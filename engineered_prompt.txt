@@ -1,0 +1,43 @@
+# SYSTEM CONTEXT: MATI FOODFINDER (MFF)
+
+## 1. Project Overview
+**App Name:** Mati FoodFinder (MFF)
+**Core Premise:** A localized application exclusive to Mati city that allows users to browse real-time restaurant menus, prices, food availability, and book dining tables or request Cash on Delivery (COD) delivery.
+**Mission:** To eliminate the time people spend deciding where and what to eat before going out, providing assurance on food availability, pricing, and seating.
+
+## 2. Tech Stack
+- **Framework:** React Native with Expo Router (Unified codebase for Web and Mobile).
+- **Backend & Database:** Supabase (PostgreSQL, Auth, Real-time subscriptions, Storage).
+- **Payments:** PayMongo (For Store Admin subscriptions via Supabase Edge Functions/Webhooks).
+- **Styling:** NativeWind (Tailwind CSS for responsive Web & Mobile design).
+- **Machine Learning (NO AI):** Statistical ML algorithms calculating order history, most visited places, and most purchased foods for user personalization (via Supabase pgvector/edge functions).
+
+## 3. User Roles (5)
+1. **System Admin (Developer):** 
+   - Platform: Desktop Web Dashboard.
+   - Duties: Manage stores, moderate social feed, handle billing oversight.
+2. **Store Admins (Karenderias & Restaurants):**
+   - Platform: Hybrid (In-App "Merchant Mode" for daily operations + Responsive Web Portal for setup/billing).
+   - Duties: Upload menus, update prices/availability in real-time, approve reservations, manage 2-month free trial and PayMongo subscription.
+3. **Registered Users:**
+   - Platform: Mobile App Only.
+   - Duties: Browse food, reserve tables, order COD, post on social food feed, utilize ML food recommendations.
+4. **Guest Users (Unregistered):**
+   - Platform: Mobile App Only.
+   - Duties: Free browse mode, view directions via maps.
+5. **Delivery Riders (Independent):**
+   - Platform: Mobile App Only.
+   - Duties: Accept COD delivery requests, view routing.
+
+## 4. Architecture & Routing Strategy (Expo Router)
+The codebase uses a single Expo project to serve both Web and Mobile interfaces securely:
+- `app/(web)/`: Contains the SEO-optimized marketing landing page, portal links, and responsive admin web dashboards. (Accessible via browser).
+- `app/(mobile)/`: Contains the mobile-only experience (Tabs, Maps, Feed, Merchant Mode). (Compiled to APK/IPA).
+
+## 5. AI Assistant Guidelines (How to Help / Debug)
+When assisting the developer with MFF, adhere to the following rules:
+- **Routing Bugs:** If a user accidentally accesses a web dashboard on mobile, check the layout files and Expo Router dynamic grouping (`app/(web)` vs `app/(mobile)`).
+- **Styling Issues:** We use NativeWind. Ensure Tailwind classes are compatible with React Native (e.g., avoid web-only pseudo-classes on native components).
+- **Store Admin UI:** Remember that Karenderia owners rely heavily on mobile devices. Any new feature added to the Store Admin dashboard MUST be mobile-responsive or integrated directly into the mobile app's "Merchant Mode".
+- **Backend/Auth:** All user states and roles are managed by Supabase. If there is a permissions error, immediately check Supabase Row Level Security (RLS) policies.
+- **Dependencies:** Always use `npx expo install` instead of raw `npm install` for native modules to ensure version compatibility.
