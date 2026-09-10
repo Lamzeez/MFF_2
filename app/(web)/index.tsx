@@ -54,9 +54,11 @@ export default function WebLanding() {
                 Mati City's exclusive food network. Browse live menus, check available tables, and get cash-on-delivery right to your door. From family-owned Karenderias to premium restaurants!
               </Text>
               <View className="flex-row flex-wrap justify-center md:justify-start gap-4 w-full">
-                <Pressable className="px-8 py-4 rounded-full bg-orange-500 shadow-lg hover:bg-orange-600 transition-all">
-                  <Text className="text-white text-lg font-bold">Get the App</Text>
-                </Pressable>
+                <Link href="/(web)/portal" asChild>
+                  <Pressable className="px-8 py-4 rounded-full bg-orange-500 shadow-lg hover:bg-orange-600 transition-all">
+                    <Text className="text-white text-lg font-bold">Get the App</Text>
+                  </Pressable>
+                </Link>
                 <Link href="/(web)/portal" asChild>
                   <Pressable className="px-8 py-4 rounded-full bg-white shadow-lg hover:bg-gray-100 transition-all">
                     <Text className="text-green-900 text-lg font-bold">Partner With Us</Text>

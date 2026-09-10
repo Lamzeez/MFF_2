@@ -43,3 +43,6 @@ npx expo start --tunnel
 
 ---
 *Built exclusively for Mati City, Philippines.*
+ 
+
+/system-admin
