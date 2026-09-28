@@ -64,6 +64,7 @@ export default function MobileFeedScreen() {
     markAllNotificationsRead,
     createReservation,
     placeActiveOrder,
+    personalizationEnabled,
     checkInToStore,
     mostVisitedStore,
   } = useAuth();
@@ -445,10 +446,52 @@ export default function MobileFeedScreen() {
     );
   };
 
+  // Open QR Scanner (Strictly Registered Users with Personalization Enabled)
+  const handleOpenScanner = () => {
+    if (!isLoggedIn) {
+      Alert.alert(
+        "Registered Users Only 🔒",
+        "In-store restaurant QR scanning is exclusive to Registered Users. Guest users cannot enable Personalization mode in Profile Settings or record in-store visits.\n\nPlease sign in as a Registered User to unlock restaurant QR scanning and personalization.",
+        [
+          { text: "Continue as Guest", style: "cancel" },
+          { text: "Sign In / Profile", onPress: () => router.push("/(mobile)/(tabs)/profile") },
+        ]
+      );
+      return;
+    }
+    if (!personalizationEnabled) {
+      Alert.alert(
+        "Personalization Mode Paused ⚠️",
+        "You have turned off Personalization mode in your Profile Settings. Please enable Personalization in your Profile to scan restaurant QR codes and track visits.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Open Profile Settings", onPress: () => router.push("/(mobile)/(tabs)/profile") },
+        ]
+      );
+      return;
+    }
+    setShowScanQrModal(true);
+  };
+
   // Perform Store Stand Check-in
   const handlePerformCheckIn = (storeName: string) => {
-    if (!verifyRegisteredUser("check in at store stands")) return;
-    
+    if (!isLoggedIn) {
+      Alert.alert(
+        "Registered Users Only 🔒",
+        "Guests cannot scan restaurant QR codes because Personalization mode cannot be enabled in Guest Mode."
+      );
+      setShowScanQrModal(false);
+      return;
+    }
+    if (!personalizationEnabled) {
+      Alert.alert(
+        "Personalization Mode Paused ⚠️",
+        "Please enable Personalization in your Profile Settings to record in-store check-ins."
+      );
+      setShowScanQrModal(false);
+      return;
+    }
+
     const visitCount = checkInToStore(storeName);
     setShowScanQrModal(false);
 
@@ -583,11 +626,7 @@ export default function MobileFeedScreen() {
           <View className="flex-row items-center gap-2">
             {/* Scan Store Stand QR Button */}
             <Pressable
-              onPress={() => {
-                if (verifyRegisteredUser("scan store stand QR codes")) {
-                  setShowScanQrModal(true);
-                }
-              }}
+              onPress={handleOpenScanner}
               className="w-9 h-9 rounded-full bg-emerald-50 border border-emerald-200 items-center justify-center"
             >
               <Ionicons name="qr-code-outline" size={18} color="#047857" />
@@ -786,7 +825,7 @@ export default function MobileFeedScreen() {
                 </View>
               </View>
               <Pressable
-                onPress={() => setShowScanQrModal(true)}
+                onPress={handleOpenScanner}
                 className="flex-row items-center gap-1"
               >
                 <Ionicons name="qr-code" size={12} color="#047857" />
@@ -794,8 +833,8 @@ export default function MobileFeedScreen() {
               </Pressable>
             </View>
 
-            {/* If user has checked in to stores, display their #1 Most Visited spot! */}
-            {mostVisitedStore && (
+            {/* If user is logged in, has personalization on, and has visits, display their #1 Most Visited spot! */}
+            {isLoggedIn && personalizationEnabled && mostVisitedStore ? (
               <View className="mx-5 mb-3.5 p-3.5 bg-amber-50 border border-amber-300 rounded-2xl flex-row items-center justify-between shadow-xs">
                 <View className="flex-1 pr-3">
                   <View className="flex-row items-center gap-1.5 mb-0.5">
@@ -818,6 +857,46 @@ export default function MobileFeedScreen() {
                   <Text className="text-white font-bold text-xs">View Menu</Text>
                 </Pressable>
               </View>
+            ) : !isLoggedIn ? (
+              <View className="mx-5 mb-3.5 p-3.5 bg-orange-50/80 border border-orange-200 rounded-2xl flex-row items-center justify-between shadow-xs">
+                <View className="flex-1 pr-3">
+                  <View className="flex-row items-center gap-1.5 mb-0.5">
+                    <Ionicons name="lock-closed" size={13} color="#ea580c" />
+                    <Text className="text-[11px] font-black text-orange-900 uppercase">
+                      Personalization Locked (Guest Mode)
+                    </Text>
+                  </View>
+                  <Text className="text-xs text-gray-700 leading-snug">
+                    Guests cannot enable Personalization in Profile Settings or scan restaurant QR codes. Sign in as a Registered User to personalize this feed!
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => router.push("/(mobile)/(tabs)/profile")}
+                  className="bg-orange-500 px-3 py-1.5 rounded-xl"
+                >
+                  <Text className="text-white font-bold text-xs">Sign In</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View className="mx-5 mb-3.5 p-3.5 bg-amber-50 border border-amber-300 rounded-2xl flex-row items-center justify-between shadow-xs">
+                <View className="flex-1 pr-3">
+                  <View className="flex-row items-center gap-1.5 mb-0.5">
+                    <Ionicons name="pause-circle" size={14} color="#d97706" />
+                    <Text className="text-[11px] font-black text-amber-900 uppercase">
+                      Personalization Mode Paused
+                    </Text>
+                  </View>
+                  <Text className="text-xs text-gray-700 leading-snug">
+                    You've turned off Personalization in Profile Settings. Turn it back on to record restaurant QR scans and display your top visited spots.
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => router.push("/(mobile)/(tabs)/profile")}
+                  className="bg-amber-600 px-3 py-1.5 rounded-xl"
+                >
+                  <Text className="text-white font-bold text-xs">Settings</Text>
+                </Pressable>
+              </View>
             )}
 
             <ScrollView
@@ -825,8 +904,8 @@ export default function MobileFeedScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ paddingHorizontal: 20 }}
             >
-              {/* Dynamic Card 1: Derived from user's most visited place */}
-              {mostVisitedStore && (
+              {/* Dynamic Card 1: Derived from user's most visited place (Registered + Personalization ON) */}
+              {isLoggedIn && personalizationEnabled && mostVisitedStore && (
                 <View className="w-64 mr-3 bg-white border-2 border-emerald-600 p-3.5 rounded-2xl shadow-xs justify-between">
                   <View>
                     <View className="flex-row justify-between items-start mb-1.5">
@@ -1255,8 +1334,8 @@ export default function MobileFeedScreen() {
             <View className="flex-row justify-between items-center pb-3 border-b border-gray-100">
               <View>
                 <Text className="text-lg font-black text-gray-900">Scan Store Stand QR</Text>
-                <Text className="text-xs text-gray-500 font-medium">
-                  Check in to earn visit points & personalize your feed
+                <Text className="text-xs text-emerald-700 font-bold">
+                  Registered Account: {user?.name || "Juan dela Cruz"} (Personalization Active)
                 </Text>
               </View>
               <Pressable

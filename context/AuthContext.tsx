@@ -70,6 +70,8 @@ interface AuthContextType {
   placeActiveOrder: (data: Omit<ActiveOrder, "id" | "orderNumber" | "status" | "createdAt">) => string;
 
   // Store Visits & ML Personalization
+  personalizationEnabled: boolean;
+  togglePersonalization: (enabled?: boolean) => void;
   storeVisits: Record<string, number>;
   checkInToStore: (storeName: string) => number;
   mostVisitedStore: { name: string; visits: number } | null;
@@ -89,6 +91,8 @@ const AuthContext = createContext<AuthContextType>({
   updateReservationStatus: () => {},
   orders: [],
   placeActiveOrder: () => "",
+  personalizationEnabled: false,
+  togglePersonalization: () => {},
   storeVisits: {},
   checkInToStore: () => 0,
   mostVisitedStore: null,
@@ -98,6 +102,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // By default, customer on mobile is guest
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
+
+  // Personalization Mode (Only available to Registered Users)
+  const [personalizationEnabled, setPersonalizationEnabled] = useState(false);
 
   // In-Store Visits Tracker (For Statistical ML "Most Visited" Personalization)
   const [storeVisits, setStoreVisits] = useState<Record<string, number>>({
@@ -189,6 +196,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role: "registered",
     });
     setIsLoggedIn(true);
+    // Registered users have Personalization mode enabled by default
+    setPersonalizationEnabled(true);
 
     // Add a welcome notification upon login
     setNotifications((prev) => [
@@ -196,7 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: `notif-welcome-${Date.now()}`,
         type: "system",
         title: `👋 Welcome back, ${name.split(" ")[0]}!`,
-        message: "You are logged in. You can now order COD, book tables, and scan store stand QR codes.",
+        message: "You are logged in. Personalization is now enabled! You can order COD, book tables, and scan restaurant stand QR codes.",
         timestamp: "Just now",
         isRead: false,
       },
@@ -207,6 +216,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logoutToGuest = () => {
     setUser(null);
     setIsLoggedIn(false);
+    // Guests cannot have personalization enabled
+    setPersonalizationEnabled(false);
+  };
+
+  const togglePersonalization = (enabled?: boolean) => {
+    if (!isLoggedIn) {
+      // Guest users cannot enable personalization
+      return;
+    }
+    setPersonalizationEnabled((prev) => (enabled !== undefined ? enabled : !prev));
   };
 
   const addNotification = (notif: Omit<AppNotification, "id" | "timestamp" | "isRead">) => {
@@ -282,8 +301,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return orderNum;
   };
 
-  // Check-in to Store via Stand QR
+  // Check-in to Store via Stand QR (Strictly Registered Users with Personalization Enabled)
   const checkInToStore = (storeName: string): number => {
+    if (!isLoggedIn || !personalizationEnabled) {
+      return 0;
+    }
+
     const nextCount = (storeVisits[storeName] || 0) + 1;
     setStoreVisits((prev) => ({ ...prev, [storeName]: nextCount }));
 
@@ -296,7 +319,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return nextCount;
   };
 
+  // Only calculate most visited store if user is registered and has personalization turned on
   const getMostVisitedStore = () => {
+    if (!isLoggedIn || !personalizationEnabled) {
+      return null;
+    }
     const entries = Object.entries(storeVisits);
     if (entries.length === 0) return null;
     entries.sort((a, b) => b[1] - a[1]);
@@ -321,6 +348,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updateReservationStatus,
         orders,
         placeActiveOrder,
+        personalizationEnabled,
+        togglePersonalization,
         storeVisits,
         checkInToStore,
         mostVisitedStore,

@@ -9,6 +9,8 @@ export default function MobileGroupRootLayout() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="portal" options={{ headerShown: false }} />
+      <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="merchant/index" options={{ headerShown: false }} />
       <Stack.Screen name="rider/index" options={{ headerShown: false }} />

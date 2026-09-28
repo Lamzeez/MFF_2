@@ -132,17 +132,30 @@ export default function MobileMerchantMode() {
     }
   };
 
+  const handleExitToPortal = () => {
+    Alert.alert(
+      "Exit Merchant Mode?",
+      "Are you sure you want to exit Store Kitchen Mode and return to the main Mati FoodFinder access portal?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Exit to Portal",
+          style: "destructive",
+          onPress: () => router.replace("/(mobile)/portal"),
+        },
+      ]
+    );
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
       {/* TOP HEADER */}
       <View className="px-5 pt-3 pb-2.5 bg-white border-b border-gray-200 z-10 shadow-xs">
         <View className="flex-row justify-between items-center mb-2">
-          <Link href="/(mobile)/(tabs)" asChild>
-            <Pressable className="flex-row items-center py-1">
-              <Ionicons name="arrow-back" size={14} color="#047857" />
-              <Text className="text-emerald-700 font-bold text-xs ml-1">Exit to Customer App</Text>
-            </Pressable>
-          </Link>
+          <Pressable onPress={handleExitToPortal} className="flex-row items-center py-1">
+            <Ionicons name="arrow-back" size={14} color="#047857" />
+            <Text className="text-emerald-700 font-bold text-xs ml-1">Exit to Portal</Text>
+          </Pressable>
           <View className="flex-row items-center gap-2">
             <Text className={`font-bold text-xs ${isOnline ? 'text-emerald-600' : 'text-gray-400'}`}>
               {isOnline ? 'ACCEPTING ORDERS' : 'CLOSED'}
@@ -760,11 +773,11 @@ export default function MobileMerchantMode() {
 
             {/* Exit Button */}
             <Pressable
-              onPress={() => router.push("/(mobile)/(tabs)")}
-              className="bg-gray-100 py-3.5 rounded-2xl items-center flex-row justify-center gap-2"
+              onPress={handleExitToPortal}
+              className="bg-gray-800 py-3.5 rounded-2xl items-center flex-row justify-center gap-2 shadow-xs"
             >
-              <Ionicons name="arrow-back" size={16} color="#374151" />
-              <Text className="text-gray-800 font-bold text-xs">Exit Kitchen Merchant Mode</Text>
+              <Ionicons name="swap-horizontal" size={16} color="white" />
+              <Text className="text-white font-bold text-xs">Exit Kitchen Mode & Return to Portal</Text>
             </Pressable>
           </View>
         )}

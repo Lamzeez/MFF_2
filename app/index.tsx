@@ -5,6 +5,6 @@ export default function Index() {
   if (Platform.OS === "web") {
     return <Redirect href="/(web)" />;
   } else {
-    return <Redirect href="/(mobile)/(tabs)" />;
+    return <Redirect href="/(mobile)/portal" />;
   }
 }
