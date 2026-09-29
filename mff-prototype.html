@@ -1,0 +1,1620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mati FoodFinder — UX Flow Prototype</title>
+<style>
+/* ============================================================
+   MATI FOODFINDER — DESIGN SYSTEM
+   8pt spacing grid · one primary action per view · tokens first
+   ============================================================ */
+:root{
+  --brand:#EA5410; --brand-600:#D44808; --brand-50:#FEF1E8; --brand-100:#FCE0CE;
+  --ink:#17191D; --ink-2:#4B5563; --ink-3:#98A2B3;
+  --line:#E7EAEF; --line-2:#F0F2F5;
+  --bg:#F4F5F7; --card:#FFFFFF;
+  --green:#0E9F6E; --green-50:#E7F7F0;
+  --amber:#D97706; --amber-50:#FDF3E1;
+  --red:#E02424;  --red-50:#FDECEC;
+  --blue:#1C64F2; --blue-50:#EBF1FE;
+  --violet:#7C3AED; --violet-50:#F1EBFE;
+  --r-xl:20px; --r-lg:16px; --r-md:12px; --r-sm:8px;
+  --shadow-sm:0 1px 2px rgba(16,24,40,.06);
+  --shadow-md:0 4px 12px -2px rgba(16,24,40,.10),0 2px 4px -2px rgba(16,24,40,.06);
+  --shadow-lg:0 16px 40px -12px rgba(16,24,40,.25);
+  --font:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased}
+html,body{height:100%}
+body{font-family:var(--font);background:#E9ECF1;color:var(--ink);font-size:14px;line-height:1.45;display:flex;flex-direction:column;overflow:hidden}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:#CBD2DB;border-radius:3px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- Typography ---------- */
+.h1{font-size:22px;font-weight:800;letter-spacing:-.02em}
+.h2{font-size:17px;font-weight:700;letter-spacing:-.01em}
+.h3{font-size:15px;font-weight:700}
+.tiny{font-size:11px}
+.small{font-size:12.5px}
+.muted{color:var(--ink-2)}
+.dim{color:var(--ink-3)}
+.bold{font-weight:700}
+.ellipsis{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ---------- Prototype chrome ---------- */
+.topbar{height:58px;background:#111318;color:#fff;display:flex;align-items:center;gap:16px;padding:0 18px;flex-shrink:0;z-index:50}
+.topbar .logo{display:flex;align-items:center;gap:9px;font-weight:800;font-size:15px;letter-spacing:-.01em;white-space:nowrap}
+.topbar .logo .mark{width:30px;height:30px;border-radius:9px;background:var(--brand);display:grid;place-items:center;font-size:16px}
+.proto-tag{font-size:10px;font-weight:700;letter-spacing:.08em;background:#2A2E37;color:#A7B0BE;padding:3px 8px;border-radius:99px;text-transform:uppercase}
+.role-switch{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
+.role-btn{display:flex;align-items:center;gap:7px;padding:7px 13px;border-radius:99px;font-size:12.5px;font-weight:600;color:#B9C0CC;background:#1E2129;border:1px solid #2E3340;transition:all .15s}
+.role-btn:hover{color:#fff;border-color:#4A5160}
+.role-btn.active{background:var(--brand);border-color:var(--brand);color:#fff}
+.role-btn .dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.6}
+.device-switch{display:flex;background:#1E2129;border:1px solid #2E3340;border-radius:99px;padding:3px;gap:2px}
+.device-btn{padding:5px 12px;border-radius:99px;font-size:12px;font-weight:600;color:#B9C0CC}
+.device-btn.active{background:#3A3F4C;color:#fff}
+
+.stage{flex:1;display:flex;min-height:0}
+.guide{width:292px;background:#fff;border-right:1px solid var(--line);padding:22px 20px;overflow-y:auto;flex-shrink:0}
+.guide .role-eyebrow{font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--brand);margin-bottom:6px}
+.guide h1{font-size:20px;font-weight:800;letter-spacing:-.02em;margin-bottom:4px}
+.guide .platform{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;background:var(--line-2);color:var(--ink-2);padding:3px 9px;border-radius:99px;margin:6px 0 14px}
+.guide p.desc{font-size:13px;color:var(--ink-2);margin-bottom:18px;line-height:1.55}
+.guide .try-title{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:10px}
+.guide ol.try{list-style:none;counter-reset:step;display:flex;flex-direction:column;gap:9px;margin-bottom:20px}
+.guide ol.try li{counter-increment:step;display:flex;gap:10px;font-size:12.5px;color:var(--ink-2);line-height:1.45}
+.guide ol.try li::before{content:counter(step);flex-shrink:0;width:20px;height:20px;border-radius:50%;background:var(--brand-50);color:var(--brand);font-size:11px;font-weight:800;display:grid;place-items:center;margin-top:1px}
+.guide .note{background:var(--amber-50);border:1px solid #F3DFB7;border-radius:var(--r-md);padding:11px 12px;font-size:12px;color:#7C5410;line-height:1.5}
+.guide .note b{color:#6B4A0E}
+.frame-host{flex:1;display:flex;padding:26px;min-width:0;overflow:auto}
+.frame-host>*{margin:auto}
+
+/* ---------- Phone frame ---------- */
+.phone{width:390px;height:800px;background:#0B0C0E;border-radius:46px;padding:11px;box-shadow:var(--shadow-lg),0 0 0 2px #2A2D33;flex-shrink:0;position:relative}
+.phone-inner{width:100%;height:100%;background:var(--bg);border-radius:36px;overflow:hidden;position:relative;display:flex;flex-direction:column}
+.statusbar{height:40px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 22px 0 28px;font-size:12.5px;font-weight:700;background:var(--bg);position:relative;z-index:5}
+.statusbar .sicons{display:flex;gap:5px;align-items:center;color:var(--ink)}
+.notch{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:110px;height:26px;background:#0B0C0E;border-radius:0 0 16px 16px;z-index:60}
+.screen{flex:1;overflow-y:auto;overscroll-behavior:contain;position:relative;scrollbar-width:none}
+.screen::-webkit-scrollbar{display:none}
+.page{position:absolute;inset:0;background:var(--bg);z-index:20;display:flex;flex-direction:column;animation:slideIn .22s ease-out}
+.page .page-body{flex:1;overflow-y:auto;scrollbar-width:none}
+.page .page-body::-webkit-scrollbar{display:none}
+@keyframes slideIn{from{transform:translateX(28px);opacity:.4}to{transform:none;opacity:1}}
+@keyframes fadeUp{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
+
+/* ---------- Mobile app bars & tabs ---------- */
+.appbar{padding:10px 18px 12px;display:flex;align-items:center;gap:12px;background:var(--bg)}
+.appbar .title{flex:1;min-width:0}
+.iconbtn{width:38px;height:38px;border-radius:50%;background:var(--card);border:1px solid var(--line);display:grid;place-items:center;color:var(--ink-2);flex-shrink:0;position:relative;box-shadow:var(--shadow-sm)}
+.iconbtn:active{transform:scale(.94)}
+.iconbtn .ndot{position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;border-radius:99px;background:var(--red);color:#fff;font-size:9.5px;font-weight:800;display:grid;place-items:center;padding:0 4px;border:2px solid var(--bg)}
+.tabbar{flex-shrink:0;height:64px;background:var(--card);border-top:1px solid var(--line);display:flex;z-index:15;position:relative}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--ink-3);font-size:10px;font-weight:600;position:relative}
+.tab.active{color:var(--brand)}
+.tab .badge{position:absolute;top:6px;left:calc(50% + 2px);min-width:16px;height:16px;border-radius:99px;background:var(--red);color:#fff;font-size:9px;font-weight:800;display:grid;place-items:center;padding:0 4px}
+.tab:active{opacity:.7}
+
+/* ---------- Components ---------- */
+.card{background:var(--card);border-radius:var(--r-lg);border:1px solid var(--line);box-shadow:var(--shadow-sm)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;font-weight:700;font-size:13.5px;border-radius:var(--r-md);padding:11px 18px;transition:transform .08s,opacity .15s;white-space:nowrap}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--brand);color:#fff}
+.btn.primary:hover{background:var(--brand-600)}
+.btn.dark{background:var(--ink);color:#fff}
+.btn.soft{background:var(--brand-50);color:var(--brand)}
+.btn.ghost{background:var(--card);border:1px solid var(--line);color:var(--ink)}
+.btn.danger{background:var(--red-50);color:var(--red)}
+.btn.block{width:100%}
+.btn.sm{padding:7px 12px;font-size:12px;border-radius:10px}
+.btn.lg{padding:14px 20px;font-size:15px;border-radius:14px}
+.btn:disabled{opacity:.45;pointer-events:none}
+.chiprow{display:flex;gap:8px;overflow-x:auto;padding:2px 18px 4px;scrollbar-width:none}
+.chiprow::-webkit-scrollbar{display:none}
+.chip{flex-shrink:0;padding:7px 14px;border-radius:99px;background:var(--card);border:1px solid var(--line);font-size:12.5px;font-weight:600;color:var(--ink-2)}
+.chip.active{background:var(--ink);border-color:var(--ink);color:#fff}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.badge.green{background:var(--green-50);color:var(--green)}
+.badge.amber{background:var(--amber-50);color:var(--amber)}
+.badge.red{background:var(--red-50);color:var(--red)}
+.badge.blue{background:var(--blue-50);color:var(--blue)}
+.badge.gray{background:var(--line-2);color:var(--ink-2)}
+.badge.violet{background:var(--violet-50);color:var(--violet)}
+.input{width:100%;padding:11px 14px;border-radius:var(--r-md);border:1.5px solid var(--line);background:var(--card);font-size:13.5px;outline:none;transition:border-color .15s}
+.input:focus{border-color:var(--brand)}
+.label{font-size:12px;font-weight:700;color:var(--ink-2);margin-bottom:6px;display:block}
+.row{display:flex;align-items:center;gap:10px}
+.col{display:flex;flex-direction:column}
+.divider{height:1px;background:var(--line-2);border:none}
+.food-thumb{border-radius:var(--r-md);display:grid;place-items:center;flex-shrink:0;position:relative;overflow:hidden}
+.rest-card{background:var(--card);border-radius:var(--r-lg);border:1px solid var(--line);overflow:hidden;box-shadow:var(--shadow-sm);transition:transform .12s,box-shadow .12s}
+.rest-card:active{transform:scale(.985)}
+.rating{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;font-weight:700}
+.avatar{border-radius:50%;display:grid;place-items:center;font-weight:800;color:#fff;flex-shrink:0}
+.qty{display:inline-flex;align-items:center;gap:0;border:1.5px solid var(--line);border-radius:99px;overflow:hidden;background:var(--card)}
+.qty button{width:30px;height:30px;display:grid;place-items:center;color:var(--brand);font-weight:800}
+.qty span{min-width:26px;text-align:center;font-weight:800;font-size:13px}
+.switch{width:44px;height:26px;border-radius:99px;background:#D4D9E0;position:relative;transition:background .2s;flex-shrink:0}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .2s}
+.switch.on{background:var(--green)}
+.switch.on::after{transform:translateX(18px)}
+.listrow{display:flex;align-items:center;gap:12px;padding:13px 16px;background:var(--card)}
+.listrow:active{background:var(--line-2)}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;text-align:center;gap:6px}
+.empty .eicon{width:64px;height:64px;border-radius:50%;background:var(--line-2);display:grid;place-items:center;font-size:26px;margin-bottom:8px}
+.progress{height:6px;border-radius:99px;background:var(--line);overflow:hidden}
+.progress>div{height:100%;border-radius:99px;background:var(--brand)}
+.stepper{display:flex;flex-direction:column;gap:0}
+.step{display:flex;gap:12px}
+.step .rail{display:flex;flex-direction:column;align-items:center;width:22px;flex-shrink:0}
+.step .sdot{width:22px;height:22px;border-radius:50%;border:2px solid var(--line);background:var(--card);display:grid;place-items:center;color:transparent;font-size:11px;flex-shrink:0}
+.step.done .sdot{background:var(--green);border-color:var(--green);color:#fff}
+.step.now .sdot{border-color:var(--brand);color:var(--brand);box-shadow:0 0 0 4px var(--brand-50)}
+.step .sline{width:2px;flex:1;min-height:26px;background:var(--line)}
+.step.done .sline{background:var(--green)}
+.step .sbody{padding-bottom:22px;flex:1;min-width:0}
+.section-pad{padding:14px 18px}
+.sec-head{display:flex;align-items:baseline;justify-content:space-between;padding:18px 18px 10px}
+.searchbar{margin:0 18px;display:flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:10px 14px;color:var(--ink-3);box-shadow:var(--shadow-sm)}
+.searchbar input{border:none;outline:none;background:none;flex:1;font-size:13.5px;color:var(--ink)}
+.mapview{position:relative;flex:1;overflow:hidden;background:#E4EAE0}
+.map-grid{position:absolute;inset:0;background-image:linear-gradient(#D5DCD0 1px,transparent 1px),linear-gradient(90deg,#D5DCD0 1px,transparent 1px);background-size:44px 44px}
+.map-road{position:absolute;background:#fff;box-shadow:0 0 0 1px #D8DED2}
+.map-pin{position:absolute;transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center;cursor:pointer;z-index:3}
+.map-pin .pin-bubble{background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:5px 9px;font-size:11px;font-weight:700;box-shadow:var(--shadow-md);white-space:nowrap;display:flex;align-items:center;gap:5px}
+.map-pin .pin-tri{width:10px;height:10px;background:var(--card);border-right:1.5px solid var(--line);border-bottom:1.5px solid var(--line);transform:rotate(45deg) translateY(-7px)}
+.map-pin.sel .pin-bubble{background:var(--ink);color:#fff;border-color:var(--ink)}
+.map-pin.sel .pin-tri{background:var(--ink);border-color:var(--ink)}
+.fab{position:absolute;bottom:18px;right:16px;z-index:8;display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;padding:13px 18px;border-radius:99px;font-weight:700;font-size:13px;box-shadow:var(--shadow-lg)}
+.fab:active{transform:scale(.96)}
+.fab .count{background:var(--brand);border-radius:99px;min-width:20px;height:20px;display:grid;place-items:center;font-size:11px;font-weight:800}
+
+/* ---------- Sheets & modals ---------- */
+.scrim{position:absolute;inset:0;background:rgba(15,18,24,.5);z-index:40;animation:fadeIn .18s;display:flex;align-items:flex-end;justify-content:center}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.sheet{background:var(--card);width:100%;border-radius:24px 24px 0 0;padding:10px 20px 26px;animation:sheetUp .25s cubic-bezier(.32,.72,.35,1);max-height:82%;overflow-y:auto;scrollbar-width:none}
+.sheet::-webkit-scrollbar{display:none}
+@keyframes sheetUp{from{transform:translateY(60px);opacity:.5}to{transform:none;opacity:1}}
+.sheet .grab{width:38px;height:4px;border-radius:99px;background:var(--line);margin:4px auto 16px}
+.web-scrim{position:fixed;inset:0;background:rgba(15,18,24,.5);z-index:200;display:flex;align-items:center;justify-content:center;animation:fadeIn .18s}
+.web-modal{background:#fff;border-radius:var(--r-xl);width:440px;max-width:92%;max-height:84%;overflow-y:auto;padding:26px;box-shadow:var(--shadow-lg);animation:fadeUp .22s}
+
+/* ---------- Toast ---------- */
+.toast{position:absolute;top:52px;left:50%;transform:translateX(-50%);z-index:90;background:var(--ink);color:#fff;font-size:12.5px;font-weight:600;padding:10px 16px;border-radius:99px;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:8px;animation:toastIn .25s;white-space:nowrap;max-width:90%}
+@keyframes toastIn{from{transform:translate(-50%,-10px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+
+/* ---------- Browser frame / web app ---------- */
+.browser{width:min(1220px,100%);height:800px;background:#fff;border-radius:16px;box-shadow:var(--shadow-lg);overflow:hidden;display:flex;flex-direction:column;flex-shrink:0}
+.browser-bar{height:42px;background:#EFF1F5;display:flex;align-items:center;gap:12px;padding:0 14px;flex-shrink:0;border-bottom:1px solid var(--line)}
+.browser-dots{display:flex;gap:6px}
+.browser-dots i{width:11px;height:11px;border-radius:50%;display:block}
+.browser-url{flex:1;max-width:460px;margin:0 auto;background:#fff;border:1px solid var(--line);border-radius:8px;padding:5px 14px;font-size:12px;color:var(--ink-2);display:flex;align-items:center;gap:7px}
+.webapp{flex:1;display:flex;min-height:0}
+.sidebar{width:222px;background:#fff;border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:2px;flex-shrink:0;overflow-y:auto}
+.side-brand{display:flex;align-items:center;gap:9px;padding:6px 10px 16px;font-weight:800;font-size:14.5px}
+.side-brand .mark{width:28px;height:28px;border-radius:8px;background:var(--brand);display:grid;place-items:center;font-size:14px;color:#fff}
+.side-label{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);padding:12px 12px 6px}
+.side-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;font-size:13px;font-weight:600;color:var(--ink-2);transition:background .12s}
+.side-item:hover{background:var(--line-2)}
+.side-item.active{background:var(--brand-50);color:var(--brand)}
+.side-item .cnt{margin-left:auto;font-size:10.5px;font-weight:800;background:var(--red);color:#fff;border-radius:99px;min-width:18px;height:18px;display:grid;place-items:center;padding:0 5px}
+.webmain{flex:1;overflow-y:auto;background:var(--bg);padding:26px 30px;min-width:0}
+.web-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;gap:14px;flex-wrap:wrap}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:20px}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:var(--r-lg);padding:16px 18px;box-shadow:var(--shadow-sm)}
+.kpi .k-label{font-size:11.5px;font-weight:600;color:var(--ink-3);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.kpi .k-val{font-size:24px;font-weight:800;letter-spacing:-.02em}
+.kpi .k-delta{font-size:11px;font-weight:700;margin-top:4px}
+.panel{background:#fff;border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);overflow:hidden}
+.panel .p-head{padding:15px 20px;border-bottom:1px solid var(--line-2);display:flex;align-items:center;justify-content:space-between;gap:10px}
+.panel .p-body{padding:16px 20px}
+.table{width:100%;border-collapse:collapse;font-size:13px}
+.table th{text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);padding:10px 20px;border-bottom:1px solid var(--line);background:#FAFBFC}
+.table td{padding:12px 20px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+.table tr:last-child td{border-bottom:none}
+.table tr:hover td{background:#FAFBFC}
+.bars{display:flex;align-items:flex-end;gap:10px;height:150px;padding:10px 4px 0}
+.bars .bar{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end}
+.bars .bar i{width:70%;max-width:34px;border-radius:6px 6px 0 0;background:var(--brand);display:block;transition:height .3s}
+.bars .bar span{font-size:10.5px;color:var(--ink-3);font-weight:600}
+.legend{display:flex;gap:14px;font-size:11.5px;color:var(--ink-2);font-weight:600}
+.legend i{width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:5px}
+
+/* ---------- Feed ---------- */
+.post{background:var(--card);border-bottom:1px solid var(--line);padding:14px 18px}
+.post .p-photo{border-radius:var(--r-lg);height:170px;display:grid;place-items:center;font-size:56px;margin:10px 0;position:relative}
+.post .p-actions{display:flex;gap:18px;padding-top:10px}
+.p-act{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--ink-2)}
+.p-act.liked{color:var(--red)}
+
+/* ---------- Responsive scaling of frames ---------- */
+@media (max-height:940px){.phone{transform:scale(.9)} .browser{transform:scale(.92)}}
+@media (max-height:840px){.phone{transform:scale(.8)} .browser{transform:scale(.82)}}
+@media (max-width:900px){.guide{display:none}}
+@media (max-width:520px){.phone{transform:scale(.82)}}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="logo"><span class="mark">🍜</span> Mati FoodFinder <span class="proto-tag">Flow Prototype</span></div>
+  <div class="device-switch" id="deviceSwitch" style="display:none">
+    <button class="device-btn active" id="devApp" onclick="A.setDevice('app')">📱 Merchant App</button>
+    <button class="device-btn" id="devWeb" onclick="A.setDevice('web')">🖥️ Web Portal</button>
+  </div>
+  <nav class="role-switch" id="roleSwitch"></nav>
+</header>
+
+<div class="stage">
+  <aside class="guide" id="guide"></aside>
+  <main class="frame-host" id="frameHost"></main>
+</div>
+
+<script>
+/* ================================================================
+   MATI FOODFINDER — INTERACTIVE FLOW PROTOTYPE
+   Single-file simulation · mock data · cross-role order lifecycle
+   ================================================================ */
+
+/* ---------- Icon set (inline SVG, feather-style) ---------- */
+const IC = {
+  home:'<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+  search:'<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  bell:'<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+  pin:'<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
+  receipt:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+  users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  user:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  plus:'<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  minus:'<line x1="5" y1="12" x2="19" y2="12"/>',
+  x:'<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  check:'<polyline points="20 6 9 17 4 12"/>',
+  checkC:'<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+  chevL:'<polyline points="15 18 9 12 15 6"/>',
+  chevR:'<polyline points="9 18 15 12 9 6"/>',
+  star:'<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  clock:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  phone:'<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>',
+  heart:'<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>',
+  chat:'<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>',
+  send:'<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
+  bag:'<path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/>',
+  cal:'<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  truck:'<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',
+  alert:'<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  flag:'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>',
+  shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  grid:'<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
+  edit:'<path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/>',
+  logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
+  dollar:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  card:'<rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>',
+  chart:'<line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/>',
+  eye:'<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+  trash:'<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+  nav:'<polygon points="3 11 22 2 13 21 11 13 3 11"/>',
+  zap:'<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  award:'<circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>',
+  sliders:'<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>',
+  store:'<path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/>',
+  bike:'<circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M15 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-3 11.5V14l-3-3 4-3 2 3h2"/>',
+  camera:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
+  arrowR:'<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>',
+  moreH:'<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  percent:'<line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
+  fileText:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>'
+};
+const ic = (n,s=18,w=2)=>'<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="'+w+'" stroke-linecap="round" stroke-linejoin="round">'+IC[n]+'</svg>';
+const peso = n => '₱' + Number(n).toLocaleString('en-PH');
+
+/* ---------- Mock data ---------- */
+const RESTAURANTS = [
+  {id:1,name:"Mama Letty's Karenderia",emoji:'🍲',cat:'Karenderias',rating:4.8,reviews:212,area:'Central (Poblacion)',time:'15–20 min',fee:29,tables:4,hours:'7:00 AM – 8:30 PM',about:'Beloved neighborhood karenderia famous for slow-cooked humba and unlimited sabaw.',promo:'Best Seller Alley',grad:'linear-gradient(135deg,#F6D365,#FDA085)'},
+  {id:2,name:'Mati Baywalk Seafood Grill',emoji:'🐟',cat:'Seafood',rating:4.9,reviews:340,area:'Pujada Bay',time:'25–35 min',fee:39,tables:6,hours:'10:30 AM – 10:00 PM',about:'Bayside grill serving the morning catch with sea-breeze dining.',promo:'Fresh Catch Daily',grad:'linear-gradient(135deg,#89F7FE,#66A6FF)'},
+  {id:3,name:'Subangan Street Grills',emoji:'🍢',cat:'BBQ & Grill',rating:4.9,reviews:188,area:'Subangan Museum',time:'20–30 min',fee:29,tables:3,hours:'4:00 PM – 11:00 PM',about:'Evening hangout for sizzling skewers, inasal and spicy vinegar dips.',promo:'Night Market Picks',grad:'linear-gradient(135deg,#FCCB90,#D57EEB)'},
+  {id:4,name:'Dahican Beach Bites',emoji:'🏖️',cat:'Merienda',rating:4.7,reviews:156,area:'Dahican Beach',time:'20–30 min',fee:35,tables:5,hours:'8:00 AM – 7:00 PM',about:'Beachfront bites, kinilaw and shakes beside the famous Dahican waves.',promo:'Surfside Favorites',grad:'linear-gradient(135deg,#A1C4FD,#C2E9FB)'},
+  {id:5,name:"Aling Nena's Kitchen",emoji:'🥣',cat:'Karenderias',rating:4.6,reviews:98,area:'Sainz',time:'30–40 min',fee:29,tables:2,hours:'8:00 AM – 7:30 PM',about:'Comfort-food kitchen specializing in native tinola and bulalo.',promo:'Soul Food Staples',grad:'linear-gradient(135deg,#FBC2EB,#A6C1EE)'}
+];
+const DISHES = [
+  {id:101,rid:1,name:'Classic Pork Humba',price:90,emoji:'🍖',avail:true,tag:'Best seller'},
+  {id:102,rid:1,name:'Chicken Adobo w/ Rice',price:85,emoji:'🍗',avail:true},
+  {id:103,rid:1,name:'Sinigang na Baboy',price:95,emoji:'🍲',avail:true},
+  {id:104,rid:1,name:'Chopsuey',price:70,emoji:'🥦',avail:false},
+  {id:201,rid:2,name:'Tuna Panga Grill',price:280,emoji:'🐟',avail:true,tag:'Must try'},
+  {id:202,rid:2,name:'Grilled Blue Marlin',price:320,emoji:'🐠',avail:true},
+  {id:203,rid:2,name:'Buttered Garlic Shrimp',price:260,emoji:'🦐',avail:true},
+  {id:301,rid:3,name:'Pork BBQ Skewers (3pc)',price:75,emoji:'🍢',avail:true,tag:'Best seller'},
+  {id:302,rid:3,name:'Chicken Inasal',price:130,emoji:'🍗',avail:true},
+  {id:303,rid:3,name:'Isaw (5pc)',price:50,emoji:'🍡',avail:true},
+  {id:401,rid:4,name:'Fresh Kinilaw na Isda',price:160,emoji:'🥗',avail:true,tag:'Local favorite'},
+  {id:402,rid:4,name:'Special Halo-Halo',price:90,emoji:'🍧',avail:true},
+  {id:403,rid:4,name:'Mango Shake',price:80,emoji:'🥭',avail:true},
+  {id:501,rid:5,name:'Native Chicken Tinola',price:120,emoji:'🍲',avail:false},
+  {id:502,rid:5,name:'Bulalo Special',price:180,emoji:'🥣',avail:true}
+];
+const BARANGAYS = ['Central (Poblacion)','Dahican','Sainz','Matiao','Badas','Mayo'];
+const FEED_SEED = [
+  {id:'p1',author:'Kathleen M.',initial:'K',color:'#7C3AED',badge:'Food Explorer',time:'2h',text:'That tuna panga from Baywalk hits different when you eat it by the sea. Smoky, fresh, perfectly charred. 🔥',rest:'Mati Baywalk Seafood Grill',dish:'Tuna Panga Grill',rating:5,photo:'🐟',pbg:'linear-gradient(135deg,#89F7FE,#66A6FF)',likes:24,liked:false,comments:[{a:'Ramon D.',t:'Agreed! Best after surfing.'},{a:'MFF Team',t:'Great shot! 📸'}]},
+  {id:'p2',author:'Ramon D.',initial:'R',color:'#0E9F6E',badge:'',time:'5h',text:'₱90 humba that tastes like a fiesta. Mama Letty never misses. Pro tip: ask for extra sabaw, it\'s free!',rest:"Mama Letty's Karenderia",dish:'Classic Pork Humba',rating:5,photo:'🍖',pbg:'linear-gradient(135deg,#F6D365,#FDA085)',likes:41,liked:true,comments:[{a:'Kathleen M.',t:'The sabaw hack is real 🙌'}]},
+  {id:'p3',author:'Aira S.',initial:'A',color:'#D97706',badge:'Night Owl',time:'1d',text:'Late-night isaw run at Subangan. The sweet-spicy vinegar is elite. Who\'s coming tonight?',rest:'Subangan Street Grills',dish:'Isaw (5pc)',rating:4,photo:'🍢',pbg:'linear-gradient(135deg,#FCCB90,#D57EEB)',likes:18,liked:false,comments:[]}
+];
+
+/* ---------- Global state ---------- */
+let SEQ = 1000;
+const S = {
+  role:'guest',
+  device:'app',                    // store admin: app | web
+  authed:false,
+  user:{name:'Kathleen Mendoza',email:'kathleen@email.com'},
+  tab:'home',                      // mobile tab per role
+  stack:[],                        // pushed mobile pages
+  sheet:null, sheetData:null,
+  toast:null,
+  search:'', cat:'All',
+  restCat:'All',
+  cart:{rid:null,items:[]},        // items: {dishId,name,price,qty}
+  orders:[],                       // shared lifecycle: user ↔ merchant ↔ rider
+  reservations:[],
+  feed:JSON.parse(JSON.stringify(FEED_SEED)),
+  notifs:[
+    {id:'n1',type:'system',title:'Welcome to MFF 👋',msg:'Browse live menus around Mati City. Sign up to order & reserve.',time:'1h',read:false},
+    {id:'n2',type:'community',title:'Trending near you',msg:'Tuna Panga Grill is this week\'s most-loved dish.',time:'3h',read:false}
+  ],
+  rider:{online:true,active:null,tab:'dash',today:4,pay:186,reqs:[
+    {id:'req0',orderNo:'MFF-0941',rest:'Subangan Street Grills',restId:3,drop:'Brgy. Matiao',items:'2× Chicken Inasal, 1× Isaw (5pc)',total:310,fee:35,dist:'3.2 km'}
+  ],week:[{d:'Mon',v:140},{d:'Tue',v:95},{d:'Wed',v:210},{d:'Thu',v:180},{d:'Fri',v:260},{d:'Sat',v:320},{d:'Sun',v:186}]},
+  merchant:{
+    store:RESTAURANTS[0], tab:'orders',
+    doneToday:18, salesToday:4230,
+    seedOrders:[
+      {id:'mo1',orderNo:'MFF-0936',cust:'Jerome P.',items:[{name:'Pork BBQ Skewers (3pc)',qty:2,price:75},{name:'Chicken Inasal',qty:1,price:130}],total:280,fee:29,status:'preparing',placed:'10:42 AM',channel:'seed'}
+    ],
+    seedRes:[
+      {id:'mr1',cust:'Aira S.',size:4,when:'Tonight · 7:30 PM',notes:'Near the window if possible',status:'pending'}
+    ]
+  },
+  admin:{page:'overview',approvals:[
+      {id:'a1',name:"Kape't Kanin",owner:'Boyet Lim',area:'Matiao',cat:'Karenderias',applied:'Sep 26',docs:'DTI · Sanitary · BIR'},
+      {id:'a2',name:'Sunset Ihaw-Ihaw',owner:'Dianne Rago',area:'Baywalk Blvd',cat:'BBQ & Grill',applied:'Sep 27',docs:'DTI · Sanitary'}
+    ],
+    flags:[
+      {id:'f1',post:'Photo of tuna panga…',by:'@foodie_mati',reason:'Spam link in comments',reports:3,excerpt:'“Check out my page for cheap…”'},
+      {id:'f2',post:'Review: Subangan Grills',by:'@anon88',reason:'Profanity',reports:2,excerpt:'“This place is *** ***…”'}
+    ],
+    subs:[
+      {store:'Mati Baywalk Seafood Grill',plan:'Pro · ₱499/mo',status:'active',renew:'Oct 12'},
+      {store:"Mama Letty's Karenderia",plan:'Trial (38 days left)',status:'trial',renew:'Nov 5'},
+      {store:'Subangan Street Grills',plan:'Pro · ₱499/mo',status:'active',renew:'Oct 20'},
+      {store:'Dahican Beach Bites',plan:'Trial (51 days left)',status:'trial',renew:'Nov 18'},
+      {store:"Aling Nena's Kitchen",plan:'Pro · ₱499/mo',status:'past_due',renew:'Sep 25'}
+    ]
+  },
+  mapSel:1,
+  personalization:true
+};
+/* ================================================================
+   RENDER ENGINE
+   ================================================================ */
+const $host = () => document.getElementById('frameHost');
+const unreadNotifs = () => S.notifs.filter(n=>!n.read).length;
+const cartCount = () => S.cart.items.reduce((a,i)=>a+i.qty,0);
+const cartTotal = () => S.cart.items.reduce((a,i)=>a+i.qty*i.price,0);
+const activeOrders = () => S.orders.filter(o=>!['delivered','cancelled'].includes(o.status));
+const rest = id => RESTAURANTS.find(r=>r.id===id);
+const dishesOf = rid => DISHES.filter(d=>d.rid===rid);
+
+function toast(msg,icon='checkC'){
+  S.toast={msg,icon}; renderToasts();
+  clearTimeout(toast._t); toast._t=setTimeout(()=>{S.toast=null;renderToasts()},2600);
+}
+function renderToasts(){
+  document.querySelectorAll('.toast').forEach(t=>t.remove());
+  if(!S.toast) return;
+  const host = document.querySelector('.phone-inner') || document.querySelector('.browser') || document.body;
+  const t=document.createElement('div'); t.className='toast';
+  t.innerHTML = '<span style="color:#7BE3B0">'+ic(S.toast.icon,15,2.5)+'</span>'+S.toast.msg;
+  host.appendChild(t);
+}
+
+function render(){
+  renderRoleSwitch(); renderGuide();
+  const web = (S.role==='admin') || (S.role==='merchant' && S.device==='web');
+  document.getElementById('deviceSwitch').style.display = S.role==='merchant' ? 'flex':'none';
+  document.getElementById('devApp').className='device-btn'+(S.device==='app'?' active':'');
+  document.getElementById('devWeb').className='device-btn'+(S.device==='web'?' active':'');
+  if(web) renderWebFrame(); else renderPhoneFrame();
+  renderToasts();
+}
+
+function renderRoleSwitch(){
+  const roles=[['admin','🧑‍💻','System Admin'],['merchant','🏪','Store Admin'],['rider','🛵','Rider'],['user','🧑','Registered'],['guest','👤','Guest']];
+  document.getElementById('roleSwitch').innerHTML = roles.map(([r,e,l])=>
+    '<button class="role-btn'+(S.role===r?' active':'')+'" onclick="A.go(\''+r+'\')"><span class="dot"></span>'+e+' '+l+'</button>').join('');
+}
+
+/* ---------- Phone frame ---------- */
+function renderPhoneFrame(){
+  const tabs = TABS[S.role]||TABS[S.authed?'user':'guest'];
+  const tabHtml = tabs.map(t=>{
+    const badge = t.badge ? t.badge() : 0;
+    return '<button class="tab'+(S.tab===t.id?' active':'')+'" onclick="A.setTab(\''+t.id+'\')">'
+      + ic(t.icon,21) + '<span>'+t.label+'</span>'
+      + (badge?'<span class="badge">'+badge+'</span>':'') + '</button>';
+  }).join('');
+  const page = S.stack[S.stack.length-1];
+  $host().innerHTML =
+   '<div class="phone"><div class="notch"></div><div class="phone-inner">'
+  +'  <div class="statusbar"><span>9:41</span><span class="sicons">'
+  +     '<svg width="16" height="12" viewBox="0 0 16 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13" y="0" width="3" height="12" rx="1" opacity=".35"/></svg>'
+  +     '<svg width="22" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor"><rect x="0.5" y="0.5" width="21" height="11" rx="3.5"/><rect x="2.5" y="2.5" width="14" height="7" rx="1.5" fill="currentColor" stroke="none"/><path d="M23.5 4v4a2 2 0 0 0 0-4z" fill="currentColor" stroke="none"/></svg>'
+  +'  </span></div>'
+  +'  <div class="screen">'+ SCREENS[S.role+'/'+S.tab]() +'</div>'
+  +   (page ? '<div class="page">'+PAGES[page.name](page.data)+'</div>' : '')
+  +'  <nav class="tabbar">'+tabHtml+'</nav>'
+  +'  <div class="sheet-host">'+ (S.sheet? renderSheet(S.sheet,S.sheetData,'phone'):'') +'</div>'
+  +'</div></div>';
+}
+
+/* ---------- Web frame ---------- */
+function renderWebFrame(){
+  const url = S.role==='admin' ? 'matifoodfinder.ph/system-admin' : 'matifoodfinder.ph/portal';
+  const body = S.role==='admin' ? adminShell() : portalShell();
+  $host().innerHTML =
+   '<div class="browser">'
+  +'  <div class="browser-bar"><div class="browser-dots"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i></div>'
+  +'    <div class="browser-url">'+ic('shield',12)+' '+url+'</div></div>'
+  +'  <div class="webapp">'+body+'</div>'
+  +'  <div class="sheet-host"></div>'
+  +'</div>';
+  if(S.sheet){
+    const host=document.querySelector('.browser .sheet-host');
+    host.innerHTML='<div class="web-scrim" onclick="if(event.target===this)A.closeSheet()"><div class="web-modal">'+renderSheet(S.sheet,S.sheetData,'web')+'</div></div>';
+  }
+}
+
+/* ---------- Shared mobile bits ---------- */
+const bellBtn = () =>
+  '<button class="iconbtn" onclick="A.openSheet(\'notifs\')">'+ic('bell',18)+(unreadNotifs()?'<span class="ndot">'+unreadNotifs()+'</span>':'')+'</button>';
+
+const guestBanner = () =>
+  '<div class="section-pad" style="padding-top:0">'
+ +'<div class="card" style="padding:14px 16px;background:linear-gradient(135deg,#17191D,#333A47);color:#fff;border:none;display:flex;align-items:center;gap:12px">'
+ +'  <span style="font-size:24px">✨</span>'
+ +'  <div style="flex:1;min-width:0"><div class="bold" style="font-size:13.5px">Join Mati FoodFinder</div><div class="small" style="opacity:.75">Order COD, reserve tables & join the food feed.</div></div>'
+ +'  <button class="btn primary sm" onclick="A.push(\'auth\')">Sign up</button>'
+ +'</div></div>';
+
+const restCard = r =>
+   '<div class="rest-card" style="margin:0 18px 12px" onclick="A.openRest('+r.id+')">'
+ +'  <div style="height:92px;background:'+r.grad+';display:flex;align-items:center;justify-content:center;font-size:44px;position:relative">'+r.emoji
+ +'    <span class="badge" style="position:absolute;top:10px;left:10px;background:rgba(255,255,255,.92);color:var(--ink)">'+r.promo+'</span></div>'
+ +'  <div style="padding:12px 14px">'
+ +'    <div class="row" style="justify-content:space-between"><span class="h3 ellipsis">'+r.name+'</span>'
+ +'      <span class="rating"><span style="color:var(--amber)">'+ic('star',12,0)+'</span>'+r.rating+' <span class="dim">('+r.reviews+')</span></span></div>'
+ +'    <div class="small muted" style="margin:3px 0 8px">'+r.cat+' · '+r.area+'</div>'
+ +'    <div class="row small" style="gap:14px;color:var(--ink-2)">'
+ +'      <span class="row" style="gap:4px">'+ic('clock',13)+' '+r.time+'</span>'
+ +'      <span class="row" style="gap:4px">'+ic('bike',13)+' '+peso(r.fee)+' fee</span>'
+ +'      <span class="badge green" style="margin-left:auto">'+r.tables+' tables open</span>'
+ +'    </div></div></div>';
+
+const dishRow = d => {
+  const inCart = S.cart.items.find(i=>i.dishId===d.id);
+  return '<div class="row card" style="padding:12px;margin:0 18px 10px;gap:12px;'+(!d.avail?'opacity:.55':'')+'">'
+  +'  <div class="food-thumb" style="width:56px;height:56px;font-size:28px;background:var(--line-2)">'+d.emoji+'</div>'
+  +'  <div style="flex:1;min-width:0">'
+  +'    <div class="row" style="gap:6px"><span class="bold ellipsis" style="font-size:13.5px">'+d.name+'</span>'
+  +      (d.tag?'<span class="badge amber">'+d.tag+'</span>':'')+'</div>'
+  +'    <div class="small muted">'+peso(d.price)+'</div></div>'
+  +  (d.avail
+     ? (inCart
+        ? '<div class="qty"><button onclick="A.dec('+d.id+')">'+ic('minus',14,2.5)+'</button><span>'+inCart.qty+'</span><button onclick="A.addDish('+d.id+')">'+ic('plus',14,2.5)+'</button></div>'
+        : '<button class="btn soft sm" onclick="A.addDish('+d.id+')">'+ic('plus',13,2.5)+' Add</button>')
+     : '<span class="badge gray">Sold out</span>')
+  +'</div>';
+};
+/* ================================================================
+   CUSTOMER SCREENS (Guest + Registered share the shell)
+   ================================================================ */
+const TABS = {
+  guest:[
+    {id:'home',label:'Home',icon:'home'},
+    {id:'map',label:'Explore',icon:'pin'},
+    {id:'feed',label:'Feed',icon:'users'},
+    {id:'profile',label:'Profile',icon:'user'}
+  ],
+  user:[
+    {id:'home',label:'Home',icon:'home'},
+    {id:'map',label:'Explore',icon:'pin'},
+    {id:'orders',label:'Orders',icon:'receipt',badge:()=>activeOrders().length},
+    {id:'feed',label:'Feed',icon:'users'},
+    {id:'profile',label:'Profile',icon:'user'}
+  ],
+  rider:[
+    {id:'dash',label:'Requests',icon:'bike',badge:()=>S.rider.online?S.rider.reqs.length:0},
+    {id:'earnings',label:'Earnings',icon:'dollar'},
+    {id:'profile',label:'Profile',icon:'user'}
+  ],
+  merchant:[
+    {id:'orders',label:'Orders',icon:'receipt',badge:()=>merchantIncoming().filter(o=>o.status==='pending').length},
+    {id:'menu',label:'Menu',icon:'grid'},
+    {id:'tables',label:'Tables',icon:'cal',badge:()=>merchantRes().filter(r=>r.status==='pending').length},
+    {id:'more',label:'More',icon:'sliders'}
+  ]
+};
+
+const SCREENS = {
+  /* ---------------- HOME ---------------- */
+  'guest/home':()=>customerHome(true),
+  'user/home':()=>customerHome(false),
+
+  /* ---------------- MAP ---------------- */
+  'guest/map':()=>customerMap(true),
+  'user/map':()=>customerMap(false),
+
+  /* ---------------- FEED ---------------- */
+  'guest/feed':()=>customerFeed(true),
+  'user/feed':()=>customerFeed(false),
+
+  /* ---------------- PROFILE ---------------- */
+  'guest/profile':()=>guestProfile(),
+  'user/profile':()=>userProfile(),
+
+  /* ---------------- ORDERS (registered) ---------------- */
+  'user/orders':()=>userOrders()
+};
+
+function customerHome(isGuest){
+  const cats=['All','Karenderias','Seafood','BBQ & Grill','Merienda'];
+  const rests = RESTAURANTS.filter(r=>S.restCat==='All'||r.cat===r.cat&&true).filter(r=>S.restCat==='All'||r.cat===S.restCat);
+  const trending = DISHES.filter(d=>d.avail&&d.tag);
+  return '<div style="padding-bottom:80px;animation:fadeUp .2s">'
+  +'<div class="appbar"><div class="title">'
+  +'  <div class="tiny dim" style="font-weight:600">DELIVER TO</div>'
+  +'  <div class="row" style="gap:4px;font-weight:800;font-size:14.5px">'+ic('pin',15)+' Mati City <span style="color:var(--ink-3)">'+ic('chevR',13)+'</span></div>'
+  +'</div>'+bellBtn()+'</div>'
+  +'<div class="searchbar" style="margin-bottom:14px" onclick="A.push(\'search\')">'+ic('search',16)+'<span class="small" style="color:var(--ink-3)">Search “humba”, “seafood”, “karenderia”…</span></div>'
+  +'<div class="chiprow" style="margin-bottom:6px">'+cats.map(c=>'<button class="chip'+(S.restCat===c?' active':'')+'" onclick="A.setCat(\''+c+'\')">'+c+'</button>').join('')+'</div>'
+  +(isGuest?guestBanner():'')
+  +(!isGuest&&S.personalization?
+      '<div class="sec-head" style="padding-bottom:6px"><span class="h2">For you, '+(S.user.name.split(' ')[0])+' ✨</span><span class="tiny dim" style="font-weight:600">Based on your visits</span></div>'
+     +'<div class="section-pad" style="padding-top:0;padding-bottom:4px"><div class="card" style="padding:12px;display:flex;gap:12px;align-items:center" onclick="A.openRest(1)">'
+     +'  <div class="food-thumb" style="width:52px;height:52px;font-size:26px;background:linear-gradient(135deg,#F6D365,#FDA085)">🍖</div>'
+     +'  <div style="flex:1"><div class="bold" style="font-size:13.5px">Classic Pork Humba</div><div class="small muted">Mama Letty\'s · your most-visited spot</div></div>'
+     +'  <span class="badge violet">ML pick</span></div></div>':'')
+  +'<div class="sec-head"><span class="h2">Popular near you</span><button class="tiny bold" style="color:var(--brand)" onclick="A.setCat(\'All\')">See all</button></div>'
+  + rests.map(restCard).join('')
+  +'<div class="sec-head"><span class="h2">Trending dishes</span></div>'
+  +'<div class="chiprow" style="padding-bottom:16px">'+trending.map(d=>{
+      const r=rest(d.rid);
+      return '<div class="card" style="width:150px;flex-shrink:0;overflow:hidden" onclick="A.openRest('+d.rid+')">'
+      +'<div style="height:82px;display:grid;place-items:center;font-size:38px;background:'+r.grad+'">'+d.emoji+'</div>'
+      +'<div style="padding:10px 12px"><div class="bold ellipsis" style="font-size:12.5px">'+d.name+'</div>'
+      +'<div class="tiny dim ellipsis">'+r.name+'</div><div class="bold" style="font-size:12.5px;margin-top:4px;color:var(--brand)">'+peso(d.price)+'</div></div></div>';
+    }).join('')+'</div>'
+  +'</div>';
+}
+
+function customerMap(isGuest){
+  const pins = RESTAURANTS.map((r,i)=>{
+    const pos=[[30,26],[64,20],[46,44],[22,58],[70,62]][i];
+    return '<div class="map-pin'+(S.mapSel===r.id?' sel':'')+'" style="left:'+pos[0]+'%;top:'+pos[1]+'%" onclick="A.mapSel('+r.id+')">'
+    +'<div class="pin-bubble">'+r.emoji+' '+r.name+'</div><div class="pin-tri"></div></div>';
+  }).join('');
+  const sel = rest(S.mapSel);
+  return '<div style="display:flex;flex-direction:column;height:100%;animation:fadeUp .2s">'
+  +'<div class="appbar"><div class="title h2">Explore Mati</div>'+bellBtn()+'</div>'
+  +'<div class="mapview"><div class="map-grid"></div>'
+  +'  <div class="map-road" style="left:-5%;top:38%;width:115%;height:14px;transform:rotate(-6deg)"></div>'
+  +'  <div class="map-road" style="left:44%;top:-5%;width:12px;height:115%"></div>'
+  +'  <div class="map-road" style="left:-5%;top:70%;width:115%;height:10px;transform:rotate(4deg)"></div>'
+  +'  <div style="position:absolute;right:8%;top:8%;background:#B7DCF7;color:#3B7FB5;font-size:10.5px;font-weight:800;padding:4px 10px;border-radius:8px">PUJADA BAY</div>'
+  +  pins
+  +'</div>'
+  +'<div style="padding:12px 18px 16px;background:var(--bg)">'
+  +'  <div class="card" style="padding:14px">'
+  +'    <div class="row" style="justify-content:space-between"><span class="h3">'+sel.emoji+' '+sel.name+'</span><span class="rating"><span style="color:var(--amber)">'+ic('star',12,0)+'</span>'+sel.rating+'</span></div>'
+  +'    <div class="small muted" style="margin:2px 0 10px">'+sel.cat+' · '+sel.area+' · '+sel.hours+'</div>'
+  +'    <div class="row" style="gap:8px">'
+  +'      <button class="btn ghost sm" style="flex:1" onclick="A.toast(\'Opening directions…\',\'nav\')">'+ic('nav',13)+' Directions</button>'
+  +(isGuest
+      ? '<button class="btn primary sm" style="flex:1" onclick="A.gate(\'view the full menu & order\')">View menu</button>'
+      : '<button class="btn primary sm" style="flex:1" onclick="A.openRest('+sel.id+')">View menu</button>')
+  +'    </div></div></div>'
+  +'</div>';
+}
+
+function customerFeed(isGuest){
+  return '<div style="animation:fadeUp .2s">'
+  +'<div class="appbar"><div class="title h2">Food Feed</div>'
+  + (isGuest?'<button class="btn primary sm" onclick="A.gate(\'post to the food feed\')">'+ic('plus',13,2.5)+' Post</button>'
+           :'<button class="btn primary sm" onclick="A.openSheet(\'newPost\')">'+ic('plus',13,2.5)+' Post</button>')
+  +'</div>'
+  + S.feed.map(p=>{
+      const gate = isGuest ? 'A.gate(\'like & comment\')' : 'A.like(\''+p.id+'\')';
+      return '<div class="post">'
+      +'<div class="row"><div class="avatar" style="width:38px;height:38px;background:'+p.color+';font-size:15px">'+p.initial+'</div>'
+      +'  <div style="flex:1;min-width:0"><div class="row" style="gap:6px"><span class="bold" style="font-size:13.5px">'+p.author+'</span>'
+      +   (p.badge?'<span class="badge violet">'+p.badge+'</span>':'')+'</div>'
+      +'  <div class="tiny dim">'+p.time+' ago · '+p.rest+'</div></div>'
+      +'  <span class="rating"><span style="color:var(--amber)">'+ic('star',12,0)+'</span>'+p.rating+'.0</span></div>'
+      +'<div class="small" style="margin-top:8px;line-height:1.55">'+p.text+'</div>'
+      +'<div class="p-photo" style="background:'+p.pbg+'">'+p.photo+'<span class="badge" style="position:absolute;bottom:10px;left:10px;background:rgba(255,255,255,.92);color:var(--ink)">🍴 '+p.dish+'</span></div>'
+      +'<div class="p-actions">'
+      +'  <button class="p-act'+(p.liked?' liked':'')+'" onclick="'+gate+'">'+ic('heart',17)+' '+p.likes+'</button>'
+      +'  <button class="p-act" onclick="'+(isGuest?'A.gate(\'like & comment\')':'A.openSheet(\'comments\',\''+p.id+'\')')+'">'+ic('chat',17)+' '+p.comments.length+'</button>'
+      +'  <button class="p-act" onclick="A.toast(\'Link copied\',\'checkC\')">'+ic('send',16)+'</button>'
+      +'</div></div>';
+    }).join('')
+  +'</div>';
+}
+
+function guestProfile(){
+  return '<div style="animation:fadeUp .2s">'
+  +'<div class="appbar"><div class="title h2">Profile</div></div>'
+  +'<div class="section-pad"><div class="card" style="padding:24px 18px;text-align:center">'
+  +'  <div class="avatar" style="width:64px;height:64px;background:var(--line);color:var(--ink-3);font-size:24px;margin:0 auto 12px">👤</div>'
+  +'  <div class="h2">Browsing as Guest</div>'
+  +'  <div class="small muted" style="margin:4px 0 18px">Create a free account to unlock the full experience.</div>'
+  +'  <button class="btn primary block lg" onclick="A.push(\'auth\')">Sign up free</button>'
+  +'  <button class="btn ghost block" style="margin-top:8px" onclick="A.push(\'auth\',{mode:\'login\'})">I already have an account</button>'
+  +'</div></div>'
+  +'<div class="section-pad" style="padding-top:0"><div class="card">'
+  + [['bag','Cash-on-delivery ordering','No cards needed — pay at your door'],
+     ['cal','Table reservations','Skip the wait at your favorite spots'],
+     ['users','Food feed & reviews','Share discoveries with Mati foodies'],
+     ['zap','Smart recommendations','The app learns what you love']]
+    .map((f,i)=>'<div class="listrow" style="'+(i? 'border-top:1px solid var(--line-2)':'')+'">'
+      +'<div class="iconbtn" style="width:34px;height:34px;color:var(--brand);background:var(--brand-50);border:none">'+ic(f[0],16)+'</div>'
+      +'<div style="flex:1"><div class="bold" style="font-size:13px">'+f[1]+'</div><div class="tiny muted">'+f[2]+'</div></div></div>').join('')
+  +'</div></div>'
+  +'<div class="section-pad" style="padding-top:0"><div class="card">'
+  +'<div class="listrow" onclick="A.toast(\'Help center — demo\',\'chat\')"><div style="flex:1" class="bold small">Help Center</div>'+ic('chevR',15)+'</div>'
+  +'<div class="listrow" style="border-top:1px solid var(--line-2)" onclick="A.toast(\'About — demo\',\'fileText\')"><div style="flex:1" class="bold small">About Mati FoodFinder</div>'+ic('chevR',15)+'</div>'
+  +'</div></div></div>';
+}
+
+function userProfile(){
+  const visits=[["Mama Letty's Karenderia",5],['Mati Baywalk Seafood Grill',2],['Subangan Street Grills',1]];
+  return '<div style="animation:fadeUp .2s;padding-bottom:24px">'
+  +'<div class="appbar"><div class="title h2">Profile</div><button class="iconbtn" onclick="A.toast(\'Settings — demo\',\'sliders\')">'+ic('sliders',17)+'</button></div>'
+  +'<div class="section-pad" style="padding-top:2px"><div class="card" style="padding:18px;display:flex;align-items:center;gap:14px">'
+  +'  <div class="avatar" style="width:56px;height:56px;background:var(--brand);font-size:21px">K</div>'
+  +'  <div style="flex:1;min-width:0"><div class="h2">'+S.user.name+'</div><div class="small muted">'+S.user.email+'</div>'
+  +'  <div class="row" style="gap:6px;margin-top:6px"><span class="badge amber">'+ic('award',11)+' Food Explorer</span><span class="badge gray">23 orders</span></div></div>'
+  +'</div></div>'
+  +'<div class="section-pad" style="padding-top:0"><div class="card" style="padding:16px 18px">'
+  +'  <div class="row" style="justify-content:space-between"><div><div class="bold" style="font-size:13.5px">Smart recommendations</div><div class="tiny muted">Learn from my orders & visits</div></div>'
+  +'  <button class="switch'+(S.personalization?' on':'')+'" onclick="A.togglePers()"></button></div>'
+  + (S.personalization?'<hr class="divider" style="margin:14px 0"><div class="tiny dim bold" style="letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">Your taste profile</div>'
+    + visits.map(v=>'<div class="row" style="margin-bottom:8px"><span class="small" style="flex:1">'+v[0]+'</span><div class="progress" style="width:90px"><div style="width:'+(v[1]*18)+'%"></div></div><span class="tiny dim">'+v[1]+' visits</span></div>').join(''):'')
+  +'</div></div>'
+  +'<div class="section-pad" style="padding-top:0"><div class="card">'
+  +'<div class="listrow" onclick="A.push(\'addresses\')"><div class="iconbtn" style="width:34px;height:34px;color:var(--blue);background:var(--blue-50);border:none">'+ic('pin',15)+'</div><div style="flex:1" class="bold small">Saved addresses</div>'+ic('chevR',15)+'</div>'
+  +'<div class="listrow" style="border-top:1px solid var(--line-2)" onclick="A.setTab(\'orders\')"><div class="iconbtn" style="width:34px;height:34px;color:var(--green);background:var(--green-50);border:none">'+ic('receipt',15)+'</div><div style="flex:1" class="bold small">Order history</div>'+ic('chevR',15)+'</div>'
+  +'<div class="listrow" style="border-top:1px solid var(--line-2)" onclick="A.toast(\'Help center — demo\',\'chat\')"><div class="iconbtn" style="width:34px;height:34px;color:var(--amber);background:var(--amber-50);border:none">'+ic('chat',15)+'</div><div style="flex:1" class="bold small">Help Center</div>'+ic('chevR',15)+'</div>'
+  +'</div></div>'
+  +'<div class="section-pad" style="padding-top:0"><button class="btn danger block" onclick="A.logout()">'+ic('logout',15)+' Log out</button></div>'
+  +'</div>';
+}
+
+function userOrders(){
+  const acts = activeOrders();
+  const resvs = S.reservations.filter(r=>r.status!=='declined');
+  const past = S.orders.filter(o=>o.status==='delivered');
+  return '<div style="animation:fadeUp .2s;padding-bottom:24px">'
+  +'<div class="appbar"><div class="title h2">My Orders</div></div>'
+  + (acts.length===0 && resvs.length===0 && past.length===0
+     ? '<div class="empty"><div class="eicon">🧾</div><div class="h3">No orders yet</div><div class="small muted">Your active orders and table<br>reservations will live here.</div><button class="btn primary" style="margin-top:14px" onclick="A.setTab(\'home\')">Find food</button></div>'
+     : '')
+  + (acts.length? '<div class="sec-head" style="padding-top:4px"><span class="h3">Active</span></div>' + acts.map(o=>{
+      const steps={pending:0,confirmed:1,preparing:2,ready:3,on_the_way:4,delivered:5};
+      const labels={pending:'Waiting for store…',confirmed:'Order confirmed',preparing:'Being prepared',ready:'Ready — rider dispatched',on_the_way:'On the way 🛵',delivered:'Delivered'};
+      return '<div class="card" style="margin:0 18px 12px;padding:16px" onclick="A.push(\'tracking\',\''+o.id+'\')">'
+      +'<div class="row" style="justify-content:space-between"><span class="bold" style="font-size:13.5px">'+o.restName+'</span><span class="badge blue">'+o.orderNo+'</span></div>'
+      +'<div class="small muted" style="margin:4px 0 10px">'+o.items.map(i=>i.qty+'× '+i.name).join(', ')+'</div>'
+      +'<div class="progress" style="margin-bottom:8px"><div style="width:'+(steps[o.status]/5*100)+'%"></div></div>'
+      +'<div class="row" style="justify-content:space-between"><span class="small bold" style="color:var(--brand)">'+labels[o.status]+'</span><span class="bold">'+peso(o.total)+'</span></div>'
+      +'</div>';}).join(''):'')
+  + (resvs.length? '<div class="sec-head"><span class="h3">Table reservations</span></div>' + resvs.map(r=>
+      '<div class="card" style="margin:0 18px 12px;padding:16px">'
+      +'<div class="row" style="justify-content:space-between"><span class="bold" style="font-size:13.5px">'+r.restName+'</span>'
+      +'  <span class="badge '+(r.status==='confirmed'?'green':'amber')+'">'+(r.status==='confirmed'?'Confirmed':'Pending approval')+'</span></div>'
+      +'<div class="small muted" style="margin-top:4px">'+ic('cal',12)+' '+r.when+' · '+r.size+' guests'+(r.notes?' · “'+r.notes+'”':'')+'</div>'
+      +'</div>').join(''):'')
+  + (past.length? '<div class="sec-head"><span class="h3">History</span></div>' + past.map(o=>
+      '<div class="card" style="margin:0 18px 12px;padding:16px;opacity:.85">'
+      +'<div class="row" style="justify-content:space-between"><span class="bold" style="font-size:13.5px">'+o.restName+'</span><span class="badge green">Delivered</span></div>'
+      +'<div class="small muted" style="margin:4px 0">'+o.items.map(i=>i.qty+'× '+i.name).join(', ')+' · '+peso(o.total)+'</div>'
+      +'<div class="row" style="gap:8px;margin-top:8px"><button class="btn soft sm" onclick="A.toast(\'Review posted — thanks!\',\'star\')">'+ic('star',12)+' Rate</button>'
+      +'<button class="btn ghost sm" onclick="A.toast(\'Items added to cart\',\'bag\')">Reorder</button></div></div>').join(''):'')
+  +'</div>';
+}
+/* ================================================================
+   PUSHED PAGES (mobile)
+   ================================================================ */
+const pageBar = (title,extra='') =>
+  '<div class="appbar" style="background:var(--bg);flex-shrink:0"><button class="iconbtn" onclick="A.pop()">'+ic('chevL',18)+'</button>'
+ +'<div class="title h3">'+title+'</div>'+extra+'</div>';
+
+const PAGES = {
+  /* ---------- Restaurant detail ---------- */
+  restaurant:(id)=>{
+    const r=rest(id), menu=dishesOf(id);
+    const avail=menu.filter(d=>d.avail).length;
+    return pageBar('',
+        '<button class="iconbtn" onclick="A.toast(\'Saved to favorites\',\'heart\')">'+ic('heart',17)+'</button>')
+    +'<div class="page-body" style="padding-bottom:'+(cartCount()&&S.cart.rid===id? '92px':'24px')+'">'
+    +'<div style="height:130px;background:'+r.grad+';display:grid;place-items:center;font-size:58px;margin:-58px 0 0; padding-top:58px">'+r.emoji+'</div>'
+    +'<div class="section-pad"><div class="card" style="padding:16px 18px;margin-top:-34px;position:relative">'
+    +'  <div class="row" style="justify-content:space-between"><span class="h1" style="font-size:19px">'+r.name+'</span>'
+    +'    <span class="rating"><span style="color:var(--amber)">'+ic('star',13,0)+'</span>'+r.rating+' <span class="dim">('+r.reviews+')</span></span></div>'
+    +'  <div class="small muted" style="margin:3px 0 10px">'+r.about+'</div>'
+    +'  <div class="row small" style="gap:12px;flex-wrap:wrap;color:var(--ink-2)">'
+    +'    <span class="row" style="gap:4px">'+ic('clock',13)+' '+r.hours+'</span>'
+    +'    <span class="row" style="gap:4px">'+ic('bike',13)+' '+r.time+' · '+peso(r.fee)+'</span></div>'
+    +'  <hr class="divider" style="margin:12px 0">'
+    +'  <div class="row" style="gap:8px">'
+    +'    <button class="btn ghost sm" style="flex:1" onclick="A.toast(\'Opening directions…\',\'nav\')">'+ic('nav',13)+' Directions</button>'
+    +'    <button class="btn dark sm" style="flex:1" onclick="A.openSheet(\'reserve\','+r.id+')">'+ic('cal',13)+' Reserve table <span class="badge green" style="margin-left:2px">'+r.tables+' open</span></button>'
+    +'  </div></div></div>'
+    +'<div class="sec-head" style="padding-top:4px"><span class="h2">Menu</span><span class="tiny dim" style="font-weight:600">'+avail+' of '+menu.length+' available now</span></div>'
+    + menu.map(dishRow).join('')
+    +'</div>'
+    +(cartCount()&&S.cart.rid===id
+      ? '<button class="fab" onclick="A.push(\'cart\')">'+ic('bag',16)+' View cart <span class="count">'+cartCount()+'</span> · '+peso(cartTotal())+'</button>':'');
+  },
+
+  /* ---------- Search ---------- */
+  search:()=>{
+    return pageBar('Search')
+    +'<div style="padding:0 18px 12px"><div class="searchbar" style="margin:0">'+ic('search',16)
+    +'  <input id="searchInput" placeholder="Dishes, restaurants, cravings…" value="'+S.search+'" oninput="A.doSearch(this.value)" autofocus>'
+    + (S.search?'<button onclick="A.doSearch(\'\')">'+ic('x',15)+'</button>':'')
+    +'</div></div>'
+    +'<div class="page-body" id="searchResults" style="padding-bottom:24px">'+searchResults()+'</div>';
+  },
+
+  /* ---------- Cart ---------- */
+  cart:()=>{
+    const r=rest(S.cart.rid);
+    return pageBar('My Cart')
+    +'<div class="page-body" style="padding-bottom:24px">'
+    +'<div class="section-pad"><div class="row card" style="padding:12px 14px"><span style="font-size:22px">'+r.emoji+'</span>'
+    +'  <div><div class="bold" style="font-size:13.5px">'+r.name+'</div><div class="tiny dim">Delivery · '+r.time+'</div></div></div></div>'
+    + S.cart.items.map(i=>'<div class="row card" style="padding:12px 14px;margin:0 18px 10px">'
+      +'  <div style="flex:1"><div class="bold" style="font-size:13.5px">'+i.name+'</div><div class="small muted">'+peso(i.price)+'</div></div>'
+      +'  <div class="qty"><button onclick="A.dec('+i.dishId+')">'+ic('minus',14,2.5)+'</button><span>'+i.qty+'</span><button onclick="A.addDish('+i.dishId+')">'+ic('plus',14,2.5)+'</button></div>'
+      +'  <span class="bold" style="width:56px;text-align:right">'+peso(i.price*i.qty)+'</span></div>').join('')
+    +'<div class="section-pad"><div class="card" style="padding:16px 18px">'
+    +'  <div class="row small" style="justify-content:space-between;margin-bottom:6px"><span class="muted">Subtotal</span><span class="bold">'+peso(cartTotal())+'</span></div>'
+    +'  <div class="row small" style="justify-content:space-between;margin-bottom:6px"><span class="muted">Delivery fee</span><span class="bold">'+peso(r.fee)+'</span></div>'
+    +'  <hr class="divider" style="margin:10px 0">'
+    +'  <div class="row" style="justify-content:space-between"><span class="bold">Total</span><span class="h3" style="color:var(--brand)">'+peso(cartTotal()+r.fee)+'</span></div>'
+    +'</div></div></div>'
+    +'<div style="padding:14px 18px;background:var(--card);border-top:1px solid var(--line);flex-shrink:0">'
+    +'  <button class="btn primary block lg" onclick="A.push(\'checkout\')">Go to checkout · '+peso(cartTotal()+r.fee)+'</button></div>';
+  },
+
+  /* ---------- Checkout ---------- */
+  checkout:()=>{
+    const r=rest(S.cart.rid);
+    return pageBar('Checkout')
+    +'<div class="page-body" style="padding-bottom:24px">'
+    +'<div class="section-pad"><div class="card" style="padding:16px 18px">'
+    +'  <div class="row" style="justify-content:space-between;margin-bottom:10px"><span class="h3">Delivery address</span><span class="badge blue">'+ic('pin',11)+' Mati City</span></div>'
+    +'  <label class="label">Barangay</label><select class="input" id="coBrgy" style="margin-bottom:10px">'
+    +    BARANGAYS.map(b=>'<option>'+b+'</option>').join('')+'</select>'
+    +'  <label class="label">Street / landmark</label><input class="input" id="coAddr" placeholder="e.g. Magsaysay St., near Rizal Park" style="margin-bottom:10px">'
+    +'  <label class="label">Notes for rider (optional)</label><input class="input" id="coNotes" placeholder="e.g. Call when outside the gate">'
+    +'</div></div>'
+    +'<div class="section-pad" style="padding-top:0"><div class="card" style="padding:16px 18px">'
+    +'  <span class="h3">Payment</span>'
+    +'  <div class="row" style="margin-top:10px;padding:12px;border:1.5px solid var(--brand);border-radius:var(--r-md);background:var(--brand-50)">'
+    +'    <span style="font-size:20px">💵</span><div style="flex:1"><div class="bold" style="font-size:13px">Cash on Delivery</div><div class="tiny muted">Pay the rider upon arrival</div></div>'
+    +'    <span style="color:var(--brand)">'+ic('checkC',18)+'</span></div>'
+    +'  <div class="tiny dim" style="margin-top:8px">Please prepare exact amount if possible.</div>'
+    +'</div></div>'
+    +'<div class="section-pad" style="padding-top:0"><div class="card" style="padding:16px 18px">'
+    +'  <span class="h3">Order summary</span>'
+    + S.cart.items.map(i=>'<div class="row small" style="justify-content:space-between;margin-top:8px"><span class="muted">'+i.qty+'× '+i.name+'</span><span>'+peso(i.price*i.qty)+'</span></div>').join('')
+    +'  <div class="row small" style="justify-content:space-between;margin-top:8px"><span class="muted">Delivery fee</span><span>'+peso(r.fee)+'</span></div>'
+    +'  <hr class="divider" style="margin:10px 0"><div class="row" style="justify-content:space-between"><span class="bold">Total (COD)</span><span class="h3" style="color:var(--brand)">'+peso(cartTotal()+r.fee)+'</span></div>'
+    +'</div></div></div>'
+    +'<div style="padding:14px 18px;background:var(--card);border-top:1px solid var(--line);flex-shrink:0">'
+    +'  <button class="btn primary block lg" onclick="A.placeOrder()">Place order · Pay '+peso(cartTotal()+r.fee)+' cash</button></div>';
+  },
+
+  /* ---------- Order tracking ---------- */
+  tracking:(oid)=>{
+    const o=S.orders.find(x=>x.id===oid);
+    if(!o) return pageBar('Order')+'<div class="empty"><div class="eicon">🧾</div><div class="h3">Order not found</div></div>';
+    const flow=[['pending','Order placed','Waiting for '+o.restName+' to confirm'],
+                ['confirmed','Confirmed','The store accepted your order'],
+                ['preparing','Preparing','Your food is being cooked'],
+                ['ready','Ready for pickup','Waiting for a rider'],
+                ['on_the_way','On the way',''+(o.rider||'Rider')+' is heading to you'],
+                ['delivered','Delivered','Enjoy your meal!']];
+    const idx=flow.findIndex(f=>f[0]===o.status);
+    return pageBar(o.orderNo, '<span class="badge '+(o.status==='delivered'?'green':'blue')+'">'+flow[idx][1]+'</span>')
+    +'<div class="page-body" style="padding-bottom:24px">'
+    +'<div class="section-pad"><div class="card" style="padding:18px"><div class="stepper">'
+    + flow.map((f,i)=>{
+        const cls=i<idx?'done':(i===idx?(o.status==='delivered'?'done':'now'):'');
+        return '<div class="step '+cls+'"><div class="rail"><div class="sdot">'+(i<idx||o.status==='delivered'&&i===idx?ic('check',11,3):(i===idx?ic('clock',11,2.5):''))+'</div>'
+        +(i<flow.length-1?'<div class="sline"></div>':'')+'</div>'
+        +'<div class="sbody"><div class="bold" style="font-size:13.5px;'+(i>idx?'color:var(--ink-3)':'')+'">'+f[1]+'</div>'
+        +(i<=idx?'<div class="tiny muted">'+f[2]+'</div>':'')+'</div></div>';
+      }).join('')
+    +'</div></div></div>'
+    +'<div class="section-pad" style="padding-top:0"><div class="card" style="padding:16px 18px">'
+    +'  <span class="h3">'+o.restName+'</span>'
+    + o.items.map(i=>'<div class="row small" style="justify-content:space-between;margin-top:8px"><span class="muted">'+i.qty+'× '+i.name+'</span><span>'+peso(i.price*i.qty)+'</span></div>').join('')
+    +'  <div class="row small" style="justify-content:space-between;margin-top:8px"><span class="muted">Delivery fee</span><span>'+peso(o.fee)+'</span></div>'
+    +'  <hr class="divider" style="margin:10px 0"><div class="row" style="justify-content:space-between"><span class="bold">Paid via COD</span><span class="bold">'+peso(o.total)+'</span></div>'
+    +'</div></div>'
+    +(o.status==='on_the_way'
+      ?'<div class="section-pad" style="padding-top:0"><div class="card" style="padding:14px 16px;display:flex;align-items:center;gap:12px">'
+      +'  <div class="avatar" style="width:42px;height:42px;background:#0E9F6E;font-size:17px">'+(o.rider||'R')[0]+'</div>'
+      +'  <div style="flex:1"><div class="bold" style="font-size:13.5px">'+(o.rider||'Rider assigned')+'</div><div class="tiny muted">Honda Click · ABC 1234</div></div>'
+      +'  <button class="iconbtn" style="color:var(--green)" onclick="A.toast(\'Calling rider…\',\'phone\')">'+ic('phone',16)+'</button></div></div>':'')
+    +'</div>';
+  },
+
+  /* ---------- Auth ---------- */
+  auth:(data)=>{
+    const mode=(data&&data.mode)||'signup';
+    return '<div style="flex:1;display:flex;flex-direction:column;padding:0 26px 26px;overflow-y:auto">'
+    +'<div style="text-align:center;margin:26px 0 22px">'
+    +'  <div style="width:64px;height:64px;border-radius:20px;background:var(--brand);display:grid;place-items:center;font-size:30px;margin:0 auto 12px">🍜</div>'
+    +'  <div class="h1">'+(mode==='signup'?'Create your account':'Welcome back')+'</div>'
+    +'  <div class="small muted" style="margin-top:4px">'+(mode==='signup'?'Order COD, reserve tables & join the feed.':'Log in to continue to Mati FoodFinder.')+'</div></div>'
+    +(mode==='signup'?'<label class="label">Full name</label><input class="input" id="authName" placeholder="Juan Dela Cruz" style="margin-bottom:12px">':'')
+    +'<label class="label">Email</label><input class="input" id="authEmail" placeholder="you@email.com" style="margin-bottom:12px">'
+    +'<label class="label">Password</label><input class="input" type="password" placeholder="••••••••" style="margin-bottom:16px">'
+    +'<button class="btn primary block lg" onclick="A.doAuth(\''+mode+'\')">'+(mode==='signup'?'Sign up free':'Log in')+'</button>'
+    +'<div class="row" style="gap:10px;margin:16px 0"><hr class="divider" style="flex:1"><span class="tiny dim">OR</span><hr class="divider" style="flex:1"></div>'
+    +'<button class="btn ghost block" onclick="A.doAuth(\''+mode+'\')">Continue with Google</button>'
+    +'<button class="btn block" style="margin-top:14px;color:var(--ink-2)" onclick="A.push(\'auth\',{mode:\''+(mode==='signup'?'login':'signup')+'\'})">'
+    + (mode==='signup'?'Already have an account? <b>&nbsp;Log in</b>':'New here? <b>&nbsp;Create an account</b>')+'</button>'
+    +'<div class="tiny dim" style="text-align:center;margin-top:auto;padding-top:18px">By continuing you agree to our Terms & Privacy Policy.</div>'
+    +'</div>';
+  },
+
+  addresses:()=>pageBar('Saved addresses')
+    +'<div class="page-body" style="padding-bottom:24px">'
+    +'<div class="section-pad">'
+    +[['🏠','Home','Blk 4 Lot 12, Brgy. Central (Poblacion)'],['🏖️','Beach House','Dahican Beach Coastline, Brgy. Dahican']].map(a=>
+      '<div class="card row" style="padding:14px 16px;margin-bottom:10px"><span style="font-size:22px">'+a[0]+'</span>'
+      +'<div style="flex:1"><div class="bold" style="font-size:13.5px">'+a[1]+'</div><div class="tiny muted">'+a[2]+'</div></div>'+ic('chevR',15)+'</div>').join('')
+    +'<button class="btn ghost block" onclick="A.toast(\'Add address — demo\',\'pin\')">'+ic('plus',14)+' Add new address</button>'
+    +'</div></div>'
+};
+
+function searchResults(){
+  const q=S.search.trim().toLowerCase();
+  if(!q) return '<div class="section-pad"><div class="tiny dim bold" style="letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">Popular searches</div>'
+    +'<div class="row" style="gap:8px;flex-wrap:wrap">'+['humba','tuna','isaw','halo-halo','kinilaw','inasal'].map(t=>'<button class="chip" onclick="A.doSearch(\''+t+'\')">'+t+'</button>').join('')+'</div></div>';
+  const dm=DISHES.filter(d=>d.name.toLowerCase().includes(q));
+  const rm=RESTAURANTS.filter(r=>r.name.toLowerCase().includes(q)||r.cat.toLowerCase().includes(q));
+  let h='';
+  if(rm.length) h+='<div class="sec-head" style="padding-top:6px"><span class="h3">Restaurants</span></div>'+rm.map(restCard).join('');
+  if(dm.length) h+='<div class="sec-head"><span class="h3">Dishes</span></div>'+dm.map(d=>{
+      const r=rest(d.rid);
+      return '<div class="row card" style="padding:12px;margin:0 18px 10px" onclick="A.openRest('+d.rid+')">'
+      +'<div class="food-thumb" style="width:46px;height:46px;font-size:22px;background:var(--line-2)">'+d.emoji+'</div>'
+      +'<div style="flex:1;min-width:0"><div class="bold ellipsis" style="font-size:13px">'+d.name+'</div><div class="tiny dim">'+r.name+'</div></div>'
+      +'<span class="bold" style="color:var(--brand)">'+peso(d.price)+'</span></div>';}).join('');
+  if(!h) h='<div class="empty"><div class="eicon">🔍</div><div class="h3">No results for “'+S.search+'”</div><div class="small muted">Try another dish or restaurant.</div></div>';
+  return h;
+}
+/* ================================================================
+   SHEETS (bottom sheet on phone / modal on web)
+   ================================================================ */
+function renderSheet(name,data,ctx){
+  const bodies={
+    /* Guest gate — the ONLY interruption guests see, shown at action points */
+    gate:()=>'<div class="grab"></div>'
+      +'<div style="text-align:center;padding:6px 8px 4px">'
+      +'<div style="width:56px;height:56px;border-radius:18px;background:var(--brand-50);display:grid;place-items:center;font-size:26px;margin:0 auto 12px">🔐</div>'
+      +'<div class="h2">Create a free account</div>'
+      +'<div class="small muted" style="margin:6px 0 18px;line-height:1.55">You need an account to '+ (data||'continue') +'.<br>Browsing will always stay free.</div>'
+      +'<button class="btn primary block lg" onclick="A.closeSheet();A.push(\'auth\')">Sign up free</button>'
+      +'<button class="btn block" style="margin-top:6px;color:var(--ink-2)" onclick="A.closeSheet()">Maybe later</button></div>',
+
+    notifs:()=>'<div class="grab"></div>'
+      +'<div class="row" style="justify-content:space-between;margin-bottom:12px"><span class="h2">Notifications</span>'
+      +'<button class="tiny bold" style="color:var(--brand)" onclick="A.readAll()">Mark all read</button></div>'
+      + S.notifs.map(n=>'<div class="row" style="gap:12px;padding:12px 0;border-bottom:1px solid var(--line-2);'+(n.read?'opacity:.6':'')+'">'
+        +'  <div class="iconbtn" style="width:36px;height:36px;border:none;background:'+({order:'var(--blue-50)',reservation:'var(--green-50)',community:'var(--violet-50)',system:'var(--amber-50)'})[n.type]+';color:'+({order:'var(--blue)',reservation:'var(--green)',community:'var(--violet)',system:'var(--amber)'})[n.type]+'">'
+        +    ic({order:'receipt',reservation:'cal',community:'users',system:'bell'}[n.type],16)+'</div>'
+        +'  <div style="flex:1;min-width:0"><div class="bold" style="font-size:13px">'+n.title+'</div><div class="small muted">'+n.msg+'</div></div>'
+        +'  <span class="tiny dim">'+n.time+'</span></div>').join('')
+      +'<div style="height:8px"></div>',
+
+    reserve:(rid)=>{
+      const r=rest(rid);
+      return '<div class="grab"></div>'
+      +'<div class="row" style="gap:10px;margin-bottom:14px"><span style="font-size:26px">'+r.emoji+'</span><div><div class="h3">Reserve a table</div><div class="small muted">'+r.name+'</div></div>'
+      +'<span class="badge green" style="margin-left:auto">'+r.tables+' tables open</span></div>'
+      +'<div class="row" style="gap:8px;margin-bottom:12px"><div style="flex:1"><label class="label">Date</label><select class="input" id="rsDate"><option>Tonight</option><option>Tomorrow</option></select></div>'
+      +'<div style="flex:1"><label class="label">Time</label><select class="input" id="rsTime"><option>12:00 PM</option><option>6:30 PM</option><option selected>7:30 PM</option><option>8:30 PM</option></select></div></div>'
+      +'<label class="label">Guests</label><div class="row" style="gap:8px;margin-bottom:12px" id="rsSize">'
+      + [2,4,6,8].map((n,i)=>'<button class="chip'+(i===0?' active':'')+'" style="flex:1" onclick="A.pickSize(this,'+n+')">'+n+'</button>').join('')+'</div>'
+      +'<label class="label">Special request (optional)</label><input class="input" id="rsNotes" placeholder="e.g. birthday, high chair…" style="margin-bottom:16px">'
+      +'<button class="btn primary block lg" onclick="A.doReserve('+rid+')">Request table</button>'
+      +'<div class="tiny dim" style="text-align:center;margin-top:10px">The store confirms within minutes. Free to cancel.</div>';
+    },
+
+    newPost:()=>'<div class="grab"></div>'
+      +'<div class="h2" style="margin-bottom:14px">Share a food find</div>'
+      +'<textarea class="input" id="npText" rows="3" placeholder="What did you eat? How was it?" style="margin-bottom:10px;resize:none"></textarea>'
+      +'<label class="label">Tag a restaurant</label><select class="input" id="npRest" style="margin-bottom:10px">'
+      +  RESTAURANTS.map(r=>'<option>'+r.name+'</option>').join('')+'</select>'
+      +'<label class="label">Rating</label><div class="row" style="gap:6px;margin-bottom:16px" id="npStars">'
+      +  [1,2,3,4,5].map(n=>'<button class="iconbtn" style="color:'+(n<=5?'var(--amber)':'var(--line)')+'" onclick="A.star(this,'+n+')">'+ic('star',18,0)+'</button>').join('')+'</div>'
+      +'<button class="btn primary block lg" onclick="A.doPost()">Post to feed</button>',
+
+    comments:(pid)=>{
+      const p=S.feed.find(x=>x.id===pid);
+      if(!p) return '';
+      return '<div class="grab"></div>'
+      +'<div class="h3" style="margin-bottom:6px">Comments</div><div class="tiny dim" style="margin-bottom:12px">on '+p.author+'\'s post · '+p.dish+'</div>'
+      +(p.comments.length? p.comments.map(c=>'<div class="row" style="align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--line-2)">'
+        +'  <div class="avatar" style="width:30px;height:30px;font-size:12px;background:var(--ink-2)">'+c.a[0]+'</div>'
+        +'  <div style="flex:1"><span class="bold small">'+c.a+'</span> <span class="small">'+c.t+'</span></div></div>').join('')
+        :'<div class="small muted" style="padding:14px 0">No comments yet — be first!</div>')
+      +'<div class="row" style="margin-top:12px;gap:8px"><input class="input" id="cmtIn" placeholder="Add a comment…">'
+      +'<button class="btn primary" style="padding:11px 14px" onclick="A.doComment(\''+pid+'\')">'+ic('send',15)+'</button></div>';
+    },
+
+    /* Web-only modal: PayMongo subscribe */
+    subscribe:()=>'<div class="row" style="justify-content:space-between;margin-bottom:6px"><span class="h2">Subscribe to MFF Pro</span><button class="iconbtn" onclick="A.closeSheet()">'+ic('x',16)+'</button></div>'
+      +'<div class="small muted" style="margin-bottom:16px">Billed monthly via <b>PayMongo</b>. Cancel anytime.</div>'
+      +'<div class="card" style="padding:16px;margin-bottom:14px;background:var(--brand-50);border-color:var(--brand-100)">'
+      +'<div class="row" style="justify-content:space-between"><span class="h3">Pro Plan</span><span class="h3" style="color:var(--brand)">₱499/mo</span></div>'
+      +'<div class="tiny muted" style="margin-top:4px">Unlimited menu items · analytics · priority placement</div></div>'
+      +'<label class="label">GCash / Card number</label><input class="input" placeholder="•••• •••• •••• 4242" style="margin-bottom:14px">'
+      +'<button class="btn primary block lg" onclick="A.doSubscribe()">Pay ₱499 with PayMongo</button>'
+      +'<div class="tiny dim" style="text-align:center;margin-top:10px">🔒 Secured by PayMongo · demo checkout</div>'
+  };
+  const inner = bodies[name] ? bodies[name](data) : '';
+  if(ctx==='web') return inner;
+  return '<div class="scrim" onclick="if(event.target===this)A.closeSheet()"><div class="sheet">'+inner+'</div></div>';
+}
+
+/* ================================================================
+   ACTIONS — customer
+   ================================================================ */
+const A = {
+  go(role){ S.role=role; S.stack=[]; S.sheet=null;
+    if(role==='guest'){S.authed=false;S.tab='home';}
+    if(role==='user'){S.authed=true;S.tab='home';}
+    if(role==='rider'){S.tab=S.rider.tab||'dash';}
+    if(role==='merchant'){S.tab=S.merchant.tab||'orders';}
+    render();
+  },
+  setDevice(d){S.device=d;S.sheet=null;render();},
+  setTab(t){S.tab=t;S.stack=[];S.sheet=null;if(S.role==='rider')S.rider.tab=t;if(S.role==='merchant')S.merchant.tab=t;render();},
+  push(name,data){S.stack.push({name,data});render();
+    if(name==='search'){setTimeout(()=>{const i=document.getElementById('searchInput');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length);}},60);}},
+  pop(){S.stack.pop();render();},
+  openSheet(n,d){S.sheet=n;S.sheetData=d;render();},
+  closeSheet(){S.sheet=null;S.sheetData=null;render();},
+  toast,
+  setCat(c){S.restCat=c;render();},
+  mapSel(id){S.mapSel=id;render();},
+  gate(action){A.openSheet('gate',action);},
+  openRest(id){A.push('restaurant',id);},
+  doSearch(v){S.search=v;const r=document.getElementById('searchResults');if(r)r.innerHTML=searchResults();
+    const si=document.getElementById('searchInput');},
+  readAll(){S.notifs.forEach(n=>n.read=true);render();},
+  togglePers(){S.personalization=!S.personalization;toast(S.personalization?'Recommendations on':'Recommendations off','zap');render();},
+
+  /* ---- auth ---- */
+  doAuth(mode){
+    const name=(document.getElementById('authName')||{}).value;
+    const email=(document.getElementById('authEmail')||{}).value;
+    if(name)S.user.name=name;
+    if(email&&email.includes('@'))S.user.email=email;
+    S.authed=true; S.role='user'; S.tab='home'; S.stack=[]; S.sheet=null;
+    S.notifs.unshift({id:'n'+(++SEQ),type:'system',title:mode==='signup'?'Welcome to MFF, '+S.user.name.split(' ')[0]+'! 🎉':'Welcome back!',msg:'Your account is ready — happy eating.',time:'now',read:false});
+    toast(mode==='signup'?'Account created 🎉':'Logged in'); render();
+  },
+  logout(){S.authed=false;S.role='guest';S.tab='home';S.stack=[];S.cart={rid:null,items:[]};toast('Logged out');render();},
+
+  /* ---- cart ---- */
+  addDish(dishId){
+    if(!S.authed){A.gate('add items & place orders');return;}
+    const d=DISHES.find(x=>x.id===dishId);
+    if(S.cart.rid && S.cart.rid!==d.rid && S.cart.items.length){
+      if(!confirm('Start a new cart from '+rest(d.rid).name+'? Your current cart will be cleared.'))return;
+      S.cart={rid:null,items:[]};
+    }
+    S.cart.rid=d.rid;
+    const it=S.cart.items.find(i=>i.dishId===dishId);
+    if(it)it.qty++; else S.cart.items.push({dishId:d.id,name:d.name,price:d.price,qty:1});
+    render();
+  },
+  dec(dishId){
+    const it=S.cart.items.find(i=>i.dishId===dishId);
+    if(!it)return;
+    it.qty--; if(it.qty<=0)S.cart.items=S.cart.items.filter(i=>i!==it);
+    if(!S.cart.items.length)S.cart.rid=null;
+    render();
+  },
+  pickSize(btn,n){btn.parentElement.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));btn.classList.add('active');A._size=n;},
+  star(btn,n){btn.parentElement.querySelectorAll('.iconbtn').forEach((b,i)=>b.style.color=i<n?'var(--amber)':'var(--line)');A._stars=n;},
+
+  /* ---- reservations ---- */
+  doReserve(rid){
+    if(!S.authed){A.gate('reserve tables');return;}
+    const r=rest(rid);
+    const when=(document.getElementById('rsDate')||{}).value+' · '+((document.getElementById('rsTime')||{}).value||'7:30 PM');
+    const res={id:'res'+(++SEQ),restId:rid,restName:r.name,cust:S.user.name,size:A._size||2,when,notes:(document.getElementById('rsNotes')||{}).value,status:'pending'};
+    S.reservations.unshift(res);
+    S.merchant.seedRes.unshift({id:res.id,cust:res.cust,size:res.size,when:res.when,notes:res.notes,status:'pending'});
+    A.closeSheet();
+    S.notifs.unshift({id:'n'+(++SEQ),type:'reservation',title:'Reservation requested 📅',msg:r.name+' · '+when+' · '+res.size+' guests',time:'now',read:false});
+    toast('Request sent to '+r.name,'cal');
+    // demo: auto-confirm after 9s if merchant doesn't act
+    setTimeout(()=>{const rr=S.reservations.find(x=>x.id===res.id);if(rr&&rr.status==='pending'){merchantDecideRes(res.id,true);}},9000);
+  },
+
+  /* ---- feed ---- */
+  like(pid){const p=S.feed.find(x=>x.id===pid);if(!p)return;p.liked=!p.liked;p.likes+=p.liked?1:-1;render();},
+  doPost(){
+    const txt=(document.getElementById('npText')||{}).value.trim();
+    if(!txt){toast('Write something first','edit');return;}
+    const rname=(document.getElementById('npRest')||{}).value;
+    const r=RESTAURANTS.find(x=>x.name===rname)||RESTAURANTS[0];
+    S.feed.unshift({id:'p'+(++SEQ),author:S.user.name,initial:S.user.name[0],color:'#EA5410',badge:'',time:'now',text:txt,rest:r.name,dish:'',rating:A._stars||5,photo:r.emoji,pbg:r.grad,likes:0,liked:false,comments:[]});
+    A.closeSheet();toast('Posted to the feed 🎉','users');
+    if(S.tab!=='feed')A.setTab('feed');else render();
+  },
+  doComment(pid){
+    const inp=document.getElementById('cmtIn');const t=(inp||{}).value.trim();
+    if(!t)return;
+    const p=S.feed.find(x=>x.id===pid);p.comments.push({a:S.user.name,t});render();
+  },
+
+  /* ---- checkout / order lifecycle ---- */
+  placeOrder(){
+    const r=rest(S.cart.rid);
+    const o={id:'o'+(++SEQ),orderNo:'MFF-'+String(SEQ).slice(-4),restId:r.id,restName:r.name,
+      items:S.cart.items.map(i=>({name:i.name,qty:i.qty,price:i.price})),
+      fee:r.fee,total:cartTotal()+r.fee,
+      brgy:(document.getElementById('coBrgy')||{}).value||'Central (Poblacion)',
+      addr:(document.getElementById('coAddr')||{}).value,
+      status:'pending',placed:'just now'};
+    S.orders.unshift(o);
+    S.merchant.seedOrders.unshift({id:o.id,orderNo:o.orderNo,cust:S.user.name,items:o.items.map(i=>({name:i.name,qty:i.qty,price:i.price})),total:o.total-o.fee,fee:o.fee,status:'pending',placed:'just now',channel:'live'});
+    S.cart={rid:null,items:[]};
+    S.stack=[];
+    S.notifs.unshift({id:'n'+(++SEQ),type:'order',title:'Order placed 🧾',msg:o.restName+' is reviewing your order.',time:'now',read:false});
+    A.setTab('orders'); A.push('tracking',o.id);
+    toast('Order sent to '+r.restName,'receipt');
+    setTimeout(()=>merchantAutoAccept(o.id),8000);   // demo auto-flow if merchant idle
+  }
+};
+/* ================================================================
+   RIDER APP
+   ================================================================ */
+const riderHeader = () =>
+  '<div class="appbar"><div class="title"><div class="tiny dim" style="font-weight:600">RIDER MODE</div>'
+ +'  <div class="row" style="gap:4px;font-weight:800;font-size:14.5px">Mati City</div></div>'
+ +'  <div class="row card" style="padding:6px 12px;gap:8px;border-radius:99px">'
+ +'   <span class="small bold" style="color:'+(S.rider.online?'var(--green)':'var(--ink-3)')+'">'+(S.rider.online?'Online':'Offline')+'</span>'
+ +'   <button class="switch'+(S.rider.online?' on':'')+'" onclick="A.toggleOnline()"></button></div></div>';
+
+SCREENS['rider/dash']=()=>{
+  const R=S.rider;
+  if(R.active){
+    const a=R.active;
+    const steps=[['pickup','Head to pickup','nav'],['picked','Confirm pickup','bag'],['deliver','Deliver & collect '+peso(a.total),'dollar']];
+    return '<div style="animation:fadeUp .2s">'+riderHeader()
+    +'<div class="section-pad"><div class="card" style="overflow:hidden">'
+    +'  <div style="background:var(--ink);color:#fff;padding:14px 16px"><div class="row" style="justify-content:space-between"><span class="bold">'+a.orderNo+'</span><span class="badge" style="background:rgba(255,255,255,.15);color:#fff">COD '+peso(a.total)+'</span></div>'
+    +'    <div class="tiny" style="opacity:.7;margin-top:2px">'+a.rest+' → '+a.drop+'</div></div>'
+    +'  <div style="height:120px;position:relative;background:#E4EAE0"><div class="map-grid"></div>'
+    +'    <div class="map-road" style="left:20%;top:-10%;width:10px;height:130%;transform:rotate(14deg)"></div>'
+    +'    <div class="map-pin sel" style="left:28%;top:42%"><div class="pin-bubble">🏪 '+a.rest+'</div><div class="pin-tri"></div></div>'
+    +'    <div class="map-pin" style="left:72%;top:86%"><div class="pin-bubble">🏠 '+a.drop+'</div><div class="pin-tri"></div></div></div>'
+    +'  <div style="padding:16px">'
+    +'   <div class="stepper">'+steps.map((s,i)=>{
+        const idx=['pickup','picked','deliver'].indexOf(a.step);
+        const cls=i<idx?'done':(i===idx?'now':'');
+        return '<div class="step '+cls+'"><div class="rail"><div class="sdot">'+(i<idx?ic('check',11,3):(i===idx?ic('clock',11,2.5):''))+'</div>'+(i<steps.length-1?'<div class="sline"></div>':'')+'</div>'
+        +'<div class="sbody"><div class="bold" style="font-size:13.5px;'+(i>idx?'color:var(--ink-3)':'')+'">'+s[1]+'</div>'
+        +(i===idx&&s[0]==='pickup'?'<div class="tiny muted">'+a.items+'</div>':'')+'</div></div>';
+      }).join('')+'</div>'
+    +'   <button class="btn primary block lg" onclick="A.riderNext()">'+steps[['pickup','picked','deliver'].indexOf(a.step)][1]+'</button>'
+    +'   <button class="btn ghost block" style="margin-top:8px" onclick="A.toast(\'Calling customer…\',\'phone\')">'+ic('phone',14)+' Contact customer</button>'
+    +'  </div></div></div></div>';
+  }
+  return '<div style="animation:fadeUp .2s">'+riderHeader()
+  +'<div class="section-pad" style="padding-top:0;display:flex;gap:10px">'
+  +'  <div class="card" style="flex:1;padding:14px"><div class="tiny dim bold">TODAY</div><div class="h1" style="font-size:20px;margin-top:2px">'+peso(R.pay)+'</div><div class="tiny" style="color:var(--green);font-weight:700">'+R.today+' deliveries</div></div>'
+  +'  <div class="card" style="flex:1;padding:14px"><div class="tiny dim bold">THIS WEEK</div><div class="h1" style="font-size:20px;margin-top:2px">'+peso(R.week.reduce((a,b)=>a+b.v,0))+'</div><div class="tiny" style="color:var(--ink-3);font-weight:700">₱'+(R.week.reduce((a,b)=>a+b.v,0)/30|0)+' avg/day</div></div></div>'
+  +'<div class="sec-head" style="padding-top:2px"><span class="h2">Delivery requests</span>'+(R.online?'<span class="badge green">'+R.reqs.length+' nearby</span>':'<span class="badge gray">offline</span>')+'</div>'
+  +(R.online
+    ? (R.reqs.length? R.reqs.map(q=>'<div class="card" style="margin:0 18px 12px;padding:16px">'
+      +'<div class="row" style="justify-content:space-between"><span class="bold" style="font-size:13.5px">'+q.rest+'</span><span class="badge amber">'+q.dist+'</span></div>'
+      +'<div class="small muted" style="margin:4px 0 10px">'+ic('pin',12)+' '+q.drop+' · '+q.items+'</div>'
+      +'<div class="row" style="gap:8px">'
+      +'  <button class="btn ghost sm" style="flex:1" onclick="A.riderSkip(\''+q.id+'\')">Skip</button>'
+      +'  <button class="btn primary sm" style="flex:1.6" onclick="A.riderAccept(\''+q.id+'\')">Accept · earn '+peso(q.fee)+'</button></div></div>').join('')
+      : '<div class="empty"><div class="eicon">🛵</div><div class="h3">All clear</div><div class="small muted">New COD requests will appear here<br>when stores need riders.</div></div>')
+    : '<div class="empty"><div class="eicon">😴</div><div class="h3">You\'re offline</div><div class="small muted">Go online to start receiving<br>delivery requests.</div></div>')
+  +'</div>';
+};
+
+SCREENS['rider/earnings']=()=>{
+  const R=S.rider, max=Math.max(...R.week.map(w=>w.v));
+  return '<div style="animation:fadeUp .2s">'+riderHeader()
+  +'<div class="section-pad" style="padding-top:0"><div class="card" style="padding:18px">'
+  +'  <div class="tiny dim bold">THIS WEEK</div>'
+  +'  <div class="h1" style="font-size:26px;margin:2px 0 14px">'+peso(R.week.reduce((a,b)=>a+b.v,0))+'</div>'
+  +'  <div class="bars" style="height:110px">'+R.week.map(w=>'<div class="bar"><i style="height:'+Math.max(8,w.v/max*100)+'%"></i><span>'+w.d+'</span></div>').join('')+'</div>'
+  +'</div></div>'
+  +'<div class="section-pad" style="padding-top:0"><div class="card" style="padding:16px 18px">'
+  +'  <div class="row" style="justify-content:space-between"><div><div class="bold" style="font-size:13.5px">Cash on hand</div><div class="tiny muted">COD collected — remit weekly</div></div><span class="h3">'+peso(R.today*35)+'</span></div>'
+  +'</div></div>'
+  +'<div class="section-pad" style="padding-top:0"><div class="card">'
+  +'  <div class="listrow"><div style="flex:1" class="bold small">Payout history</div>'+ic('chevR',15)+'</div>'
+  +'  <div class="listrow" style="border-top:1px solid var(--line-2)"><div style="flex:1" class="bold small">Documents & vehicle info</div>'+ic('chevR',15)+'</div>'
+  +'</div></div></div>';
+};
+
+SCREENS['rider/profile']=()=>{
+  return '<div style="animation:fadeUp .2s">'+riderHeader()
+  +'<div class="section-pad" style="padding-top:0"><div class="card" style="padding:18px;display:flex;align-items:center;gap:14px">'
+  +'  <div class="avatar" style="width:56px;height:56px;background:#0E9F6E;font-size:21px">J</div>'
+  +'  <div style="flex:1"><div class="h2">Jomer Cruz</div><div class="small muted">Independent rider · since 2025</div>'
+  +'  <div class="row" style="gap:6px;margin-top:6px"><span class="badge green">'+ic('shield',11)+' Verified</span><span class="badge amber">★ 4.9</span></div></div></div></div>'
+  +'<div class="section-pad" style="padding-top:0"><div class="card">'
+  +'  <div class="listrow"><div style="flex:1" class="bold small">Honda Click · ABC 1234</div><span class="badge gray">Vehicle</span></div>'
+  +'  <div class="listrow" style="border-top:1px solid var(--line-2)" onclick="A.toast(\'Support — demo\',\'chat\')"><div style="flex:1" class="bold small">Rider support</div>'+ic('chevR',15)+'</div>'
+  +'  <div class="listrow" style="border-top:1px solid var(--line-2)" onclick="A.go(\'guest\')"><div style="flex:1" class="bold small" style="color:var(--red)">Log out</div>'+ic('logout',15)+'</div>'
+  +'</div></div></div>';
+};
+
+/* ================================================================
+   SHARED ORDER LIFECYCLE (customer ↔ merchant ↔ rider)
+   ================================================================ */
+function setOrderStatus(oid,status,riderName){
+  const o=S.orders.find(x=>x.id===oid); if(o){o.status=status; if(riderName)o.rider=riderName;}
+  const mo=S.merchant.seedOrders.find(x=>x.id===oid); if(mo)mo.status=status;
+  const page=S.stack[S.stack.length-1];
+  if(['user','guest','rider','merchant'].includes(S.role)) render();
+}
+function notify(type,title,msg){S.notifs.unshift({id:'n'+(++SEQ),type,title,msg,time:'now',read:false});}
+
+function merchantAutoAccept(oid){
+  const mo=S.merchant.seedOrders.find(x=>x.id===oid);
+  if(!mo||mo.status!=='pending')return;
+  merchantAccept(oid,true);
+}
+function merchantAccept(oid,auto){
+  const mo=S.merchant.seedOrders.find(x=>x.id===oid); if(!mo||mo.status!=='pending')return;
+  mo.status='preparing'; setOrderStatus(oid,'preparing');
+  notify('order','Order confirmed ✅',(mo.rest||'The store')+' is preparing your food.');
+  if(!auto)toast('Order accepted — preparing','checkC'); else if(S.role==='user')toast('Store accepted your order','receipt');
+  setTimeout(()=>merchantReady(oid), 9000);
+}
+function merchantReady(oid){
+  const mo=S.merchant.seedOrders.find(x=>x.id===oid); if(!mo||mo.status!=='preparing')return;
+  mo.status='ready'; setOrderStatus(oid,'ready');
+  // dispatch to riders
+  const o=S.orders.find(x=>x.id===oid);
+  const restName=o?o.restName:'Store';
+  const drop=o?('Brgy. '+o.brgy):'Brgy. Central';
+  S.rider.reqs.unshift({id:'req'+(++SEQ),oid,orderNo:mo.orderNo,rest:restName,drop,items:mo.items.map(i=>i.qty+'× '+i.name).join(', '),total:mo.total+mo.fee,fee:mo.fee+16,dist:'2.4 km'});
+  notify('order','Ready for pickup 📦','Looking for a rider near you…');
+  if(S.role==='merchant'&&S.device==='app')toast('Marked ready — rider requested','bike');
+  render();
+  setTimeout(()=>riderAutoDispatch(oid), 8000);
+}
+function riderAutoDispatch(oid){
+  const q=S.rider.reqs.find(x=>x.oid===oid); if(!q)return;
+  S.rider.reqs=S.rider.reqs.filter(x=>x!==q);
+  setOrderStatus(oid,'on_the_way','Jomer C.');
+  notify('order','Rider on the way 🛵','Jomer C. picked up your order.');
+  if(S.role==='user')toast('Rider picked up your order 🛵','bike');
+  setTimeout(()=>{ setOrderStatus(oid,'delivered'); notify('order','Delivered 🎉','Enjoy your meal! Rate your experience.'); if(S.role==='user')toast('Order delivered 🎉','checkC'); },11000);
+}
+function merchantDecideRes(resId,approve){
+  const mr=S.merchant.seedRes.find(x=>x.id===resId);
+  const ur=S.reservations.find(x=>x.id===resId);
+  if(mr)mr.status=approve?'confirmed':'declined';
+  if(ur)ur.status=approve?'confirmed':'declined';
+  notify('reservation',approve?'Reservation confirmed 🎉':'Reservation declined',
+    (ur?ur.restName:'Store')+' · '+(ur?ur.when:''));
+  if(S.role==='merchant')toast(approve?'Reservation confirmed':'Reservation declined',approve?'checkC':'x');
+  else if(S.role==='user')toast(approve?'Table confirmed 🎉':'Store declined the request',approve?'cal':'x');
+  render();
+}
+Object.assign(A,{
+  toggleOnline(){S.rider.online=!S.rider.online;toast(S.rider.online?'You\'re online — receiving requests':'You\'re offline','bike');render();},
+  riderSkip(id){S.rider.reqs=S.rider.reqs.filter(q=>q.id!==id);toast('Skipped');render();},
+  riderAccept(id){
+    const q=S.rider.reqs.find(x=>x.id===id); if(!q)return;
+    S.rider.reqs=S.rider.reqs.filter(x=>x!==q);
+    S.rider.active={...q,step:'pickup'};
+    if(q.oid)setOrderStatus(q.oid,'on_the_way','Jomer C.');
+    toast('Delivery accepted','bike');render();
+  },
+  riderNext(){
+    const a=S.rider.active; if(!a)return;
+    if(a.step==='pickup'){a.step='picked';toast('Order picked up','bag');}
+    else if(a.step==='picked'){a.step='deliver';toast('On the way to customer','nav');}
+    else{
+      if(a.oid)setOrderStatus(a.oid,'delivered');
+      S.rider.today++;S.rider.pay+=a.fee;S.rider.week[6].v+=a.fee;
+      S.rider.active=null;toast('Delivered — '+peso(a.fee)+' earned 💵','dollar');
+      notify('order','Delivered 🎉','Enjoy your meal! Rate your experience.');
+    }
+    render();
+  }
+});
+/* ================================================================
+   STORE ADMIN — MERCHANT MODE (mobile)
+   ================================================================ */
+const merchantIncoming = ()=>S.merchant.seedOrders;
+const merchantRes = ()=>S.merchant.seedRes;
+const merchantHeader = ()=>{
+  const m=S.merchant;
+  return '<div class="appbar"><div class="avatar" style="width:38px;height:38px;background:linear-gradient(135deg,#F6D365,#FDA085);font-size:18px">🍲</div>'
+  +'<div class="title"><div class="bold" style="font-size:14.5px">'+m.store.name+'</div>'
+  +'  <div class="tiny" style="color:var(--green);font-weight:700;display:flex;align-items:center;gap:4px"><span style="width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block"></span> Open · Merchant Mode</div></div>'
+  +'  <button class="iconbtn" onclick="A.setDevice(\'web\')" title="Open web portal">'+ic('chart',17)+'</button></div>';
+};
+
+SCREENS['merchant/orders']=()=>{
+  const list=merchantIncoming();
+  const active=list.filter(o=>!['delivered','cancelled'].includes(o.status));
+  return '<div style="animation:fadeUp .2s">'+merchantHeader()
+  +'<div class="section-pad" style="padding-top:0;display:flex;gap:10px">'
+  +'  <div class="card" style="flex:1;padding:14px"><div class="tiny dim bold">ORDERS TODAY</div><div class="h1" style="font-size:20px;margin-top:2px">'+(S.merchant.doneToday+active.length)+'</div></div>'
+  +'  <div class="card" style="flex:1;padding:14px"><div class="tiny dim bold">SALES TODAY</div><div class="h1" style="font-size:20px;margin-top:2px">'+peso(S.merchant.salesToday)+'</div></div></div>'
+  +'<div class="sec-head" style="padding-top:2px"><span class="h2">Incoming & active</span></div>'
+  +(active.length? active.map(o=>{
+      const next={pending:['Accept order','primary','A.acceptOrder(\''+o.id+'\')'],
+                  preparing:['Mark ready for pickup','dark','A.readyOrder(\''+o.id+'\')'],
+                  ready:['Waiting for rider…','ghost',''],
+                  on_the_way:['Rider on the way 🛵','ghost','']}[o.status];
+      return '<div class="card" style="margin:0 18px 12px;overflow:hidden">'
+      +'<div style="padding:14px 16px 0" class="row"><span class="bold" style="font-size:13.5px">'+o.orderNo+'</span>'
+      +'  <span class="tiny dim">'+o.placed+'</span>'
+      +'  <span class="badge '+(o.status==='pending'?'red':o.status==='preparing'?'amber':'blue')+'" style="margin-left:auto">'+o.status.replace('_',' ')+'</span></div>'
+      +'<div style="padding:8px 16px 12px">'
+      +'  <div class="small muted" style="margin-bottom:2px">'+o.cust+' · COD</div>'
+      +  o.items.map(i=>'<div class="row small" style="justify-content:space-between;padding:3px 0"><span>'+i.qty+'× '+i.name+'</span><span class="muted">'+peso(i.price*i.qty)+'</span></div>').join('')
+      +'  <div class="row small" style="justify-content:space-between;border-top:1px dashed var(--line);margin-top:8px;padding-top:8px"><span class="bold">Total</span><span class="bold">'+peso(o.total)+'</span></div>'
+      +'</div>'
+      +(next?'<div style="padding:0 16px 14px" class="row">'
+        +(o.status==='pending'?'<button class="btn danger sm" style="flex:1" onclick="A.declineOrder(\''+o.id+'\')">Decline</button>':'')
+        +'<button class="btn '+next[1]+' sm" style="flex:2" '+(next[2]?'onclick="'+next[2]+'"':'disabled')+'>'+next[0]+'</button></div>':'')
+      +'</div>';
+    }).join('')
+   :'<div class="empty"><div class="eicon">🍳</div><div class="h3">No active orders</div><div class="small muted">New COD orders appear here in real time.<br>Place an order as a Registered user to see it!</div></div>')
+  +'</div>';
+};
+
+SCREENS['merchant/menu']=()=>{
+  const menu=dishesOf(S.merchant.store.id);
+  return '<div style="animation:fadeUp .2s">'+merchantHeader()
+  +'<div class="sec-head" style="padding-top:0"><span class="h2">Menu & availability</span><button class="btn soft sm" onclick="A.toast(\'Add dish — demo\',\'plus\')">'+ic('plus',13,2.5)+' Add dish</button></div>'
+  +'<div class="section-pad" style="padding-top:0"><div class="note card" style="padding:12px 14px;display:flex;gap:10px;align-items:flex-start;background:var(--blue-50);border-color:#CBDCF8">'
+  +'  <span style="color:var(--blue)">'+ic('zap',15)+'</span><span class="small" style="color:#2B4C7E">Toggling updates the live menu customers see — no reprint needed.</span></div></div>'
+  + menu.map(d=>'<div class="row card" style="padding:12px 14px;margin:0 18px 10px">'
+    +'  <div class="food-thumb" style="width:44px;height:44px;font-size:22px;background:var(--line-2);'+(d.avail?'':'filter:grayscale(1);opacity:.6')+'">'+d.emoji+'</div>'
+    +'  <div style="flex:1;min-width:0"><div class="bold ellipsis" style="font-size:13px">'+d.name+'</div>'
+    +'    <div class="tiny muted">'+peso(d.price)+' · <button style="color:var(--brand);font-weight:700" onclick="A.openSheet(\'editDish\','+d.id+')">Edit</button></div></div>'
+    +'  <button class="switch'+(d.avail?' on':'')+'" onclick="A.toggleDish('+d.id+')"></button></div>').join('')
+  +'</div>';
+};
+
+SCREENS['merchant/tables']=()=>{
+  const rs=merchantRes();
+  return '<div style="animation:fadeUp .2s">'+merchantHeader()
+  +'<div class="sec-head" style="padding-top:0"><span class="h2">Table reservations</span><span class="badge green">'+S.merchant.store.tables+' tables open</span></div>'
+  +(rs.filter(r=>r.status!=='declined').length? rs.filter(r=>r.status!=='declined').map(r=>
+     '<div class="card" style="margin:0 18px 12px;padding:16px">'
+    +'  <div class="row" style="justify-content:space-between"><span class="bold" style="font-size:13.5px">'+r.cust+'</span>'
+    +'    <span class="badge '+(r.status==='confirmed'?'green':'amber')+'">'+r.status+'</span></div>'
+    +'  <div class="small muted" style="margin:4px 0">'+ic('cal',12)+' '+r.when+' · '+r.size+' guests'+(r.notes?'<br>📝 “'+r.notes+'”':'')+'</div>'
+    +(r.status==='pending'
+      ?'<div class="row" style="gap:8px;margin-top:10px"><button class="btn danger sm" style="flex:1" onclick="A.decideRes(\''+r.id+'\',false)">Decline</button>'
+      +'<button class="btn primary sm" style="flex:2" onclick="A.decideRes(\''+r.id+'\',true)">Confirm table</button></div>':'')
+    +'</div>').join('')
+   :'<div class="empty"><div class="eicon">🪑</div><div class="h3">No reservations</div><div class="small muted">Reservation requests appear here.<br>Reserve a table as a Registered user!</div></div>')
+  +'</div>';
+};
+
+SCREENS['merchant/more']=()=>{
+  const trialLeft=38;
+  return '<div style="animation:fadeUp .2s">'+merchantHeader()
+  +'<div class="section-pad" style="padding-top:0"><div class="card" style="padding:16px 18px;background:linear-gradient(135deg,#17191D,#333A47);border:none;color:#fff">'
+  +'  <div class="row" style="justify-content:space-between"><span class="bold" style="font-size:13.5px">Free trial</span><span class="badge" style="background:rgba(255,255,255,.15);color:#fff">'+trialLeft+' days left</span></div>'
+  +'  <div class="progress" style="margin:10px 0;background:rgba(255,255,255,.2)"><div style="width:'+(trialLeft/60*100)+'%;background:#fff"></div></div>'
+  +'  <div class="tiny" style="opacity:.75;margin-bottom:12px">Subscribe to keep your store listed after the trial.</div>'
+  +'  <button class="btn block" style="background:#fff;color:var(--ink)" onclick="A.setDevice(\'web\')">Manage plan on Web Portal '+ic('arrowR',13)+'</button>'
+  +'</div></div>'
+  +'<div class="section-pad" style="padding-top:0"><div class="card">'
+  +'  <div class="listrow" onclick="A.setDevice(\'web\')"><div class="iconbtn" style="width:34px;height:34px;color:var(--brand);background:var(--brand-50);border:none">'+ic('chart',15)+'</div><div style="flex:1"><div class="bold small">Analytics & billing</div><div class="tiny muted">Full web portal</div></div>'+ic('chevR',15)+'</div>'
+  +'  <div class="listrow" style="border-top:1px solid var(--line-2)" onclick="A.toast(\'Store profile — demo\',\'store\')"><div class="iconbtn" style="width:34px;height:34px;color:var(--blue);background:var(--blue-50);border:none">'+ic('store',15)+'</div><div style="flex:1" class="bold small">Store profile & hours</div>'+ic('chevR',15)+'</div>'
+  +'  <div class="listrow" style="border-top:1px solid var(--line-2)" onclick="A.toast(\'Payouts — demo\',\'dollar\')"><div class="iconbtn" style="width:34px;height:34px;color:var(--green);background:var(--green-50);border:none">'+ic('card',15)+'</div><div style="flex:1" class="bold small">Payouts</div>'+ic('chevR',15)+'</div>'
+  +'  <div class="listrow" style="border-top:1px solid var(--line-2)" onclick="A.go(\'guest\')"><div style="flex:1" class="bold small" style="color:var(--red)">Log out</div>'+ic('logout',15)+'</div>'
+  +'</div></div></div>';
+};
+
+Object.assign(A,{
+  acceptOrder(oid){merchantAccept(oid);render();},
+  declineOrder(oid){
+    const mo=S.merchant.seedOrders.find(x=>x.id===oid);if(!mo)return;
+    mo.status='cancelled';setOrderStatus(oid,'cancelled');
+    notify('order','Order declined','Sorry, the store couldn\'t take your order.');
+    toast('Order declined','x');render();
+  },
+  readyOrder(oid){merchantReady(oid);render();},
+  toggleDish(id){const d=DISHES.find(x=>x.id===id);d.avail=!d.avail;toast(d.avail?'"'+d.name+'" is now available':'"'+d.name+'" marked sold out',d.avail?'checkC':'eye');render();},
+  decideRes(id,ok){merchantDecideRes(id,ok);}
+});
+/* ================================================================
+   STORE ADMIN — WEB PORTAL (desktop)
+   ================================================================ */
+let portalPage='overview';
+function portalShell(){
+  const items=[['overview','grid','Overview'],['menu','grid','Menu & prices'],['orders','receipt','Orders'],['analytics','chart','Analytics'],['billing','card','Billing & plan'],['settings','sliders','Store settings']];
+  const side='<div class="side-brand"><span class="mark">🍲</span><div><div>Mama Letty\'s</div><div class="tiny dim" style="font-weight:600">Merchant Portal</div></div></div>'
+   +'<div class="side-label">Manage</div>'
+   + items.map(i=>'<button class="side-item'+(portalPage===i[0]?' active':'')+'" onclick="A.portal(\''+i[0]+'\')">'+ic(i[1],16)+' '+i[2]+(i[0]==='orders'&&merchantIncoming().some(o=>o.status==='pending')?'<span class="cnt">'+merchantIncoming().filter(o=>o.status==='pending').length+'</span>':'')+'</button>').join('')
+   +'<div style="margin-top:auto;padding:12px"><div class="card" style="padding:12px;background:var(--brand-50);border-color:var(--brand-100)"><div class="tiny bold" style="color:var(--brand)">TRIAL · 38 DAYS LEFT</div><div class="progress" style="margin:8px 0"><div style="width:63%"></div></div><button class="btn primary sm block" onclick="A.portal(\'billing\')">Upgrade to Pro</button></div></div>';
+  return '<aside class="sidebar">'+side+'</aside><main class="webmain">'+PORTAL[portalPage]()+'</main>';
+}
+const PORTAL = {
+  overview(){
+    return '<div class="web-head"><div><div class="h1">Good afternoon, Letty 👋</div><div class="small muted">Here\'s how your karenderia is doing today.</div></div>'
+    +'<button class="btn dark" onclick="A.setDevice(\'app\')">'+ic('phone',14)+' Switch to Merchant Mode</button></div>'
+    +'<div class="kpis">'
+    +[['💰','Sales today',peso(S.merchant.salesToday),'+12% vs yesterday','var(--green)'],
+      ['🧾','Orders today',S.merchant.doneToday+merchantIncoming().filter(o=>!['delivered','cancelled'].includes(o.status)).length,'3 peak-hour','var(--blue)'],
+      ['⭐','Rating','4.8','212 reviews','var(--amber)'],
+      ['🪑','Tables open',S.merchant.store.tables+' / 8','updates live','var(--violet)']]
+     .map(k=>'<div class="kpi"><div class="k-label">'+k[0]+' '+k[1]+'</div><div class="k-val">'+k[2]+'</div><div class="k-delta" style="color:'+k[4]+'">'+k[3]+'</div></div>').join('')
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1.6fr 1fr;gap:14px">'
+    +'<div class="panel"><div class="p-head"><span class="h3">This week\'s sales</span><span class="badge green">+18% WoW</span></div>'
+    +'  <div class="p-body"><div class="bars">'
+    +  [['Mon',42],['Tue',38],['Wed',55],['Thu',48],['Fri',70],['Sat',92],['Sun',64]].map(b=>'<div class="bar"><i style="height:'+b[1]+'%"></i><span>'+b[0]+'</span></div>').join('')
+    +'  </div></div></div>'
+    +'<div class="panel"><div class="p-head"><span class="h3">Top dishes</span></div><div class="p-body" style="display:flex;flex-direction:column;gap:12px">'
+    +  [['🍖','Pork Humba',86],['🍗','Chicken Adobo',64],['🍲','Sinigang',41],['🥦','Chopsuey',22]].map(d=>
+       '<div class="row"><span style="font-size:18px">'+d[0]+'</span><span class="small" style="flex:1">'+d[1]+'</span><div class="progress" style="width:90px"><div style="width:'+d[2]+'%"></div></div><span class="tiny dim" style="width:44px;text-align:right">'+d[2]+' sold</span></div>').join('')
+    +'</div></div></div>';
+  },
+  menu(){
+    const menu=dishesOf(S.merchant.store.id);
+    return '<div class="web-head"><div><div class="h1">Menu & prices</div><div class="small muted">Changes go live to customers instantly.</div></div>'
+    +'<button class="btn primary" onclick="A.toast(\'Add dish — demo\',\'plus\')">'+ic('plus',14)+' Add dish</button></div>'
+    +'<div class="panel"><table class="table"><tr><th>Dish</th><th>Price</th><th>Tag</th><th>Status</th><th style="text-align:right">Available</th></tr>'
+    + menu.map(d=>'<tr><td><div class="row"><span style="font-size:20px">'+d.emoji+'</span><span class="bold">'+d.name+'</span></div></td>'
+      +'<td>'+peso(d.price)+'</td><td>'+(d.tag?'<span class="badge amber">'+d.tag+'</span>':'<span class="dim">—</span>')+'</td>'
+      +'<td>'+(d.avail?'<span class="badge green">Live</span>':'<span class="badge gray">Sold out</span>')+'</td>'
+      +'<td style="text-align:right"><button class="switch'+(d.avail?' on':'')+'" onclick="A.toggleDish('+d.id+')"></button></td></tr>').join('')
+    +'</table></div>';
+  },
+  orders(){
+    const list=merchantIncoming().filter(o=>o.status!=='cancelled');
+    return '<div class="web-head"><div><div class="h1">Orders</div><div class="small muted">Real-time COD order stream. Daily ops are faster in Merchant Mode.</div></div></div>'
+    +'<div class="panel"><table class="table"><tr><th>Order</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th></tr>'
+    +(list.length?list.map(o=>'<tr><td class="bold">'+o.orderNo+'<div class="tiny dim">'+o.placed+'</div></td><td>'+o.cust+'</td>'
+      +'<td class="small muted">'+o.items.map(i=>i.qty+'× '+i.name).join(', ')+'</td><td class="bold">'+peso(o.total)+'</td>'
+      +'<td><span class="badge '+(o.status==='pending'?'red':o.status==='delivered'?'green':'blue')+'">'+o.status.replace('_',' ')+'</span></td></tr>').join('')
+      :'<tr><td colspan="5" style="text-align:center;padding:40px" class="muted">No orders yet today</td></tr>')
+    +'</table></div>';
+  },
+  analytics(){
+    return '<div class="web-head"><div><div class="h1">Analytics</div><div class="small muted">Understand your Mati customers.</div></div></div>'
+    +'<div class="kpis">'
+    +[['👥','Repeat customers','61%',''],['⏱️','Peak hour','12–1 PM',''],['📍','Top barangay','Central',''],['💸','Avg. basket','₱172','']]
+     .map(k=>'<div class="kpi"><div class="k-label">'+k[0]+' '+k[1]+'</div><div class="k-val" style="font-size:20px">'+k[2]+'</div></div>').join('')
+    +'</div>'
+    +'<div class="panel"><div class="p-head"><span class="h3">Orders by hour</span></div><div class="p-body"><div class="bars">'
+    +[['8a',20],['9a',28],['10a',36],['11a',58],['12p',95],['1p',80],['2p',42],['5p',50],['6p',74],['7p',66]].map(b=>'<div class="bar"><i style="height:'+b[1]+'%"></i><span>'+b[0]+'</span></div>').join('')
+    +'</div></div></div>';
+  },
+  billing(){
+    return '<div class="web-head"><div><div class="h1">Billing & plan</div><div class="small muted">Powered by PayMongo. Invoices emailed monthly.</div></div></div>'
+    +'<div style="display:grid;grid-template-columns:1.3fr 1fr;gap:14px;align-items:start">'
+    +'<div class="panel"><div class="p-head"><span class="h3">Current plan</span><span class="badge amber">Trial · 38 days left</span></div><div class="p-body">'
+    +'  <div class="row" style="justify-content:space-between;margin-bottom:12px"><div><div class="h2">Free Trial</div><div class="small muted">Full Pro features until Nov 5</div></div><span class="h1">₱0</span></div>'
+    +'  <div class="progress" style="margin-bottom:16px"><div style="width:63%"></div></div>'
+    +'  <div class="card" style="padding:16px;border:1.5px solid var(--brand);background:var(--brand-50)">'
+    +'    <div class="row" style="justify-content:space-between"><div><div class="h3">MFF Pro</div><div class="tiny muted">Everything you need after trial</div></div><div style="text-align:right"><span class="h2" style="color:var(--brand)">₱499</span><span class="tiny dim">/mo</span></div></div>'
+    +'    <div class="small" style="margin:10px 0 14px;display:flex;flex-direction:column;gap:6px">'
+    +'      <span class="row" style="gap:8px;color:var(--ink-2)">'+ic('checkC',14)+' Unlimited menu items & photos</span>'
+    +'      <span class="row" style="gap:8px;color:var(--ink-2)">'+ic('checkC',14)+' Analytics & peak-hour insights</span>'
+    +'      <span class="row" style="gap:8px;color:var(--ink-2)">'+ic('checkC',14)+' Priority placement in search</span></div>'
+    +'    <button class="btn primary block" onclick="A.openSheet(\'subscribe\')">Subscribe via PayMongo</button>'
+    +'  </div></div></div>'
+    +'<div class="panel"><div class="p-head"><span class="h3">Invoice history</span></div><div class="p-body" style="padding:8px 0">'
+    +'  <div class="listrow" style="background:none"><div style="flex:1"><div class="bold small">Trial period</div><div class="tiny dim">Sep 5 – Nov 5</div></div><span class="badge amber">₱0.00</span></div>'
+    +'  <div class="tiny dim" style="padding:8px 20px">Paid invoices will appear here after your first billing cycle.</div>'
+    +'</div></div></div>';
+  },
+  settings(){
+    return '<div class="web-head"><div><div class="h1">Store settings</div><div class="small muted">These details appear on your public page.</div></div></div>'
+    +'<div class="panel"><div class="p-body" style="max-width:520px">'
+    +'<label class="label">Store name</label><input class="input" value="Mama Letty\'s Karenderia" style="margin-bottom:12px">'
+    +'<label class="label">Address</label><input class="input" value="Magsaysay St, Brgy. Central, Mati City" style="margin-bottom:12px">'
+    +'<div class="row" style="gap:10px;margin-bottom:12px"><div style="flex:1"><label class="label">Opens</label><input class="input" value="7:00 AM"></div><div style="flex:1"><label class="label">Closes</label><input class="input" value="8:30 PM"></div></div>'
+    +'<label class="label">Description</label><textarea class="input" rows="3" style="margin-bottom:16px;resize:none">Beloved neighborhood karenderia famous for slow-cooked humba and unlimited sabaw.</textarea>'
+    +'<button class="btn primary" onclick="A.toast(\'Store profile saved\',\'checkC\')">Save changes</button>'
+    +'</div></div>';
+  }
+};
+Object.assign(A,{
+  portal(p){portalPage=p;render();},
+  doSubscribe(){A.closeSheet();toast('Subscribed to MFF Pro via PayMongo 🎉','card');}
+});
+
+/* ================================================================
+   SYSTEM ADMIN — WEB DASHBOARD
+   ================================================================ */
+function adminShell(){
+  const pending=S.admin.approvals.length, flags=S.admin.flags.length;
+  const items=[['overview','grid','Overview',0],['approvals','checkC','Store approvals',pending],['stores','store','Stores',0],['users','users','Users',0],['moderation','flag','Moderation',flags],['subs','card','Subscriptions',0]];
+  const side='<div class="side-brand"><span class="mark">🍜</span><div><div>MFF Admin</div><div class="tiny dim" style="font-weight:600">System Console</div></div></div>'
+   +'<div class="side-label">Platform</div>'
+   + items.map(i=>'<button class="side-item'+(S.admin.page===i[0]?' active':'')+'" onclick="A.admin(\''+i[0]+'\')">'+ic(i[1],16)+' '+i[2]+(i[3]?'<span class="cnt">'+i[3]+'</span>':'')+'</button>').join('')
+   +'<div style="margin-top:auto;padding:12px" class="tiny dim">v1.0 · Mati City, PH<br>All systems <span style="color:var(--green);font-weight:700">operational</span></div>';
+  return '<aside class="sidebar">'+side+'</aside><main class="webmain">'+ADMIN[S.admin.page]()+'</main>';
+}
+const ADMIN = {
+  overview(){
+    return '<div class="web-head"><div><div class="h1">Platform overview</div><div class="small muted">Mati FoodFinder · September 29, 2026</div></div>'
+    +'<span class="badge green">'+ic('zap',11)+' Live</span></div>'
+    +'<div class="kpis">'
+    +[['🏪','Active stores','24','+3 this week','var(--green)'],
+      ['👥','Registered users','1,842','+126 this week','var(--green)'],
+      ['🛵','Active riders','17','5 online now','var(--blue)'],
+      ['🧾','Orders today','213','₱38.4k GMV','var(--violet)']]
+     .map(k=>'<div class="kpi"><div class="k-label">'+k[0]+' '+k[1]+'</div><div class="k-val">'+k[2]+'</div><div class="k-delta" style="color:'+k[4]+'">'+k[3]+'</div></div>').join('')
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1.6fr 1fr;gap:14px;align-items:start">'
+    +'<div class="panel"><div class="p-head"><span class="h3">Signups & orders (7 days)</span>'
+    +'  <div class="legend"><span><i style="background:var(--brand)"></i>Orders</span></div></div>'
+    +'  <div class="p-body"><div class="bars">'
+    +  [['Sep 23',45],['Sep 24',52],['Sep 25',48],['Sep 26',66],['Sep 27',71],['Sep 28',88],['Sep 29',95]].map(b=>'<div class="bar"><i style="height:'+b[1]+'%"></i><span>'+b[0]+'</span></div>').join('')
+    +'</div></div></div>'
+    +'<div class="panel"><div class="p-head"><span class="h3">Needs attention</span></div><div class="p-body" style="display:flex;flex-direction:column;gap:10px">'
+    +'  <button class="card row" style="padding:12px;text-align:left;width:100%" onclick="A.admin(\'approvals\')"><span class="badge red">'+S.admin.approvals.length+'</span><span class="small" style="flex:1">Store applications awaiting review</span>'+ic('chevR',14)+'</button>'
+    +'  <button class="card row" style="padding:12px;text-align:left;width:100%" onclick="A.admin(\'moderation\')"><span class="badge amber">'+S.admin.flags.length+'</span><span class="small" style="flex:1">Flagged feed posts</span>'+ic('chevR',14)+'</button>'
+    +'  <button class="card row" style="padding:12px;text-align:left;width:100%" onclick="A.admin(\'subs\')"><span class="badge gray">1</span><span class="small" style="flex:1">Subscription past due</span>'+ic('chevR',14)+'</button>'
+    +'</div></div></div>';
+  },
+  approvals(){
+    return '<div class="web-head"><div><div class="h1">Store approvals</div><div class="small muted">Verify documents before a store goes live.</div></div></div>'
+    +(S.admin.approvals.length
+      ?'<div class="panel"><table class="table"><tr><th>Store</th><th>Owner</th><th>Area</th><th>Documents</th><th>Applied</th><th style="text-align:right">Decision</th></tr>'
+      + S.admin.approvals.map(a=>'<tr><td class="bold">'+a.name+'<div class="tiny dim">'+a.cat+'</div></td><td>'+a.owner+'</td><td>'+a.area+'</td>'
+        +'<td><span class="badge blue">'+ic('fileText',11)+' '+a.docs+'</span></td><td class="small muted">'+a.applied+'</td>'
+        +'<td style="text-align:right"><div class="row" style="gap:6px;justify-content:flex-end">'
+        +'  <button class="btn ghost sm" onclick="A.toast(\'Document viewer — demo\',\'eye\')">Review</button>'
+        +'  <button class="btn danger sm" onclick="A.decideStore(\''+a.id+'\',false)">Reject</button>'
+        +'  <button class="btn primary sm" onclick="A.decideStore(\''+a.id+'\',true)">Approve</button></div></td></tr>').join('')
+      +'</table></div>'
+      :'<div class="panel"><div class="empty"><div class="eicon">✅</div><div class="h3">All caught up</div><div class="small muted">No pending applications.</div></div></div>');
+  },
+  stores(){
+    return '<div class="web-head"><div><div class="h1">Stores</div><div class="small muted">All listed stores in Mati City.</div></div></div>'
+    +'<div class="panel"><table class="table"><tr><th>Store</th><th>Category</th><th>Rating</th><th>Orders (7d)</th><th>Status</th></tr>'
+    + RESTAURANTS.map((r,i)=>'<tr><td><div class="row"><span style="font-size:20px">'+r.emoji+'</span><span class="bold">'+r.name+'</span></div></td>'
+      +'<td class="small muted">'+r.cat+'</td><td>★ '+r.rating+'</td><td>'+[86,124,73,58,41][i]+'</td>'
+      +'<td><span class="badge green">Live</span></td></tr>').join('')
+    +'</table></div>';
+  },
+  users(){
+    const rows=[['Kathleen Mendoza','Customer','23 orders','green'],['Jomer Cruz','Rider','4.9 ★ · 412 trips','green'],['Letty Ramos','Store Admin','Mama Letty\'s','green'],['Jerome P.','Customer','8 orders','green'],['Dianne Rago','Store Admin','Pending approval','amber'],['anon88','Customer','Flagged ×2','red']];
+    return '<div class="web-head"><div><div class="h1">Users</div><div class="small muted">1,842 registered accounts.</div></div>'
+    +'<div class="searchbar" style="margin:0;width:260px;background:#fff">'+ic('search',15)+'<input placeholder="Search users…"></div></div>'
+    +'<div class="panel"><table class="table"><tr><th>Name</th><th>Role</th><th>Activity</th><th>Status</th><th style="text-align:right">Actions</th></tr>'
+    + rows.map(u=>'<tr><td><div class="row"><div class="avatar" style="width:30px;height:30px;font-size:12px;background:var(--ink-2)">'+u[0][0]+'</div><span class="bold">'+u[0]+'</span></div></td>'
+      +'<td class="small muted">'+u[1]+'</td><td class="small muted">'+u[2]+'</td>'
+      +'<td><span class="badge '+u[3]+'">'+(u[3]==='green'?'Active':u[3]==='amber'?'Pending':'Flagged')+'</span></td>'
+      +'<td style="text-align:right"><button class="btn ghost sm" onclick="A.toast(\'User detail — demo\',\'eye\')">View</button></td></tr>').join('')
+    +'</table></div>';
+  },
+  moderation(){
+    return '<div class="web-head"><div><div class="h1">Moderation</div><div class="small muted">Community-reported feed content.</div></div></div>'
+    +(S.admin.flags.length
+      ? S.admin.flags.map(f=>'<div class="panel" style="margin-bottom:12px"><div class="p-body">'
+        +'<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px">'
+        +'  <div class="row"><span class="badge red">'+ic('flag',11)+' '+f.reason+'</span><span class="tiny dim">'+f.reports+' reports</span></div>'
+        +'  <div class="row" style="gap:8px"><button class="btn ghost sm" onclick="A.resolveFlag(\''+f.id+'\',false)">Keep post</button>'
+        +'    <button class="btn danger sm" onclick="A.resolveFlag(\''+f.id+'\',true)">'+ic('trash',13)+' Remove post</button></div></div>'
+        +'<hr class="divider" style="margin:12px 0">'
+        +'<div class="small"><b>'+f.post+'</b> · '+f.by+'</div><div class="small muted" style="margin-top:4px">'+f.excerpt+'</div>'
+        +'</div></div>').join('')
+      :'<div class="panel"><div class="empty"><div class="eicon">🛡️</div><div class="h3">Queue clear</div><div class="small muted">No flagged content.</div></div></div>');
+  },
+  subs(){
+    return '<div class="web-head"><div><div class="h1">Subscriptions</div><div class="small muted">Store billing via PayMongo.</div></div></div>'
+    +'<div class="kpis">'
+    +[['💳','MRR','₱9,482',''],['✅','Active paid','19',''],['🎁','On trial','5',''],['⚠️','Past due','1','']]
+     .map(k=>'<div class="kpi"><div class="k-label">'+k[0]+' '+k[1]+'</div><div class="k-val" style="font-size:20px">'+k[2]+'</div></div>').join('')
+    +'</div>'
+    +'<div class="panel"><table class="table"><tr><th>Store</th><th>Plan</th><th>Next billing</th><th>Status</th><th style="text-align:right">Actions</th></tr>'
+    + S.admin.subs.map(s=>'<tr><td class="bold">'+s.store+'</td><td class="small muted">'+s.plan+'</td><td class="small muted">'+s.renew+'</td>'
+      +'<td><span class="badge '+(s.status==='active'?'green':s.status==='trial'?'amber':'red')+'">'+s.status.replace('_',' ')+'</span></td>'
+      +'<td style="text-align:right">'+(s.status==='past_due'
+        ?'<button class="btn primary sm" onclick="A.toast(\'Reminder sent via email\',\'send\')">Send reminder</button>'
+        :'<button class="btn ghost sm" onclick="A.toast(\'Invoice — demo\',\'fileText\')">Invoice</button>')+'</td></tr>').join('')
+    +'</table></div>';
+  }
+};
+Object.assign(A,{
+  admin(p){S.admin.page=p;render();},
+  decideStore(id,ok){
+    const a=S.admin.approvals.find(x=>x.id===id);
+    S.admin.approvals=S.admin.approvals.filter(x=>x.id!==id);
+    toast(ok?'"'+a.name+'" approved & live 🎉':'Application rejected',ok?'checkC':'x');render();
+  },
+  resolveFlag(id,remove){
+    S.admin.flags=S.admin.flags.filter(f=>f.id!==id);
+    toast(remove?'Post removed, author notified':'Report dismissed — post kept',remove?'trash':'checkC');render();
+  }
+});
+/* ================================================================
+   GUIDE PANEL (explains each role's flow while you click through)
+   ================================================================ */
+const GUIDES = {
+  guest:{
+    eyebrow:'Role 5 of 5', title:'Guest User', platform:'📱 Mobile app · no account',
+    desc:'Guests browse freely — no forced sign-up wall. The app only asks them to register at the exact moment they try to act (order, reserve, post).',
+    steps:['Browse <b>Home</b> — restaurants, live dishes, trending picks. No login required.','Open a restaurant, tap <b>Add</b> on a dish → a one-time sign-up sheet appears.','Tap <b>Maybe later</b>, then open the <b>Explore</b> map and get directions — always free.','Open the <b>Feed</b> tab — guests can read, but liking/commenting asks for an account.','Tap <b>Sign up free</b> → you become a Registered User.']
+  },
+  user:{
+    eyebrow:'Role 4 of 5', title:'Registered User', platform:'📱 Mobile app',
+    desc:'The core customer loop: discover → order COD (or reserve a table) → track live → rate & share. One primary action per screen; details stay in drill-down pages and bottom sheets.',
+    steps:['Home shows a <b>“For you”</b> ML pick based on visit history (toggle it in Profile).','Open a restaurant → <b>Add</b> dishes → <b>View cart</b> → checkout with COD.','Place the order, then watch the <b>live tracking stepper</b>. It advances as the Store Admin & Rider (switch roles!) do their part.','From a restaurant page, <b>Reserve table</b> → the Store Admin confirms it in real time.','Share your meal on the <b>Feed</b> tab.']
+  },
+  rider:{
+    eyebrow:'Role 3 of 5', title:'Delivery Rider', platform:'📱 Mobile app · independent',
+    desc:'A single-task interface: go online, accept a nearby COD request, follow the three-step delivery. Big touch targets, cash amounts always visible.',
+    steps:['Toggle <b>Online</b> (top-right) to receive requests.','Tap <b>Accept</b> on a request → the stepper guides pickup → collect cash → done.','Tip: place an order as a Registered User first — it arrives here after the store marks it ready.','Check the <b>Earnings</b> tab for the weekly summary.']
+  },
+  merchant:{
+    eyebrow:'Role 2 of 5', title:'Store Admin', platform:'📱 Merchant Mode · 🖥️ Web Portal (use the toggle above)',
+    desc:'Two surfaces, one job each. The phone app is for the kitchen: accept orders, mark sold-out dishes, confirm tables — fast, one-thumb actions. The web portal is for the owner\'s desk: analytics, menu pricing, billing.',
+    steps:['<b>Merchant App:</b> accept the incoming order (or place one as a Registered User first).','Mark it <b>ready</b> → a rider is auto-requested.','In <b>Menu</b>, toggle a dish sold-out — it instantly greys out on the customer side.','Confirm the pending request in <b>Tables</b>.','Switch to <b>Web Portal</b> (top bar) → check Analytics, then open <b>Billing</b> and subscribe via PayMongo.']
+  },
+  admin:{
+    eyebrow:'Role 1 of 5', title:'System Admin', platform:'🖥️ Web dashboard',
+    desc:'The operator\'s console: platform KPIs, store approvals, content moderation, and subscription health. Table-first layouts, with queues that empty as you work them.',
+    steps:['<b>Overview</b> surfaces the 3 queues that need attention.','Open <b>Store approvals</b> → review documents → Approve or Reject.','Open <b>Moderation</b> → keep or remove flagged feed posts.','Open <b>Subscriptions</b> → chase the past-due store with one click.']
+  }
+};
+function renderGuide(){
+  const g=GUIDES[S.role];
+  document.getElementById('guide').innerHTML =
+    '<div class="role-eyebrow">'+g.eyebrow+'</div><h1>'+g.title+'</h1>'
+   +'<span class="platform">'+g.platform+'</span>'
+   +'<p class="desc">'+g.desc+'</p>'
+   +'<div class="try-title">Try this flow</div>'
+   +'<ol class="try">'+g.steps.map(s=>'<li><span>'+s+'</span></li>').join('')+'</ol>'
+   +'<div class="note"><b>🔗 Connected demo:</b> orders flow across roles — place a COD order as a <b>Registered User</b>, accept it as the <b>Store Admin</b>, then deliver it as the <b>Rider</b>. (Steps auto-advance after a few seconds if nobody acts.)</div>';
+}
+
+/* ---------- Boot ---------- */
+render();
+</script>
+</body>
+</html>

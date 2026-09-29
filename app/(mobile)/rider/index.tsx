@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, ScrollView, Pressable, Switch, Modal, Alert } from "react-native";
+import { View, Text, ScrollView, Pressable, Switch, Modal, Alert, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -8,6 +8,12 @@ export default function MobileRiderMode() {
   const router = useRouter();
   const [isOnline, setIsOnline] = useState(true);
   const [activeJobId, setActiveJobId] = useState<number | null>(null);
+  const [jobStage, setJobStage] = useState<"heading_to_store" | "picked_up" | "arrived">("heading_to_store");
+  const [showHandshakeModal, setShowHandshakeModal] = useState(false);
+  const [handshakePin, setHandshakePin] = useState("");
+  const [cashCollectedConfirmed, setCashCollectedConfirmed] = useState(false);
+  const [todayEarnings, setTodayEarnings] = useState(620.0);
+  const [completedTrips, setCompletedTrips] = useState(7);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
 
   const [availableJobs, setAvailableJobs] = useState([
@@ -19,10 +25,12 @@ export default function MobileRiderMode() {
       distance: "2.1 km",
       estTime: "15 min",
       deliveryFee: "₱65.00",
+      deliveryFeeNum: 65,
       codAmount: "₱220.00",
       customerName: "Maria Santos",
       customerPhone: "0917-889-1234",
       items: "2x Pork Humba, 2x Extra Rice",
+      completionPin: "4821",
     },
     {
       id: 2049,
@@ -32,22 +40,54 @@ export default function MobileRiderMode() {
       distance: "6.8 km",
       estTime: "25 min",
       deliveryFee: "₱120.00",
+      deliveryFeeNum: 120,
       codAmount: "₱580.00",
       customerName: "John Reyes",
       customerPhone: "0928-554-9876",
       items: "1x Tuna Panga Grill, 1x Kinilaw",
+      completionPin: "3914",
     },
   ]);
 
   const acceptJob = (id: number) => {
     setActiveJobId(id);
+    setJobStage("heading_to_store");
+    setCashCollectedConfirmed(false);
+    setHandshakePin("");
     Alert.alert("Job Accepted! 🛵", `Accepted Delivery #MFF-${id}! Navigate to restaurant for pickup.`);
   };
 
-  const completeJob = () => {
-    Alert.alert("Delivery Completed! 🎉", "Cash of COD collected from customer and delivery fee credited to your wallet balance.");
-    setAvailableJobs(availableJobs.filter((j) => j.id !== activeJobId));
+  const handleVerifyHandshakeAndComplete = () => {
+    if (!cashCollectedConfirmed) {
+      Alert.alert(
+        "Cash Collection Required",
+        "Please check the confirmation box indicating you have collected the Cash on Delivery amount from the customer."
+      );
+      return;
+    }
+
+    const currentJob = availableJobs.find((j) => j.id === activeJobId);
+    const expectedPin = currentJob?.completionPin || "4821";
+
+    if (handshakePin.trim() && handshakePin.trim() !== expectedPin) {
+      Alert.alert(
+        "Invalid Delivery PIN",
+        `The PIN you entered (${handshakePin}) does not match the customer's PIN. Ask ${currentJob?.customerName} for the 4-digit code shown in their app.`
+      );
+      return;
+    }
+
+    const fee = currentJob?.deliveryFeeNum || 65;
+    setTodayEarnings((prev) => prev + fee);
+    setCompletedTrips((prev) => prev + 1);
+    setShowHandshakeModal(false);
+    setAvailableJobs((prev) => prev.filter((j) => j.id !== activeJobId));
     setActiveJobId(null);
+
+    Alert.alert(
+      "Delivery Completed! 🎉",
+      `Cash on Delivery collected successfully! ₱${fee}.00 delivery fee has been credited to your Rider Wallet.`
+    );
   };
 
   const handleExitToPortal = () => {
@@ -121,8 +161,8 @@ export default function MobileRiderMode() {
             Today's Delivery Earnings
           </Text>
           <View className="flex-row justify-between items-baseline mb-3">
-            <Text className="text-3xl font-black text-white">₱620.00</Text>
-            <Text className="text-xs text-sky-200 font-bold">7 completed trips</Text>
+            <Text className="text-3xl font-black text-white">₱{todayEarnings.toFixed(2)}</Text>
+            <Text className="text-xs text-sky-200 font-bold">{completedTrips} completed trips</Text>
           </View>
           <View className="pt-3 border-t border-sky-800 flex-row justify-between items-center">
             <Text className="text-xs text-sky-100 font-medium">Payment Protocol:</Text>
@@ -143,6 +183,58 @@ export default function MobileRiderMode() {
               <View className="bg-emerald-100 px-3 py-1 rounded-full">
                 <Text className="text-xs font-bold text-emerald-800">
                   Your Fee: {activeJob.deliveryFee}
+                </Text>
+              </View>
+            </View>
+
+            {/* Stage Progress Indicator */}
+            <View className="flex-row gap-1.5 mb-4">
+              <View
+                className={`flex-1 h-1.5 rounded-full ${
+                  jobStage === "heading_to_store" || jobStage === "picked_up" || jobStage === "arrived"
+                    ? "bg-emerald-600"
+                    : "bg-gray-200"
+                }`}
+              />
+              <View
+                className={`flex-1 h-1.5 rounded-full ${
+                  jobStage === "picked_up" || jobStage === "arrived" ? "bg-emerald-600" : "bg-gray-200"
+                }`}
+              />
+              <View
+                className={`flex-1 h-1.5 rounded-full ${
+                  jobStage === "arrived" ? "bg-emerald-600" : "bg-gray-200"
+                }`}
+              />
+            </View>
+
+            <View className="flex-row items-center justify-between mb-3 px-1">
+              <Text className="text-[10px] font-extrabold uppercase text-gray-500">
+                Current Status:
+              </Text>
+              <View
+                className={`px-2 py-0.5 rounded-md ${
+                  jobStage === "heading_to_store"
+                    ? "bg-amber-100"
+                    : jobStage === "picked_up"
+                    ? "bg-sky-100"
+                    : "bg-emerald-100"
+                }`}
+              >
+                <Text
+                  className={`text-[10px] font-black uppercase ${
+                    jobStage === "heading_to_store"
+                      ? "text-amber-800"
+                      : jobStage === "picked_up"
+                      ? "text-sky-800"
+                      : "text-emerald-800"
+                  }`}
+                >
+                  {jobStage === "heading_to_store"
+                    ? "Heading to Store"
+                    : jobStage === "picked_up"
+                    ? "Out for Delivery"
+                    : "At Customer Location"}
                 </Text>
               </View>
             </View>
@@ -191,23 +283,58 @@ export default function MobileRiderMode() {
               <Text className="text-lg font-black text-amber-950">{activeJob.codAmount}</Text>
             </View>
 
-            <View className="flex-row gap-3">
+            {/* Action Buttons based on stage */}
+            <View className="gap-2.5">
+              {jobStage === "heading_to_store" && (
+                <Pressable
+                  onPress={() => {
+                    setJobStage("picked_up");
+                    Alert.alert(
+                      "Food Picked Up! 🥡",
+                      `You have collected order #MFF-${activeJob.id} from ${activeJob.restaurant}. Head towards ${activeJob.customerName} at ${activeJob.dropoffArea}.`
+                    );
+                  }}
+                  className="w-full py-3.5 bg-orange-500 rounded-xl items-center flex-row justify-center gap-1.5 shadow-sm"
+                >
+                  <Ionicons name="bag-check" size={16} color="white" />
+                  <Text className="text-xs font-bold text-white">Confirm Food Picked Up →</Text>
+                </Pressable>
+              )}
+
+              {jobStage === "picked_up" && (
+                <Pressable
+                  onPress={() => {
+                    setJobStage("arrived");
+                    Alert.alert(
+                      "Arrived at Customer! 📍",
+                      `You've arrived at ${activeJob.dropoffArea}. Call ${activeJob.customerName}, collect ${activeJob.codAmount} COD cash, and enter their 4-digit PIN.`
+                    );
+                  }}
+                  className="w-full py-3.5 bg-sky-600 rounded-xl items-center flex-row justify-center gap-1.5 shadow-sm"
+                >
+                  <Ionicons name="location" size={16} color="white" />
+                  <Text className="text-xs font-bold text-white">Mark Arrived at Customer →</Text>
+                </Pressable>
+              )}
+
+              {jobStage === "arrived" && (
+                <Pressable
+                  onPress={() => setShowHandshakeModal(true)}
+                  className="w-full py-3.5 bg-emerald-700 rounded-xl items-center flex-row justify-center gap-1.5 shadow-sm"
+                >
+                  <Ionicons name="lock-closed" size={16} color="white" />
+                  <Text className="text-xs font-black text-white">🔐 Verify PIN & Handshake Delivery</Text>
+                </Pressable>
+              )}
+
               <Pressable
                 onPress={() =>
                   Alert.alert("Calling Customer", `Dialing ${activeJob.customerName} at ${activeJob.customerPhone}...`)
                 }
-                className="flex-1 py-3 bg-gray-100 rounded-xl items-center flex-row justify-center gap-1.5 border border-gray-200"
+                className="w-full py-2.5 bg-gray-100 rounded-xl items-center flex-row justify-center gap-1.5 border border-gray-200"
               >
                 <Ionicons name="call" size={15} color="#374151" />
-                <Text className="text-xs font-bold text-gray-700">Call Customer</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={completeJob}
-                className="flex-1 py-3 bg-emerald-700 rounded-xl items-center flex-row justify-center gap-1.5 shadow-sm"
-              >
-                <Ionicons name="checkmark-done" size={16} color="white" />
-                <Text className="text-xs font-bold text-white">Mark Delivered</Text>
+                <Text className="text-xs font-bold text-gray-700">Call Customer ({activeJob.customerPhone})</Text>
               </Pressable>
             </View>
           </View>
@@ -351,7 +478,7 @@ export default function MobileRiderMode() {
                 </View>
                 <View className="flex-row justify-between py-1">
                   <Text className="text-xs text-gray-500">Earned Delivery Wallet</Text>
-                  <Text className="text-xs font-black text-emerald-800">₱620.00</Text>
+                  <Text className="text-xs font-black text-emerald-800">₱{todayEarnings.toFixed(2)}</Text>
                 </View>
               </View>
 
@@ -364,6 +491,101 @@ export default function MobileRiderMode() {
                 <Text className="text-white font-bold text-xs">
                   Exit Rider Mode & Return to Portal
                 </Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* COD HANDSHAKE VERIFICATION MODAL */}
+      <Modal
+        visible={showHandshakeModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowHandshakeModal(false)}
+      >
+        <View className="flex-1 justify-end bg-black/60">
+          <View className="bg-white rounded-t-3xl p-5 max-h-[85%]">
+            <View className="flex-row justify-between items-center pb-3 border-b border-gray-100">
+              <View className="flex-row items-center gap-2">
+                <Text className="text-xl">🔐</Text>
+                <View>
+                  <Text className="text-base font-black text-gray-900 uppercase">
+                    COD Handshake Verification
+                  </Text>
+                  <Text className="text-xs text-emerald-700 font-bold">
+                    Order #MFF-{activeJob?.id}
+                  </Text>
+                </View>
+              </View>
+              <Pressable
+                onPress={() => setShowHandshakeModal(false)}
+                className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center"
+              >
+                <Ionicons name="close" size={20} color="#4b5563" />
+              </Pressable>
+            </View>
+
+            <ScrollView className="mt-4" showsVerticalScrollIndicator={false}>
+              <Text className="text-xs text-gray-600 mb-3 leading-relaxed">
+                Ask customer <Text className="font-bold text-gray-900">{activeJob?.customerName}</Text> for their 4-digit Delivery PIN before releasing order:
+              </Text>
+
+              {/* PIN Input */}
+              <View className="mb-4">
+                <Text className="text-[11px] font-bold text-gray-500 uppercase mb-1.5 text-center">
+                  Customer 4-Digit PIN (Demo: {activeJob?.completionPin || "4821"})
+                </Text>
+                <TextInput
+                  value={handshakePin}
+                  onChangeText={setHandshakePin}
+                  placeholder="••••"
+                  keyboardType="number-pad"
+                  maxLength={4}
+                  className="bg-gray-100 text-center font-mono font-black text-2xl py-3 rounded-2xl border border-gray-300 text-gray-900 tracking-widest"
+                  placeholderTextColor="#9ca3af"
+                />
+              </View>
+
+              {/* Cash Collection Checkbox */}
+              <Pressable
+                onPress={() => setCashCollectedConfirmed(!cashCollectedConfirmed)}
+                className={`p-4 rounded-2xl border mb-5 flex-row items-center gap-3 ${
+                  cashCollectedConfirmed
+                    ? "bg-emerald-50 border-emerald-400"
+                    : "bg-amber-50 border-amber-300"
+                }`}
+              >
+                <Ionicons
+                  name={cashCollectedConfirmed ? "checkbox" : "square-outline"}
+                  size={24}
+                  color={cashCollectedConfirmed ? "#047857" : "#d97706"}
+                />
+                <View className="flex-1">
+                  <Text className="text-xs font-black text-gray-900">
+                    I have collected the COD cash in full
+                  </Text>
+                  <Text className="text-xs text-amber-900 font-bold mt-0.5">
+                    Amount to collect: {activeJob?.codAmount}
+                  </Text>
+                </View>
+              </Pressable>
+
+              {/* Complete Delivery Action */}
+              <Pressable
+                onPress={handleVerifyHandshakeAndComplete}
+                className="w-full py-4 bg-emerald-700 rounded-xl items-center shadow-md mb-4"
+              >
+                <Text className="text-white font-black text-sm">
+                  Confirm Cash Received & Complete Delivery ✓
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setShowHandshakeModal(false)}
+                className="py-2 items-center"
+              >
+                <Text className="text-xs font-bold text-gray-400">Cancel</Text>
               </Pressable>
             </ScrollView>
           </View>

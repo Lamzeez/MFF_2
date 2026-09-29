@@ -14,6 +14,20 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../context/AuthContext";
+import { OrderStatus } from "../../../types/order";
+
+interface KitchenOrder {
+  id: string;
+  customer: string;
+  phone: string;
+  address: string;
+  items: string[];
+  total: number;
+  paymentType: string;
+  status: OrderStatus;
+  time: string;
+  notes: string;
+}
 
 export default function MobileMerchantMode() {
   const router = useRouter();
@@ -28,7 +42,7 @@ export default function MobileMerchantMode() {
   );
 
   // Live Orders Pipeline State
-  const [kitchenOrders, setKitchenOrders] = useState([
+  const [kitchenOrders, setKitchenOrders] = useState<KitchenOrder[]>([
     {
       id: "1094",
       customer: "Juan dela Cruz",
@@ -37,7 +51,7 @@ export default function MobileMerchantMode() {
       items: ["2x Classic Pork Humba", "2x Extra Rice"],
       total: 220,
       paymentType: "Cash on Delivery",
-      status: "preparing", // "pending" | "preparing" | "ready" | "completed"
+      status: "preparing",
       time: "5 mins ago",
       notes: "Extra spicy sauce please",
     },
@@ -49,7 +63,7 @@ export default function MobileMerchantMode() {
       items: ["1x Native Chicken Tinola", "1x Extra Rice"],
       total: 140,
       paymentType: "Cash on Delivery",
-      status: "pending",
+      status: "placed",
       time: "Just now",
       notes: "Hot sabaw please",
     },
@@ -61,7 +75,7 @@ export default function MobileMerchantMode() {
       items: ["1x Pork Sinigang", "2x Extra Rice"],
       total: 110,
       paymentType: "GCash Paid",
-      status: "ready",
+      status: "ready_for_pickup",
       time: "15 mins ago",
       notes: "",
     },
@@ -122,13 +136,23 @@ export default function MobileMerchantMode() {
   };
 
   // Update order status in kitchen pipeline
-  const updateOrderStatus = (id: string, newStatus: "preparing" | "ready" | "completed" | "declined") => {
-    if (newStatus === "declined") {
-      setKitchenOrders(kitchenOrders.filter(o => o.id !== id));
-      Alert.alert("Order Declined", `Order #${id} was removed from the queue.`);
+  const updateOrderStatus = (id: string, newStatus: OrderStatus) => {
+    if (newStatus === "cancelled") {
+      setKitchenOrders(kitchenOrders.filter((o) => o.id !== id));
+      Alert.alert("Order Cancelled", `Order #${id} was declined and removed from the queue.`);
     } else {
-      setKitchenOrders(kitchenOrders.map(o => o.id === id ? { ...o, status: newStatus } : o));
-      Alert.alert("Status Updated", `Order #${id} moved to: ${newStatus.toUpperCase()}`);
+      setKitchenOrders(
+        kitchenOrders.map((o) => (o.id === id ? { ...o, status: newStatus } : o))
+      );
+      const label =
+        newStatus === "preparing"
+          ? "PREPARING FOOD"
+          : newStatus === "ready_for_pickup"
+          ? "READY FOR RIDER PICKUP"
+          : newStatus === "out_for_delivery"
+          ? "HANDED TO COURIER"
+          : newStatus.toUpperCase();
+      Alert.alert("Status Updated 🍳", `Order #${id} is now ${label}.`);
     }
   };
 
@@ -299,19 +323,22 @@ export default function MobileMerchantMode() {
 
             <View className="gap-4">
               {kitchenOrders.map((order) => {
-                const isPending = order.status === "pending";
+                const isPlaced = order.status === "placed";
                 const isPreparing = order.status === "preparing";
-                const isReady = order.status === "ready";
+                const isReadyForPickup = order.status === "ready_for_pickup";
+                const isOutForDelivery = order.status === "out_for_delivery";
 
                 return (
                   <View
                     key={order.id}
                     className={`bg-white p-4 rounded-2xl border shadow-xs ${
-                      isPending
+                      isPlaced
                         ? "border-orange-300"
                         : isPreparing
                         ? "border-amber-400"
-                        : "border-emerald-500"
+                        : isReadyForPickup
+                        ? "border-emerald-500"
+                        : "border-sky-500"
                     }`}
                   >
                     {/* Header */}
@@ -323,23 +350,31 @@ export default function MobileMerchantMode() {
                           </Text>
                           <View
                             className={`px-2 py-0.5 rounded ${
-                              isPending
+                              isPlaced
                                 ? "bg-orange-100"
                                 : isPreparing
                                 ? "bg-amber-100"
-                                : "bg-emerald-100"
+                                : isReadyForPickup
+                                ? "bg-emerald-100"
+                                : "bg-sky-100"
                             }`}
                           >
                             <Text
                               className={`text-[10px] font-black uppercase ${
-                                isPending
+                                isPlaced
                                   ? "text-orange-800"
                                   : isPreparing
                                   ? "text-amber-800"
-                                  : "text-emerald-800"
+                                  : isReadyForPickup
+                                  ? "text-emerald-800"
+                                  : "text-sky-800"
                               }`}
                             >
-                              {order.status}
+                              {order.status === "ready_for_pickup"
+                                ? "READY FOR PICKUP"
+                                : order.status === "out_for_delivery"
+                                ? "OUT FOR DELIVERY"
+                                : order.status.toUpperCase()}
                             </Text>
                           </View>
                         </View>
@@ -376,19 +411,19 @@ export default function MobileMerchantMode() {
 
                     {/* Pipeline Actions */}
                     <View className="flex-row gap-2 pt-2 border-t border-gray-100">
-                      {isPending && (
+                      {isPlaced && (
                         <>
                           <Pressable
-                            onPress={() => updateOrderStatus(order.id, "declined")}
-                            className="flex-1 py-2.5 bg-gray-100 rounded-xl items-center"
+                            onPress={() => updateOrderStatus(order.id, "cancelled")}
+                            className="flex-1 py-3 bg-gray-100 rounded-xl items-center"
                           >
                             <Text className="text-gray-700 font-bold text-xs">Decline</Text>
                           </Pressable>
                           <Pressable
                             onPress={() => updateOrderStatus(order.id, "preparing")}
-                            className="flex-1 py-2.5 bg-orange-500 rounded-xl items-center shadow-xs"
+                            className="flex-1 py-3 bg-orange-500 rounded-xl items-center shadow-xs"
                           >
-                            <Text className="text-white font-bold text-xs">Accept & Cook</Text>
+                            <Text className="text-white font-extrabold text-xs">Accept & Cook 🍳</Text>
                           </Pressable>
                         </>
                       )}
@@ -397,33 +432,47 @@ export default function MobileMerchantMode() {
                         <>
                           <Pressable
                             onPress={() => Alert.alert("Customer Contact", `Calling ${order.customer} (${order.phone})...`)}
-                            className="w-10 h-10 bg-gray-100 rounded-xl items-center justify-center"
+                            className="w-11 h-11 bg-gray-100 rounded-xl items-center justify-center"
                           >
                             <Ionicons name="call-outline" size={16} color="#374151" />
                           </Pressable>
                           <Pressable
-                            onPress={() => updateOrderStatus(order.id, "ready")}
-                            className="flex-1 py-2.5 bg-emerald-700 rounded-xl items-center shadow-xs"
+                            onPress={() => updateOrderStatus(order.id, "ready_for_pickup")}
+                            className="flex-1 py-3 bg-emerald-700 rounded-xl items-center shadow-xs"
                           >
-                            <Text className="text-white font-bold text-xs">Mark Ready for Rider</Text>
+                            <Text className="text-white font-extrabold text-xs">Mark Ready for Rider 🥡</Text>
                           </Pressable>
                         </>
                       )}
 
-                      {isReady && (
+                      {isReadyForPickup && (
                         <View className="flex-1 flex-row items-center justify-between">
-                          <View className="flex-row items-center gap-1.5">
+                          <View className="flex-row items-center gap-1.5 flex-1 pr-2">
                             <Ionicons name="bicycle" size={16} color="#047857" />
                             <Text className="text-xs font-bold text-emerald-800">
-                              Rider Jun arriving (~4 mins)
+                              Rider Jun (#M-402) arriving (~4 mins)
                             </Text>
                           </View>
                           <Pressable
-                            onPress={() => updateOrderStatus(order.id, "completed")}
-                            className="px-3 py-1.5 bg-emerald-100 rounded-lg"
+                            onPress={() => updateOrderStatus(order.id, "out_for_delivery")}
+                            className="px-3 py-2 bg-emerald-700 rounded-xl shadow-xs"
                           >
-                            <Text className="text-xs font-bold text-emerald-900">Handed to Rider</Text>
+                            <Text className="text-xs font-bold text-white">Hand to Rider 🛵</Text>
                           </Pressable>
+                        </View>
+                      )}
+
+                      {isOutForDelivery && (
+                        <View className="flex-1 flex-row items-center justify-between bg-sky-50 p-2.5 rounded-xl border border-sky-200">
+                          <View className="flex-row items-center gap-1.5">
+                            <Ionicons name="navigate-circle" size={18} color="#0284c7" />
+                            <Text className="text-xs font-bold text-sky-900">
+                              Dispatched with Courier Jun
+                            </Text>
+                          </View>
+                          <Text className="text-[10px] font-black text-amber-800 bg-amber-100 px-2 py-0.5 rounded">
+                            COD Pending
+                          </Text>
                         </View>
                       )}
                     </View>

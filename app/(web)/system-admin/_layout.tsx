@@ -1,9 +1,17 @@
+import React, { useState } from "react";
 import { Slot, Link, usePathname } from "expo-router";
 import { View, Text, Pressable, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import SystemAdminGate from "./gate";
 
 export default function SystemAdminLayout() {
   const pathname = usePathname();
+  // Temporary frontend-only gate until Supabase Auth lands (see gate.tsx).
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
+
+  if (!isAdminUnlocked) {
+    return <SystemAdminGate onUnlock={() => setIsAdminUnlocked(true)} />;
+  }
 
   const navItems = [
     { label: "Dashboard", href: "/(web)/system-admin" },
@@ -44,11 +52,12 @@ export default function SystemAdminLayout() {
         </ScrollView>
 
         <View className="p-4 border-t border-green-800">
-          <Link href="/(web)/portal" asChild>
-            <Pressable className="px-4 py-3 rounded-xl hover:bg-red-500/20 transition-colors">
-              <Text className="text-red-300 font-semibold">Sign Out</Text>
-            </Pressable>
-          </Link>
+          <Pressable
+            className="px-4 py-3 rounded-xl hover:bg-red-500/20 transition-colors"
+            onPress={() => setIsAdminUnlocked(false)}
+          >
+            <Text className="text-red-300 font-semibold">Sign Out</Text>
+          </Pressable>
         </View>
       </View>
 

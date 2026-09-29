@@ -1,0 +1,2404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mati FoodFinder (MFF) — International Standard UX/UI Simulator</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              200: '#a7f3d0',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              800: '#065f46',
+              900: '#064e3b'
+            },
+            sunset: {
+              50: '#fff7ed',
+              500: '#f97316',
+              600: '#ea580c',
+              700: '#c2410c'
+            }
+          },
+          boxShadow: {
+            'phone': '0 25px 60px -15px rgba(0, 0, 0, 0.3), 0 0 0 12px #1e293b, 0 0 0 14px #475569',
+            'card': '0 2px 10px -2px rgba(0, 0, 0, 0.05), 0 1px 4px -1px rgba(0, 0, 0, 0.03)'
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Hide scrollbar for clean app simulation */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    /* Phone frame animations & transitions */
+    .fade-in { animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+    .slide-up { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.99); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    /* Pulse ring for active radar/tracker */
+    @keyframes pulseRing {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    .pulse-badge { animation: pulseRing 2s infinite; }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-800 min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
+
+  <!-- ======================================================== -->
+  <!-- TOP GLOBAL SIMULATION CONTROL BAR                        -->
+  <!-- ======================================================== -->
+  <header class="bg-slate-950/80 backdrop-blur border-b border-slate-800 sticky top-0 z-50 px-4 py-3 text-white">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+      
+      <!-- Brand & Title -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center shadow-lg shadow-brand-500/20 text-white font-black text-xl">
+          M
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base font-bold tracking-tight">Mati FoodFinder (MFF)</h1>
+            <span class="text-[10px] font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30 px-2 py-0.5 rounded-full uppercase tracking-wider">UX Redesign</span>
+          </div>
+          <p class="text-xs text-slate-400">Interactive Multi-Role Experience • International Standard</p>
+        </div>
+      </div>
+
+      <!-- Role Selector (5 Roles) -->
+      <div class="flex items-center bg-slate-900 p-1.5 rounded-2xl border border-slate-800 gap-1 overflow-x-auto max-w-full">
+        <button onclick="setRole('registered_user')" id="btn-role-registered_user" class="role-btn px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all bg-brand-600 text-white shadow-sm">
+          <span>👤</span>
+          <span>Registered User</span>
+        </button>
+        <button onclick="setRole('guest_user')" id="btn-role-guest_user" class="role-btn px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all text-slate-400 hover:text-white">
+          <span>👁️</span>
+          <span>Guest User</span>
+        </button>
+        <button onclick="setRole('rider')" id="btn-role-rider" class="role-btn px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all text-slate-400 hover:text-white">
+          <span>🛵</span>
+          <span>Delivery Rider</span>
+        </button>
+        <button onclick="setRole('store_admin')" id="btn-role-store_admin" class="role-btn px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all text-slate-400 hover:text-white">
+          <span>🏪</span>
+          <span>Store Admin</span>
+        </button>
+        <button onclick="setRole('system_admin')" id="btn-role-system_admin" class="role-btn px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all text-slate-400 hover:text-white">
+          <span>👑</span>
+          <span>System Admin</span>
+        </button>
+      </div>
+
+      <!-- UX Guide & Quick Rationale Modal Trigger -->
+      <div class="flex items-center gap-2">
+        <button onclick="toggleUxAuditModal()" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-2 transition-all">
+          <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span>UX Audit & Split Rationale</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ======================================================== -->
+  <!-- MAIN SIMULATOR WORKSPACE                                 -->
+  <!-- ======================================================== -->
+  <main class="flex-1 flex flex-col items-center justify-start p-4 md:p-8 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 overflow-y-auto">
+
+    <!-- Active Role Context Sub-Banner -->
+    <div class="w-full max-w-4xl mb-6 bg-slate-800/60 border border-slate-700/60 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-slate-300">
+      <div class="flex items-center gap-3">
+        <div id="role-avatar" class="w-9 h-9 rounded-xl bg-brand-500/20 text-brand-400 border border-brand-500/30 flex items-center justify-center font-bold text-lg">
+          👤
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span id="role-title" class="font-bold text-white text-sm">Customer Experience (Registered User)</span>
+            <span id="role-mode-badge" class="text-[10px] font-semibold bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 px-2 py-0.5 rounded-full">Mobile Native App</span>
+          </div>
+          <p id="role-description" class="text-xs text-slate-400 mt-0.5">
+            Decoupled 3-job feed: Live Menus discovery, split 2-step checkout, table booking, and dedicated Community tab.
+          </p>
+        </div>
+      </div>
+      
+      <!-- Quick Role Action Switchers -->
+      <div id="role-subactions" class="flex items-center gap-2 self-end md:self-center">
+        <!-- Dynamically populated per role -->
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- VIEWPORT 1: MOBILE APP SIMULATOR (USER, GUEST, RIDER, KDS) -->
+    <!-- ======================================================== -->
+    <div id="mobile-viewport-container" class="relative transition-all duration-300">
+      
+      <!-- Phone Mockup Device Chassis -->
+      <div class="w-[390px] h-[830px] bg-slate-900 rounded-[52px] shadow-phone p-3.5 relative flex flex-col border border-slate-700/80">
+        
+        <!-- Screen Outer Container -->
+        <div class="w-full h-full bg-slate-50 rounded-[42px] overflow-hidden flex flex-col relative text-slate-900 select-none">
+          
+          <!-- Realistic Dynamic Island & Status Bar -->
+          <div class="w-full bg-white pt-3 px-6 pb-2 flex items-center justify-between z-40 shrink-0 border-b border-slate-100">
+            <span class="text-xs font-bold tracking-tight text-slate-800" id="phone-time">9:41</span>
+            
+            <!-- Dynamic Island Capsule -->
+            <div class="w-24 h-5 bg-black rounded-full flex items-center justify-center gap-1.5 px-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-brand-500 animate-ping"></span>
+              <span class="text-[9px] font-bold text-slate-200" id="island-text">MFF Mati</span>
+            </div>
+
+            <!-- Signal / Battery Icons -->
+            <div class="flex items-center gap-1.5 text-slate-700">
+              <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 18.25c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l.64-.64C7.93 20.26 9.88 21 12 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm0 16c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17 6h-2V4a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v2H7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm-6-1h2v1h-2V5zm6 14H7V8h10v11z"/></svg>
+            </div>
+          </div>
+
+          <!-- Dynamic Mobile Screens Viewport -->
+          <div id="phone-screen-content" class="flex-1 overflow-y-auto no-scrollbar relative flex flex-col bg-slate-50">
+            <!-- Screen views injected via JavaScript -->
+          </div>
+
+          <!-- Toast / Floating Cart Notification Bar (Mobile) -->
+          <div id="mobile-floating-cart" class="hidden absolute bottom-16 left-3 right-3 bg-brand-700 text-white p-3.5 rounded-2xl shadow-xl z-30 flex items-center justify-between slide-up">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-xl bg-brand-800 flex items-center justify-center font-bold text-sm">
+                <span id="cart-total-badge">1</span>
+              </div>
+              <div>
+                <p class="text-xs font-bold leading-tight" id="cart-floating-text">1 Item • ₱90.00</p>
+                <p class="text-[10px] text-brand-200">Mama Letty's Karenderia</p>
+              </div>
+            </div>
+            <button onclick="openCheckoutModal()" class="px-3.5 py-1.5 bg-white text-brand-800 font-extrabold text-xs rounded-xl hover:bg-brand-50 transition-all flex items-center gap-1 shadow-sm">
+              <span>View Cart</span>
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+
+          <!-- Mobile App Bottom Navigation Bar (5 Standard Tabs) -->
+          <nav id="mobile-bottom-tabs" class="w-full bg-white border-t border-slate-100 py-2 px-3 flex items-center justify-around shrink-0 z-40 shadow-sm">
+            <button onclick="switchMobileTab('home')" id="tab-home" class="tab-btn flex flex-col items-center gap-0.5 text-brand-600 transition-all">
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+              <span class="text-[10px] font-bold">Discover</span>
+            </button>
+            <button onclick="switchMobileTab('community')" id="tab-community" class="tab-btn flex flex-col items-center gap-0.5 text-slate-400 hover:text-slate-600 transition-all">
+              <div class="relative">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/></svg>
+                <span class="w-2 h-2 rounded-full bg-sunset-500 absolute -top-0.5 -right-0.5"></span>
+              </div>
+              <span class="text-[10px] font-bold">Foodies</span>
+            </button>
+            <button onclick="switchMobileTab('map')" id="tab-map" class="tab-btn flex flex-col items-center gap-0.5 text-slate-400 hover:text-slate-600 transition-all">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+              <span class="text-[10px] font-bold">Map</span>
+            </button>
+            <button onclick="switchMobileTab('orders')" id="tab-orders" class="tab-btn flex flex-col items-center gap-0.5 text-slate-400 hover:text-slate-600 transition-all">
+              <div class="relative">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
+                <span id="active-orders-dot" class="w-2 h-2 rounded-full bg-brand-500 absolute -top-0.5 -right-0.5"></span>
+              </div>
+              <span class="text-[10px] font-bold">Orders</span>
+            </button>
+            <button onclick="switchMobileTab('profile')" id="tab-profile" class="tab-btn flex flex-col items-center gap-0.5 text-slate-400 hover:text-slate-600 transition-all">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+              <span class="text-[10px] font-bold">Account</span>
+            </button>
+          </nav>
+
+          <!-- iOS Home Indicator Bar -->
+          <div class="w-full bg-white pb-1.5 flex justify-center shrink-0">
+            <div class="w-32 h-1 bg-slate-300 rounded-full"></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- VIEWPORT 2: DESKTOP WEB SAAS DASHBOARD (ADMIN & MERCHANT)-->
+    <!-- ======================================================== -->
+    <div id="desktop-viewport-container" class="hidden w-full max-w-7xl bg-white rounded-3xl shadow-2xl border border-slate-700/80 overflow-hidden flex flex-col min-h-[780px] text-slate-800">
+      <!-- Desktop layout injected dynamically -->
+    </div>
+
+  </main>
+
+  <!-- ======================================================== -->
+  <!-- MODALS & OVERLAYS CONTAINER                              -->
+  <!-- ======================================================== -->
+  <div id="modal-container" class="relative z-50"></div>
+
+  <!-- ======================================================== -->
+  <!-- JAVASCRIPT: DATA STORE & REACTIVE ENGINE                 -->
+  <!-- ======================================================== -->
+  <script>
+    // Global Application State
+    const state = {
+      role: 'registered_user', // 'registered_user' | 'guest_user' | 'rider' | 'store_admin' | 'system_admin'
+      storeViewMode: 'mobile_kds', // 'mobile_kds' | 'web_portal'
+      activeMobileTab: 'home', // 'home' | 'community' | 'map' | 'orders' | 'profile'
+      selectedCategory: 'All',
+      searchQuery: '',
+      
+      // Cart & Checkout
+      cart: [
+        { id: 1, name: "Classic Pork Humba", store: "Mama Letty's Karenderia", price: 90, qty: 1, portion: "Regular", spicy: true }
+      ],
+      checkoutStep: 1, // 1: Order Items & Delivery Method, 2: Address & COD Confirmation
+      selectedBarangay: "Central (Poblacion)",
+      deliveryAddressNote: "Near Baywalk Pavilion, blue gate",
+      
+      // Active Live Order for Registered User
+      activeOrder: {
+        id: "MFF-2048",
+        status: "preparing", // "placed" | "accepted" | "preparing" | "ready_for_pickup" | "out_for_delivery" | "delivered"
+        restaurant: "Mama Letty's Karenderia",
+        items: "1x Classic Pork Humba, 1x Extra Rice",
+        total: 110,
+        fee: 25,
+        payment: "Cash on Delivery (COD)",
+        driverName: "Kuya Jun Almonte",
+        driverPlate: "DVO-8492",
+        driverPhone: "+63 917 889 1234",
+        deliveryPin: "4821",
+        estimatedMinutes: 14
+      },
+
+      // Rider State
+      rider: {
+        isOnline: true,
+        todayEarnings: 420.00,
+        completedDeliveries: 5,
+        activeJobId: null // or 2048
+      },
+
+      // Store Admin KDS State (Mama Letty's Karenderia)
+      merchant: {
+        isOnline: true,
+        activeKdsTab: 'incoming', // 'incoming' | 'preparing' | 'ready' | 'inventory' | 'tables'
+        orders: [
+          {
+            id: "1094",
+            customer: "Juan dela Cruz",
+            phone: "+63 917 111 2222",
+            address: "Near Baywalk Pavilion, blue gate",
+            items: ["1x Classic Pork Humba", "1x Extra Rice"],
+            total: 110,
+            status: "preparing",
+            time: "4 mins ago",
+            notes: "Extra humba sauce please"
+          },
+          {
+            id: "1095",
+            customer: "Maria Santos",
+            phone: "+63 928 333 4444",
+            address: "Purok 4, Brgy. Sainz",
+            items: ["2x Native Chicken Tinola", "2x Rice"],
+            total: 280,
+            status: "incoming",
+            time: "Just now",
+            notes: "Make the soup extra hot"
+          },
+          {
+            id: "1093",
+            customer: "Rico Alcantara",
+            phone: "+63 939 555 6666",
+            address: "Dahican Beach Road",
+            items: ["1x Tuna Panga Grill"],
+            total: 280,
+            status: "ready",
+            time: "12 mins ago",
+            notes: "Rider arriving in 2m"
+          }
+        ],
+        menu: [
+          { id: 1, name: "Classic Pork Humba", category: "Karenderia", price: 90, inStock: true, emoji: "🍲", soldCount: 42 },
+          { id: 2, name: "Chicken Adobo", category: "Karenderia", price: 85, inStock: true, emoji: "🍗", soldCount: 28 },
+          { id: 3, name: "Native Chicken Tinola", category: "Soups", price: 120, inStock: true, emoji: "🥣", soldCount: 19 },
+          { id: 4, name: "Pork Sinigang", category: "Soups", price: 95, inStock: false, emoji: "🥘", soldCount: 15 },
+          { id: 5, name: "Extra Rice", category: "Extras", price: 20, inStock: true, emoji: "🍚", soldCount: 88 },
+          { id: 6, name: "Cold Calamansi Juice", category: "Beverages", price: 35, inStock: true, emoji: "🍹", soldCount: 31 }
+        ],
+        reservations: [
+          { id: "RES-401", customer: "Atty. Dizon", guests: 4, time: "Today, 7:00 PM", status: "confirmed", tableType: "Bayside Window" },
+          { id: "RES-402", customer: "Carla Gomez", guests: 2, time: "Today, 8:15 PM", status: "pending", tableType: "Standard Indoor" }
+        ]
+      },
+
+      // System Admin State
+      sysAdmin: {
+        activeTab: 'approvals', // 'overview' | 'approvals' | 'moderation' | 'paymongo' | 'users'
+        pendingStores: [
+          { id: 'app-1', name: "Mama Letty's Karenderia", owner: "Letty Ramirez", location: "Central Poblacion, Mati City", type: "Karenderia", permit: "Mayor's Permit #2026-MP-0914", applied: "2 hrs ago", verified: true },
+          { id: 'app-2', name: "Dahican Chill & Grill", owner: "Paolo Morales", location: "Dahican Coastline, Mati City", type: "Seafood & Bar", permit: "DTI Cert #0849102", applied: "4 hrs ago", verified: false },
+          { id: 'app-3', name: "Subangan Street Skewers", owner: "Elena Flores", location: "Subangan Park, Mati City", type: "Street BBQ", permit: "Barangay Clearance #8812", applied: "Yesterday", verified: true }
+        ],
+        flaggedPosts: [
+          { id: 'flag-1', author: "AnonFoodie99", reason: "Spam / Repeated Promotion", restaurant: "Subangan Street Grills", excerpt: "CLICK HERE TO WIN FREE LECHON VISIT MY LINK...", time: "30m ago" },
+          { id: 'flag-2', author: "AngryEater", reason: "Harassment & Offensive Language", restaurant: "Mati Baywalk Seafood", excerpt: "Worst place ever they should be closed down right now curse words...", time: "2 hrs ago" }
+        ]
+      },
+
+      // Social Community Posts (Mati Foodies)
+      posts: [
+        {
+          id: "p1",
+          author: "Rico Alcantara",
+          avatarColor: "bg-emerald-600",
+          badge: "Top Foodie",
+          time: "20m ago",
+          restaurant: "Mati Baywalk Seafood Grill",
+          dish: "Tuna Panga Grill",
+          rating: 5,
+          text: "Fresh morning catch grilled right overlooking Pujada Bay! The calamansi and chili dip cuts through the tuna richness perfectly. A must-try when visiting Baywalk! 🐟🔥",
+          likes: 24,
+          liked: false,
+          commentsCount: 6,
+          photoEmoji: "🐟"
+        },
+        {
+          id: "p2",
+          author: "Beatriz Tan",
+          avatarColor: "bg-orange-500",
+          badge: "Local Guide",
+          time: "1h ago",
+          restaurant: "Mama Letty's Karenderia",
+          dish: "Classic Pork Humba",
+          rating: 5,
+          text: "Nothing beats Mama Letty's Humba after a long day at Dahican beach. Tender pork belly, sweet savory sauce with star anise and banana blossoms. Best ₱90 lunch in Mati!",
+          likes: 41,
+          liked: true,
+          commentsCount: 9,
+          photoEmoji: "🍲"
+        }
+      ]
+    };
+
+    // Static Mati City Data
+    const MATI_RESTAURANTS = [
+      {
+        id: 1,
+        name: "Mama Letty's Karenderia",
+        category: "Karenderias",
+        rating: 4.8,
+        reviewsCount: 142,
+        time: "15-20 min",
+        address: "Magsaysay St, Brgy. Central, Mati",
+        open: true,
+        availableTables: 4,
+        emoji: "🍲",
+        deliveryFee: "₱25",
+        specialty: "Classic Pork Humba & Native Tinola",
+        badge: "Most Visited (Personalized)"
+      },
+      {
+        id: 2,
+        name: "Mati Baywalk Seafood Grill",
+        category: "Seafood",
+        rating: 4.9,
+        reviewsCount: 230,
+        time: "25-35 min",
+        address: "Baywalk Boulevard, Pujada Bay, Mati",
+        open: true,
+        availableTables: 6,
+        emoji: "🐟",
+        deliveryFee: "₱35",
+        specialty: "Fresh Tuna Panga & Kinilaw",
+        badge: "Bayside Sunset Spot"
+      },
+      {
+        id: 3,
+        name: "Subangan Street Grills",
+        category: "BBQ & Grill",
+        rating: 4.9,
+        reviewsCount: 88,
+        time: "15-25 min",
+        address: "Near Subangan Museum Grounds, Mati",
+        open: true,
+        availableTables: 2,
+        emoji: "🍢",
+        deliveryFee: "₱25",
+        specialty: "Sizzling Pork BBQ & Isaw",
+        badge: "Evening Favorite"
+      },
+      {
+        id: 4,
+        name: "Dahican Beach Bites",
+        category: "Merienda",
+        rating: 4.7,
+        reviewsCount: 119,
+        time: "30-40 min",
+        address: "Dahican Beach Coastline, Mati",
+        open: true,
+        availableTables: 5,
+        emoji: "🏖️",
+        deliveryFee: "₱55",
+        specialty: "Kinilaw, Mango Shakes & Halo-halo",
+        badge: "Surf & Beachside"
+      }
+    ];
+
+    const MATI_BARANGAYS = [
+      "Central (Poblacion)", "Dahican", "Sainz", "Matiao", "Badas", "Mayo"
+    ];
+
+    // ========================================================
+    // ROLE SWITCHING LOGIC
+    // ========================================================
+    function setRole(newRole) {
+      state.role = newRole;
+      
+      // Update Role Buttons UI
+      document.querySelectorAll('.role-btn').forEach(btn => {
+        btn.classList.remove('bg-brand-600', 'text-white', 'shadow-sm');
+        btn.classList.add('text-slate-400');
+      });
+      const activeBtn = document.getElementById(`btn-role-${newRole}`);
+      if (activeBtn) {
+        activeBtn.classList.add('bg-brand-600', 'text-white', 'shadow-sm');
+        activeBtn.classList.remove('text-slate-400');
+      }
+
+      // Update Viewports (Mobile vs Desktop)
+      const mobileContainer = document.getElementById('mobile-viewport-container');
+      const desktopContainer = document.getElementById('desktop-viewport-container');
+      const roleAvatar = document.getElementById('role-avatar');
+      const roleTitle = document.getElementById('role-title');
+      const roleBadge = document.getElementById('role-mode-badge');
+      const roleDesc = document.getElementById('role-description');
+      const subactions = document.getElementById('role-subactions');
+
+      if (newRole === 'system_admin') {
+        mobileContainer.classList.add('hidden');
+        desktopContainer.classList.remove('hidden');
+        roleAvatar.textContent = '👑';
+        roleTitle.textContent = 'System Admin (Platform Web Portal)';
+        roleBadge.textContent = 'Desktop SaaS View';
+        roleDesc.textContent = 'Oversight for Mati City: Store verifications, PayMongo subscriptions, and social feed moderation.';
+        subactions.innerHTML = `
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-400">Environment: <strong class="text-emerald-400 font-mono">Production</strong></span>
+            <button onclick="renderDesktopAdmin()" class="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-xs rounded-lg text-slate-200">Refresh Feed</button>
+          </div>
+        `;
+        renderDesktopAdmin();
+      } else if (newRole === 'store_admin' && state.storeViewMode === 'web_portal') {
+        mobileContainer.classList.add('hidden');
+        desktopContainer.classList.remove('hidden');
+        roleAvatar.textContent = '🏪';
+        roleTitle.textContent = "Store Admin — Web Merchant Portal";
+        roleBadge.textContent = 'Desktop Responsive';
+        roleDesc.textContent = "Daily operations, PayMongo 2-month trial subscription, and menu management for Mama Letty's Karenderia.";
+        subactions.innerHTML = `
+          <button onclick="switchStoreView('mobile_kds')" class="px-3 py-1 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all">
+            <span>📱 Switch to Mobile Kitchen KDS</span>
+          </button>
+        `;
+        renderDesktopMerchant();
+      } else {
+        // Mobile view for Registered, Guest, Rider, and Store Mobile KDS
+        mobileContainer.classList.remove('hidden');
+        desktopContainer.classList.add('hidden');
+
+        if (newRole === 'registered_user') {
+          roleAvatar.textContent = '👤';
+          roleTitle.textContent = 'Customer Experience (Registered User)';
+          roleBadge.textContent = 'Mobile Native App';
+          roleDesc.textContent = 'Streamlined discovery, live availability, 2-step COD checkout, table reservations, and dedicated Foodies feed.';
+          subactions.innerHTML = `
+            <button onclick="simulateOrderDeliveryStep()" class="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-medium flex items-center gap-1">
+              <span>⚡ Advance Order Status</span>
+            </button>
+          `;
+          state.activeMobileTab = 'home';
+          renderMobileScreen();
+        } else if (newRole === 'guest_user') {
+          roleAvatar.textContent = '👁️';
+          roleTitle.textContent = 'Guest User (Frictionless Exploration)';
+          roleBadge.textContent = 'Mobile Native App';
+          roleDesc.textContent = 'Zero sign-in barrier to view menus and map. Graceful progressive conversion triggers on order or reservation.';
+          subactions.innerHTML = `
+            <span class="text-xs text-amber-400 font-medium">✨ Browse mode active (No login wall)</span>
+          `;
+          state.activeMobileTab = 'home';
+          renderMobileScreen();
+        } else if (newRole === 'rider') {
+          roleAvatar.textContent = '🛵';
+          roleTitle.textContent = 'Delivery Rider (Mobile Cockpit)';
+          roleBadge.textContent = 'Rider Mobile App';
+          roleDesc.textContent = 'Job radar, pickup instructions, turn-by-turn preview, and dispute-proof COD cash collection & customer PIN hand-off.';
+          subactions.innerHTML = `
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-slate-400">Status:</span>
+              <button onclick="toggleRiderOnline()" class="px-2.5 py-1 ${state.rider.isOnline ? 'bg-emerald-600' : 'bg-slate-700'} text-white rounded-lg text-xs font-bold">
+                ${state.rider.isOnline ? 'ONLINE' : 'OFFLINE'}
+              </button>
+            </div>
+          `;
+          renderMobileRiderScreen();
+        } else if (newRole === 'store_admin') {
+          roleAvatar.textContent = '🏪';
+          roleTitle.textContent = "Store Admin — Mobile Kitchen KDS";
+          roleBadge.textContent = 'Kitchen Mode';
+          roleDesc.textContent = 'Optimized for fast-paced phone operations: Large tap targets for kitchen staff, 1-tap stock toggle, and reservation approvals.';
+          subactions.innerHTML = `
+            <button onclick="switchStoreView('web_portal')" class="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all">
+              <span>💻 Switch to Web Portal</span>
+            </button>
+          `;
+          renderMobileStoreKds();
+        }
+      }
+      updateCartFloatingBar();
+    }
+
+    function switchStoreView(mode) {
+      state.storeViewMode = mode;
+      setRole('store_admin');
+    }
+
+    // ========================================================
+    // MOBILE TAB NAVIGATION
+    // ========================================================
+    function switchMobileTab(tabKey) {
+      state.activeMobileTab = tabKey;
+      
+      // Update Tab Bar Active Styles
+      const tabs = ['home', 'community', 'map', 'orders', 'profile'];
+      tabs.forEach(t => {
+        const btn = document.getElementById(`tab-${t}`);
+        if (!btn) return;
+        if (t === tabKey) {
+          btn.className = 'tab-btn flex flex-col items-center gap-0.5 text-brand-600 transition-all font-bold';
+        } else {
+          btn.className = 'tab-btn flex flex-col items-center gap-0.5 text-slate-400 hover:text-slate-600 transition-all';
+        }
+      });
+
+      renderMobileScreen();
+    }
+
+    // ========================================================
+    // RENDER MOBILE SCREENS (USER & GUEST)
+    // ========================================================
+    function renderMobileScreen() {
+      const screen = document.getElementById('phone-screen-content');
+      const tabsNav = document.getElementById('mobile-bottom-tabs');
+      tabsNav.classList.remove('hidden');
+
+      if (state.role === 'rider') {
+        renderMobileRiderScreen();
+        return;
+      }
+      if (state.role === 'store_admin' && state.storeViewMode === 'mobile_kds') {
+        renderMobileStoreKds();
+        return;
+      }
+
+      // Guest or Registered User Tab Routing
+      switch (state.activeMobileTab) {
+        case 'home':
+          screen.innerHTML = getHomeDiscoveryViewHtml();
+          break;
+        case 'community':
+          screen.innerHTML = getCommunityFeedViewHtml();
+          break;
+        case 'map':
+          screen.innerHTML = getMapViewHtml();
+          break;
+        case 'orders':
+          screen.innerHTML = getOrdersQueueViewHtml();
+          break;
+        case 'profile':
+          screen.innerHTML = getProfileViewHtml();
+          break;
+      }
+      updateCartFloatingBar();
+    }
+
+    // --------------------------------------------------------
+    // SCREEN 1: HOME & LIVE MENUS DISCOVERY
+    // Solves the problem: No longer crammed with checkout & social feed!
+    // --------------------------------------------------------
+    function getHomeDiscoveryViewHtml() {
+      const isGuest = state.role === 'guest_user';
+      return `
+        <div class="flex-1 pb-20 fade-in">
+          
+          <!-- Sticky Top Discovery Bar -->
+          <div class="sticky top-0 bg-white/95 backdrop-blur z-20 px-4 pt-2 pb-3 border-b border-slate-100 shadow-xs">
+            <div class="flex items-center justify-between mb-2.5">
+              <div class="flex items-center gap-1.5 cursor-pointer" onclick="openBarangayPickerModal()">
+                <div class="w-7 h-7 rounded-full bg-brand-50 flex items-center justify-center text-brand-600">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                </div>
+                <div>
+                  <div class="flex items-center gap-1">
+                    <span class="text-xs font-black text-slate-800 tracking-tight">${state.selectedBarangay}</span>
+                    <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                  </div>
+                  <span class="text-[10px] text-slate-400 block leading-none">Mati City, Davao Oriental</span>
+                </div>
+              </div>
+
+              <!-- Notifications / Guest Gate -->
+              <div class="flex items-center gap-2">
+                ${isGuest ? `
+                  <button onclick="openGuestGateModal('Sign in to track orders and save favorites')" class="px-2.5 py-1 bg-brand-50 border border-brand-200 text-brand-700 text-[11px] font-bold rounded-full">
+                    Sign In
+                  </button>
+                ` : `
+                  <button onclick="openNotificationsModal()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 relative">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                    <span class="w-2 h-2 rounded-full bg-sunset-500 absolute top-1.5 right-1.5"></span>
+                  </button>
+                `}
+              </div>
+            </div>
+
+            <!-- Search Field with Clean Icon -->
+            <div class="relative">
+              <input 
+                type="text" 
+                placeholder="Search Pork Humba, Tuna Panga, Karenderia..." 
+                class="w-full bg-slate-100 text-xs text-slate-800 placeholder-slate-400 pl-9 pr-3 py-2.5 rounded-xl border-none focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
+                oninput="handleSearch(this.value)"
+              />
+              <svg class="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            </div>
+          </div>
+
+          <!-- Hero Promo Banner (Localized to Mati City) -->
+          <div class="px-4 mt-3">
+            <div class="bg-gradient-to-r from-emerald-800 to-teal-700 rounded-2xl p-4 text-white relative overflow-hidden shadow-sm">
+              <div class="relative z-10 max-w-[210px]">
+                <span class="bg-emerald-600/60 text-emerald-200 text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md">Mati Exclusive</span>
+                <h3 class="text-sm font-extrabold mt-1 leading-snug">Zero Surprises: Real-Time Availability & Prices</h3>
+                <p class="text-[11px] text-emerald-100 mt-1">Know before you order. Cash on Delivery supported city-wide.</p>
+              </div>
+              <div class="absolute -right-2 -bottom-3 text-5xl opacity-40 select-none">
+                🍲
+              </div>
+            </div>
+          </div>
+
+          <!-- Category Chips Carousel -->
+          <div class="mt-4 px-4">
+            <div class="flex items-center justify-between mb-2">
+              <h2 class="text-xs font-black text-slate-800 uppercase tracking-wider">Categories</h2>
+            </div>
+            <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+              ${['All', 'Karenderias', 'Seafood', 'BBQ & Grill', 'Merienda', 'Beverages'].map(cat => `
+                <button 
+                  onclick="setCategory('${cat}')" 
+                  class="px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${state.selectedCategory === cat ? 'bg-brand-600 text-white shadow-xs' : 'bg-white text-slate-600 border border-slate-200'}"
+                >
+                  <span>${cat === 'All' ? '✨' : cat === 'Karenderias' ? '🍲' : cat === 'Seafood' ? '🐟' : cat === 'BBQ & Grill' ? '🍢' : cat === 'Merienda' ? '🍧' : '🍹'}</span>
+                  <span>${cat}</span>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Personalized "Most Loved in Mati" Carousel -->
+          <div class="mt-5 px-4">
+            <div class="flex items-center justify-between mb-2.5">
+              <div>
+                <h2 class="text-xs font-black text-slate-800 uppercase tracking-wider">Top Karenderias & Spots</h2>
+                <p class="text-[10px] text-slate-400">Verified live menus & available dining tables</p>
+              </div>
+              <span class="text-[10px] font-bold text-brand-600">4 spots</span>
+            </div>
+
+            <!-- Restaurant Cards List (Progressive Disclosure) -->
+            <div class="flex flex-col gap-3">
+              ${MATI_RESTAURANTS.map(resto => `
+                <div class="bg-white rounded-2xl border border-slate-100 p-3 shadow-card hover:border-brand-200 transition-all">
+                  
+                  <!-- Card Header -->
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="flex items-start gap-2.5">
+                      <div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-2xl shrink-0">
+                        ${resto.emoji}
+                      </div>
+                      <div>
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                          <h3 class="font-extrabold text-xs text-slate-900 leading-tight">${resto.name}</h3>
+                          <span class="text-[9px] bg-brand-50 text-brand-700 font-bold px-1.5 py-0.5 rounded">⭐ ${resto.rating}</span>
+                        </div>
+                        <p class="text-[11px] text-slate-500 mt-0.5">${resto.specialty}</p>
+                        <p class="text-[10px] text-slate-400 mt-0.5">${resto.address}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Badges & Availability Bar -->
+                  <div class="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
+                    <div class="flex items-center gap-2">
+                      <span class="flex items-center gap-1 font-semibold text-emerald-700">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        ${resto.availableTables} Tables Free
+                      </span>
+                      <span class="text-slate-300">•</span>
+                      <span class="text-slate-500 font-medium">🕒 ${resto.time}</span>
+                      <span class="text-slate-300">•</span>
+                      <span class="text-slate-500 font-medium">🛵 ${resto.deliveryFee} COD</span>
+                    </div>
+                  </div>
+
+                  <!-- Quick Action Buttons -->
+                  <div class="mt-2.5 flex items-center gap-2">
+                    <button 
+                      onclick="openRestaurantStorefront(${resto.id})" 
+                      class="flex-1 py-2 bg-brand-50 hover:bg-brand-100 text-brand-800 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1"
+                    >
+                      <span>View Live Menu</span>
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    </button>
+                    <button 
+                      onclick="openTableReservationModal('${resto.name}')" 
+                      class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all"
+                      title="Book Dining Table"
+                    >
+                      🪑 Reserve
+                    </button>
+                  </div>
+
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+        </div>
+      `;
+    }
+
+    // --------------------------------------------------------
+    // SCREEN 2: DEDICATED RESTAURANT STOREFRONT & MENU
+    // Progressive disclosure: Split away from the crowded home feed!
+    // --------------------------------------------------------
+    function openRestaurantStorefront(restaurantId) {
+      const resto = MATI_RESTAURANTS.find(r => r.id === restaurantId) || MATI_RESTAURANTS[0];
+      const screen = document.getElementById('phone-screen-content');
+
+      screen.innerHTML = `
+        <div class="flex-1 pb-24 fade-in">
+          
+          <!-- Sticky Header with Back Button -->
+          <div class="sticky top-0 bg-white/95 backdrop-blur z-20 px-4 py-3 flex items-center justify-between border-b border-slate-100 shadow-xs">
+            <button onclick="renderMobileScreen()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 hover:bg-slate-200 transition-all">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <span class="text-xs font-extrabold text-slate-800 truncate max-w-[180px]">${resto.name}</span>
+            <button onclick="openTableReservationModal('${resto.name}')" class="px-2.5 py-1 bg-brand-50 border border-brand-200 text-brand-700 font-bold text-[11px] rounded-lg">
+              Book Table
+            </button>
+          </div>
+
+          <!-- Hero Details Card -->
+          <div class="p-4 bg-gradient-to-b from-white to-slate-50 border-b border-slate-100">
+            <div class="flex items-center gap-3">
+              <div class="w-14 h-14 rounded-2xl bg-brand-100 flex items-center justify-center text-3xl shrink-0 shadow-sm">
+                ${resto.emoji}
+              </div>
+              <div>
+                <h1 class="text-sm font-black text-slate-900 leading-tight">${resto.name}</h1>
+                <p class="text-[11px] text-slate-500 mt-0.5">${resto.category} • ${resto.address}</p>
+                <div class="flex items-center gap-2 mt-1.5 text-[10px]">
+                  <span class="font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">⭐ ${resto.rating} (${resto.reviewsCount})</span>
+                  <span class="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">🟢 Open • ${resto.availableTables} Tables</span>
+                </div>
+              </div>
+            </div>
+            
+            <p class="text-xs text-slate-600 mt-3 leading-relaxed">
+              Serving genuine local favorites in Mati City. All dishes prepared fresh daily with Cash on Delivery (COD) payment.
+            </p>
+          </div>
+
+          <!-- Live Menu Section -->
+          <div class="p-4">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <h2 class="text-xs font-black text-slate-900 uppercase tracking-wider">Today's Live Menu</h2>
+                <p class="text-[10px] text-slate-400">Real-time stock verified by kitchen staff</p>
+              </div>
+              <span class="text-[10px] font-bold bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full">Updated 10m ago</span>
+            </div>
+
+            <!-- Dish Items -->
+            <div class="flex flex-col gap-2.5">
+              ${state.merchant.menu.map(item => `
+                <div class="bg-white rounded-xl border border-slate-100 p-3 flex items-center justify-between gap-3 shadow-card ${!item.inStock ? 'opacity-60 bg-slate-50' : ''}">
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-xl shrink-0">
+                      ${item.emoji}
+                    </div>
+                    <div>
+                      <div class="flex items-center gap-1.5">
+                        <h4 class="font-extrabold text-xs text-slate-900">${item.name}</h4>
+                        ${!item.inStock ? '<span class="text-[9px] bg-red-100 text-red-700 font-bold px-1.5 py-0.2 rounded">Sold Out</span>' : ''}
+                      </div>
+                      <span class="text-xs font-black text-brand-700 mt-0.5 block">₱${item.price}.00</span>
+                      <span class="text-[10px] text-slate-400">${item.category}</span>
+                    </div>
+                  </div>
+
+                  <!-- Add to Order Button -->
+                  <div>
+                    ${item.inStock ? `
+                      <button 
+                        onclick="addToCart('${item.name}', ${item.price}, '${resto.name}')" 
+                        class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all active:scale-95"
+                      >
+                        + Add
+                      </button>
+                    ` : `
+                      <button disabled class="px-3 py-1.5 bg-slate-200 text-slate-400 font-bold text-xs rounded-xl cursor-not-allowed">
+                        Unavailable
+                      </button>
+                    `}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+        </div>
+      `;
+    }
+
+    // --------------------------------------------------------
+    // SCREEN 3: DEDICATED SOCIAL FOOD FEED ("MATI FOODIES")
+    // Decoupled from index.tsx: gives community its own space!
+    // --------------------------------------------------------
+    function getCommunityFeedViewHtml() {
+      const isGuest = state.role === 'guest_user';
+      return `
+        <div class="flex-1 pb-20 fade-in">
+          
+          <!-- Sticky Feed Top Bar -->
+          <div class="sticky top-0 bg-white/95 backdrop-blur z-20 px-4 py-3 border-b border-slate-100 shadow-xs flex items-center justify-between">
+            <div>
+              <h1 class="text-sm font-black text-slate-900 tracking-tight flex items-center gap-1.5">
+                <span>Mati Foodies</span>
+                <span class="text-[10px] bg-sunset-50 text-sunset-600 border border-sunset-200 font-extrabold px-1.5 py-0.5 rounded-full">Community</span>
+              </h1>
+              <p class="text-[10px] text-slate-400">Real food reviews & photos by locals</p>
+            </div>
+            
+            <button 
+              onclick="${isGuest ? "openGuestGateModal('Sign in to post reviews and photos')" : "openCreatePostModal()"}"
+              class="px-3 py-1.5 bg-sunset-600 hover:bg-sunset-500 text-white font-extrabold text-xs rounded-xl flex items-center gap-1 shadow-sm transition-all"
+            >
+              <span>+ Share Review</span>
+            </button>
+          </div>
+
+          <!-- Feed Posts Stream -->
+          <div class="p-4 flex flex-col gap-4">
+            ${state.posts.map(post => `
+              <div class="bg-white rounded-2xl border border-slate-100 p-4 shadow-card">
+                
+                <!-- Author Header -->
+                <div class="flex items-center justify-between mb-2.5">
+                  <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-full ${post.avatarColor} text-white font-black text-xs flex items-center justify-center">
+                      ${post.author.charAt(0)}
+                    </div>
+                    <div>
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-xs font-bold text-slate-900">${post.author}</span>
+                        <span class="text-[9px] bg-slate-100 text-slate-600 font-semibold px-1.5 py-0.2 rounded">${post.badge}</span>
+                      </div>
+                      <span class="text-[10px] text-slate-400">${post.time}</span>
+                    </div>
+                  </div>
+                  <div class="flex text-amber-400 text-xs">
+                    ${'★'.repeat(post.rating)}
+                  </div>
+                </div>
+
+                <!-- Tagged Location Pill -->
+                <div class="mb-2.5">
+                  <span class="inline-flex items-center gap-1 text-[10px] font-bold bg-brand-50 text-brand-800 px-2 py-1 rounded-lg">
+                    <span>📍 ${post.restaurant}</span>
+                    <span class="text-brand-400">•</span>
+                    <span class="text-brand-600">${post.dish}</span>
+                  </span>
+                </div>
+
+                <!-- Review Content -->
+                <p class="text-xs text-slate-700 leading-relaxed">
+                  ${post.text}
+                </p>
+
+                <!-- Post Media Placeholder -->
+                <div class="mt-3 bg-slate-50 border border-slate-100 rounded-xl h-28 flex flex-col items-center justify-center text-slate-400 text-xs gap-1">
+                  <span class="text-3xl">${post.photoEmoji}</span>
+                  <span class="text-[10px] font-medium text-slate-500">Mati FoodFinder Verified Photo</span>
+                </div>
+
+                <!-- Likes & Comments Bar -->
+                <div class="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                  <button 
+                    onclick="${isGuest ? "openGuestGateModal('Sign in to like and comment')" : `toggleLike('${post.id}')`}" 
+                    class="flex items-center gap-1.5 font-bold ${post.liked ? 'text-sunset-600' : 'text-slate-500 hover:text-slate-800'}"
+                  >
+                    <span>${post.liked ? '❤️' : '🤍'}</span>
+                    <span>${post.likes} Likes</span>
+                  </button>
+
+                  <button 
+                    onclick="${isGuest ? "openGuestGateModal('Sign in to join the conversation')" : `openCommentsModal('${post.id}')`}" 
+                    class="flex items-center gap-1 text-slate-500 hover:text-slate-800 font-medium text-[11px]"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                    <span>${post.commentsCount} Comments</span>
+                  </button>
+                </div>
+
+              </div>
+            `).join('')}
+          </div>
+
+        </div>
+      `;
+    }
+
+    // --------------------------------------------------------
+    // SCREEN 4: INTERACTIVE MAP VIEW OF MATI CITY
+    // --------------------------------------------------------
+    function getMapViewHtml() {
+      return `
+        <div class="flex-1 pb-20 fade-in flex flex-col">
+          
+          <!-- Map Header -->
+          <div class="bg-white px-4 py-3 border-b border-slate-100 shadow-xs flex items-center justify-between">
+            <div>
+              <h1 class="text-xs font-black text-slate-900 uppercase tracking-wider">Mati Food Radar</h1>
+              <p class="text-[10px] text-slate-400">Discover spots around Pujada Bay & Dahican</p>
+            </div>
+            <span class="text-[10px] font-bold bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full">GPS Active</span>
+          </div>
+
+          <!-- Stylized Localized Mati Map Graphic -->
+          <div class="flex-1 bg-teal-50 relative flex items-center justify-center overflow-hidden min-h-[360px] p-4">
+            
+            <!-- Coastline Graphic SVG -->
+            <svg class="absolute inset-0 w-full h-full text-emerald-100" fill="currentColor" viewBox="0 0 400 400" preserveAspectRatio="none">
+              <path d="M0,0 L240,0 C220,100 290,180 180,260 C90,320 200,400 0,400 Z" opacity="0.6"/>
+              <path d="M220,400 C270,300 350,250 400,220 L400,400 Z" opacity="0.4"/>
+            </svg>
+
+            <!-- Coastal Labels -->
+            <div class="absolute top-6 left-6 text-[10px] font-black tracking-widest text-emerald-800 uppercase bg-white/70 px-2 py-1 rounded backdrop-blur">
+              Pujada Bay Coastline
+            </div>
+            <div class="absolute bottom-16 right-6 text-[10px] font-black tracking-widest text-teal-800 uppercase bg-white/70 px-2 py-1 rounded backdrop-blur">
+              Dahican Beach
+            </div>
+
+            <!-- Map Markers -->
+            <!-- Marker 1: Mama Letty's -->
+            <div class="absolute top-1/3 left-1/4 flex flex-col items-center cursor-pointer group" onclick="openRestaurantStorefront(1)">
+              <div class="px-2 py-1 bg-white text-slate-900 rounded-lg shadow-md border border-slate-200 text-[10px] font-bold flex items-center gap-1 group-hover:scale-105 transition-all">
+                <span>🍲</span>
+                <span>Mama Letty's (4 Tables)</span>
+              </div>
+              <div class="w-3 h-3 bg-brand-600 rotate-45 -mt-1.5 shadow-sm"></div>
+            </div>
+
+            <!-- Marker 2: Mati Baywalk Grill -->
+            <div class="absolute top-1/2 left-1/3 flex flex-col items-center cursor-pointer group" onclick="openRestaurantStorefront(2)">
+              <div class="px-2 py-1 bg-white text-slate-900 rounded-lg shadow-md border border-slate-200 text-[10px] font-bold flex items-center gap-1 group-hover:scale-105 transition-all">
+                <span>🐟</span>
+                <span>Baywalk Grill</span>
+              </div>
+              <div class="w-3 h-3 bg-brand-600 rotate-45 -mt-1.5 shadow-sm"></div>
+            </div>
+
+            <!-- Marker 3: Dahican Beach Bites -->
+            <div class="absolute bottom-28 right-12 flex flex-col items-center cursor-pointer group" onclick="openRestaurantStorefront(4)">
+              <div class="px-2 py-1 bg-white text-slate-900 rounded-lg shadow-md border border-slate-200 text-[10px] font-bold flex items-center gap-1 group-hover:scale-105 transition-all">
+                <span>🏖️</span>
+                <span>Dahican Bites</span>
+              </div>
+              <div class="w-3 h-3 bg-brand-600 rotate-45 -mt-1.5 shadow-sm"></div>
+            </div>
+
+          </div>
+
+          <!-- Bottom Sheet Summary Card for Selected Spot -->
+          <div class="p-3 bg-white border-t border-slate-100 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="text-2xl">🍲</span>
+              <div>
+                <h4 class="text-xs font-black text-slate-900">Mama Letty's Karenderia</h4>
+                <p class="text-[10px] text-slate-500">Central Poblacion • 4 free dining tables</p>
+              </div>
+            </div>
+            <button onclick="openRestaurantStorefront(1)" class="px-3 py-1.5 bg-brand-600 text-white font-bold text-xs rounded-xl">
+              Open Menu
+            </button>
+          </div>
+
+        </div>
+      `;
+    }
+
+    // --------------------------------------------------------
+    // SCREEN 5: ORDERS QUEUE & REAL-TIME TRACKER
+    // Replaces dense unstructured text with a modern 5-stage stepper!
+    // --------------------------------------------------------
+    function getOrdersQueueViewHtml() {
+      const isGuest = state.role === 'guest_user';
+      if (isGuest) {
+        return `
+          <div class="flex-1 p-6 flex flex-col items-center justify-center text-center fade-in">
+            <div class="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center text-3xl mb-4 text-slate-400">
+              🔒
+            </div>
+            <h2 class="text-sm font-black text-slate-900">Guest Mode Active</h2>
+            <p class="text-xs text-slate-500 mt-1 max-w-xs leading-relaxed">
+              Sign in to view your real-time Cash on Delivery deliveries and table reservations.
+            </p>
+            <button onclick="openGuestGateModal('Sign in to view live order tracking')" class="mt-4 px-5 py-2.5 bg-brand-600 text-white text-xs font-bold rounded-xl shadow-sm">
+              Sign In / Register
+            </button>
+          </div>
+        `;
+      }
+
+      const order = state.activeOrder;
+      const stages = [
+        { key: 'placed', label: 'Placed' },
+        { key: 'preparing', label: 'Cooking' },
+        { key: 'ready_for_pickup', label: 'Rider Ready' },
+        { key: 'out_for_delivery', label: 'On Way' },
+        { key: 'delivered', label: 'Delivered' }
+      ];
+      const currentIdx = stages.findIndex(s => s.key === order.status);
+
+      return `
+        <div class="flex-1 pb-20 fade-in p-4">
+          
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h1 class="text-xs font-black text-slate-900 uppercase tracking-wider">Your Active Order</h1>
+              <p class="text-[10px] text-slate-400">Order #${order.id} • Cash on Delivery</p>
+            </div>
+            <span class="text-[10px] font-bold bg-brand-50 text-brand-700 px-2.5 py-1 rounded-full border border-brand-200">
+              Est. ${order.estimatedMinutes} mins
+            </span>
+          </div>
+
+          <!-- Live Visual Status Stepper (International Standard UX) -->
+          <div class="bg-white rounded-2xl border border-slate-100 p-4 shadow-card mb-4">
+            <div class="flex items-center justify-between mb-4">
+              <span class="text-xs font-extrabold text-slate-800">Delivery Status</span>
+              <span class="text-xs font-black text-brand-600 uppercase tracking-wider">${order.status.replace(/_/g, ' ')}</span>
+            </div>
+
+            <!-- Stepper Progress Bar -->
+            <div class="relative flex items-center justify-between px-2 mb-2">
+              <div class="absolute left-6 right-6 top-1/2 -translate-y-1/2 h-1 bg-slate-100 -z-0"></div>
+              <div class="absolute left-6 top-1/2 -translate-y-1/2 h-1 bg-brand-500 transition-all -z-0" style="width: ${(currentIdx / (stages.length - 1)) * 82}%;"></div>
+
+              ${stages.map((stage, idx) => `
+                <div class="flex flex-col items-center gap-1 z-10">
+                  <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${idx <= currentIdx ? 'bg-brand-600 text-white shadow-xs' : 'bg-white border-2 border-slate-200 text-slate-400'}">
+                    ${idx < currentIdx ? '✓' : idx === currentIdx ? '●' : idx + 1}
+                  </div>
+                  <span class="text-[9px] font-semibold ${idx <= currentIdx ? 'text-slate-800' : 'text-slate-400'}">${stage.label}</span>
+                </div>
+              `).join('')}
+            </div>
+
+            <!-- PIN Handshake Guard for COD -->
+            <div class="mt-4 bg-brand-50 border border-brand-200/80 rounded-xl p-3 flex items-center justify-between">
+              <div>
+                <span class="text-[10px] font-bold uppercase tracking-wider text-brand-800 block">Customer COD Hand-off PIN</span>
+                <span class="text-[11px] text-brand-700">Give this PIN to rider upon receiving food</span>
+              </div>
+              <span class="text-base font-black text-brand-900 tracking-widest font-mono bg-white px-2.5 py-1 rounded-lg border border-brand-200">${order.deliveryPin}</span>
+            </div>
+          </div>
+
+          <!-- Assigned Rider Card -->
+          <div class="bg-white rounded-2xl border border-slate-100 p-4 shadow-card mb-4">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2.5">
+                <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-xl shrink-0">
+                  🛵
+                </div>
+                <div>
+                  <h4 class="text-xs font-extrabold text-slate-900">${order.driverName}</h4>
+                  <p class="text-[10px] text-slate-400">Rider • Honda Wave (${order.driverPlate})</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <a href="tel:${order.driverPhone}" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 text-xs">
+                  📞
+                </a>
+              </div>
+            </div>
+            
+            <div class="pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
+              <span class="text-slate-500">Destination:</span>
+              <span class="font-bold text-slate-800">${state.selectedBarangay}</span>
+            </div>
+          </div>
+
+          <!-- Order Summary Details -->
+          <div class="bg-white rounded-2xl border border-slate-100 p-4 shadow-card">
+            <h4 class="text-xs font-extrabold text-slate-900 mb-2">Order Breakdown</h4>
+            <div class="text-xs text-slate-600 space-y-1 mb-3">
+              <div class="flex justify-between">
+                <span>1x Classic Pork Humba</span>
+                <span>₱90.00</span>
+              </div>
+              <div class="flex justify-between">
+                <span>1x Extra Rice</span>
+                <span>₱20.00</span>
+              </div>
+              <div class="flex justify-between text-slate-400">
+                <span>Delivery Fee (Central Poblacion)</span>
+                <span>₱25.00</span>
+              </div>
+            </div>
+            <div class="pt-2 border-t border-slate-100 flex justify-between font-black text-xs text-slate-900">
+              <span>Total to Pay upon Delivery (COD)</span>
+              <span class="text-brand-700 text-sm">₱135.00</span>
+            </div>
+          </div>
+
+        </div>
+      `;
+    }
+
+    // --------------------------------------------------------
+    // SCREEN 6: USER PROFILE & SETTINGS
+    // --------------------------------------------------------
+    function getProfileViewHtml() {
+      const isGuest = state.role === 'guest_user';
+      return `
+        <div class="flex-1 pb-20 fade-in p-4">
+          <div class="flex items-center gap-3 mb-6 pt-2">
+            <div class="w-14 h-14 rounded-2xl bg-brand-600 text-white flex items-center justify-center text-2xl font-black shadow-sm">
+              ${isGuest ? '?' : 'J'}
+            </div>
+            <div>
+              <h2 class="text-sm font-black text-slate-900">${isGuest ? 'Guest Visitor' : 'Juan dela Cruz'}</h2>
+              <p class="text-xs text-slate-400">${isGuest ? 'Exploring Mati City' : '+63 917 111 2222 • Brgy. Central'}</p>
+              <span class="text-[10px] font-bold ${isGuest ? 'text-amber-600' : 'text-emerald-700'}">${isGuest ? 'Unverified Guest' : 'Verified Registered Foodie'}</span>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-100 divide-y divide-slate-100 shadow-card overflow-hidden">
+            <button onclick="openBarangayPickerModal()" class="w-full p-3.5 flex items-center justify-between text-xs text-left hover:bg-slate-50 transition-all">
+              <span class="font-bold text-slate-800">📍 Default Barangay & Delivery Landmark</span>
+              <span class="text-slate-400 text-[11px]">${state.selectedBarangay} →</span>
+            </button>
+            <div class="p-3.5 flex items-center justify-between text-xs">
+              <div>
+                <span class="font-bold text-slate-800 block">Personalized ML Recommendations</span>
+                <span class="text-[10px] text-slate-400">Suggest spots based on order frequency</span>
+              </div>
+              <input type="checkbox" checked class="w-4 h-4 text-brand-600 rounded">
+            </div>
+            <button onclick="toggleUxAuditModal()" class="w-full p-3.5 flex items-center justify-between text-xs text-left hover:bg-slate-50 transition-all text-brand-700 font-bold">
+              <span>📋 View Architecture & Split Rationale</span>
+              <span>→</span>
+            </button>
+          </div>
+
+          ${isGuest ? `
+            <button onclick="setRole('registered_user')" class="w-full mt-6 py-3 bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-xs rounded-xl shadow-sm transition-all">
+              Sign In as Registered User Demo
+            </button>
+          ` : `
+            <button onclick="setRole('guest_user')" class="w-full mt-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-extrabold text-xs rounded-xl transition-all">
+              Sign Out (Switch to Guest Mode)
+            </button>
+          `}
+        </div>
+      `;
+    }
+
+    // ========================================================
+    // ROLE: DELIVERY RIDER MOBILE COCKPIT
+    // Big buttons, high contrast, safe COD collection with PIN/Photo
+    // ========================================================
+    function renderMobileRiderScreen() {
+      const screen = document.getElementById('phone-screen-content');
+      const tabsNav = document.getElementById('mobile-bottom-tabs');
+      tabsNav.classList.add('hidden'); // Rider has specialized bottom bar
+
+      const r = state.rider;
+      screen.innerHTML = `
+        <div class="flex-1 pb-6 fade-in flex flex-col bg-slate-100">
+          
+          <!-- Rider Header Bar -->
+          <div class="bg-slate-900 text-white px-4 py-3.5 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <div class="w-9 h-9 rounded-xl bg-brand-500/20 text-brand-400 border border-brand-500/40 flex items-center justify-center font-bold text-base">
+                🛵
+              </div>
+              <div>
+                <h3 class="text-xs font-black tracking-tight leading-tight">Kuya Jun Almonte</h3>
+                <span class="text-[10px] font-mono text-slate-400">Plate: DVO-8492</span>
+              </div>
+            </div>
+
+            <!-- Online / Offline Switcher -->
+            <button onclick="toggleRiderOnline()" class="px-3 py-1.5 rounded-full text-xs font-extrabold flex items-center gap-1.5 transition-all ${r.isOnline ? 'bg-emerald-500 text-white pulse-badge' : 'bg-slate-800 text-slate-400 border border-slate-700'}">
+              <span class="w-2 h-2 rounded-full ${r.isOnline ? 'bg-white' : 'bg-slate-500'}"></span>
+              <span>${r.isOnline ? 'ONLINE' : 'OFFLINE'}</span>
+            </button>
+          </div>
+
+          <!-- Rider Shift Earnings Ribbon -->
+          <div class="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center justify-around text-center shadow-xs">
+            <div>
+              <span class="text-[10px] font-bold text-slate-400 uppercase">Today's Earnings</span>
+              <p class="text-sm font-black text-slate-900">₱${r.todayEarnings.toFixed(2)}</p>
+            </div>
+            <div class="w-px h-6 bg-slate-200"></div>
+            <div>
+              <span class="text-[10px] font-bold text-slate-400 uppercase">Deliveries</span>
+              <p class="text-sm font-black text-emerald-700">${r.completedDeliveries} Trips</p>
+            </div>
+            <div class="w-px h-6 bg-slate-200"></div>
+            <div>
+              <span class="text-[10px] font-bold text-slate-400 uppercase">COD Wallet</span>
+              <p class="text-sm font-black text-sunset-600">₱640.00</p>
+            </div>
+          </div>
+
+          <!-- Active Job or Available Jobs Queue -->
+          <div class="flex-1 p-4 overflow-y-auto no-scrollbar">
+            ${r.activeJobId ? `
+              <!-- IN-PROGRESS DELIVERY CARD -->
+              <div class="bg-white rounded-2xl border-2 border-brand-500 p-4 shadow-md mb-4">
+                <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
+                  <span class="text-[10px] font-extrabold bg-brand-100 text-brand-800 px-2 py-0.5 rounded-md uppercase">Active Job #MFF-2048</span>
+                  <span class="text-xs font-black text-brand-700">Fee: +₱65.00</span>
+                </div>
+
+                <!-- Pickup Spot -->
+                <div class="flex items-start gap-2.5 mb-3">
+                  <span class="text-lg">🏪</span>
+                  <div>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase">Pickup Location</span>
+                    <h4 class="text-xs font-black text-slate-900">Mama Letty's Karenderia</h4>
+                    <p class="text-[11px] text-slate-500">Magsaysay St, Brgy. Central</p>
+                    <span class="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded mt-1 inline-block">Order is Packed & Ready</span>
+                  </div>
+                </div>
+
+                <!-- Drop-off Spot -->
+                <div class="flex items-start gap-2.5 mb-4 pt-2 border-t border-slate-100">
+                  <span class="text-lg">📍</span>
+                  <div>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase">Drop-off Customer</span>
+                    <h4 class="text-xs font-black text-slate-900">Juan dela Cruz (+63 917 111 2222)</h4>
+                    <p class="text-[11px] text-slate-500">Near Baywalk Pavilion, blue gate</p>
+                    <span class="text-[10px] text-sunset-700 font-bold bg-sunset-50 px-2 py-0.5 rounded mt-1 inline-block">💵 Collect COD Cash: ₱135.00</span>
+                  </div>
+                </div>
+
+                <!-- Hand-off & Dispute Protection Actions -->
+                <div class="space-y-2">
+                  <button onclick="openRiderHandshakeModal()" class="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5">
+                    <span>🔐 Verify PIN & Complete Delivery</span>
+                  </button>
+                  <a href="tel:09171112222" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1">
+                    <span>📞 Call Customer</span>
+                  </a>
+                </div>
+              </div>
+            ` : `
+              <!-- AVAILABLE JOBS RADAR -->
+              <div>
+                <div class="flex items-center justify-between mb-3">
+                  <span class="text-xs font-black text-slate-800 uppercase tracking-wider">Nearby Deliveries (2)</span>
+                  <span class="text-[10px] font-bold text-brand-600">Auto-refreshing</span>
+                </div>
+
+                <!-- Job 1 -->
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-card mb-3">
+                  <div class="flex items-start justify-between gap-2 mb-2">
+                    <div>
+                      <h4 class="text-xs font-black text-slate-900">Mama Letty's Karenderia</h4>
+                      <p class="text-[11px] text-slate-500">Poblacion → Madang District (2.1 km)</p>
+                    </div>
+                    <div class="text-right">
+                      <span class="text-sm font-black text-brand-700">₱65.00</span>
+                      <span class="text-[9px] text-slate-400 block">Delivery Fee</span>
+                    </div>
+                  </div>
+
+                  <div class="bg-slate-50 rounded-xl p-2.5 mb-3 flex items-center justify-between text-[11px]">
+                    <span class="text-slate-600">Items: 2x Pork Humba, 2x Rice</span>
+                    <span class="font-bold text-sunset-700">COD: ₱220</span>
+                  </div>
+
+                  <button onclick="acceptRiderJob(2048)" class="w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-xs rounded-xl transition-all shadow-xs">
+                    Accept Delivery Request 🛵
+                  </button>
+                </div>
+
+                <!-- Job 2 -->
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-card">
+                  <div class="flex items-start justify-between gap-2 mb-2">
+                    <div>
+                      <h4 class="text-xs font-black text-slate-900">Mati Baywalk Seafood Grill</h4>
+                      <p class="text-[11px] text-slate-500">Baywalk → Dahican Beach (6.8 km)</p>
+                    </div>
+                    <div class="text-right">
+                      <span class="text-sm font-black text-brand-700">₱120.00</span>
+                      <span class="text-[9px] text-slate-400 block">Delivery Fee</span>
+                    </div>
+                  </div>
+
+                  <div class="bg-slate-50 rounded-xl p-2.5 mb-3 flex items-center justify-between text-[11px]">
+                    <span class="text-slate-600">Items: 1x Tuna Panga, 1x Kinilaw</span>
+                    <span class="font-bold text-sunset-700">COD: ₱580</span>
+                  </div>
+
+                  <button onclick="acceptRiderJob(2049)" class="w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-xs rounded-xl transition-all shadow-xs">
+                    Accept Delivery Request 🛵
+                  </button>
+                </div>
+              </div>
+            `}
+          </div>
+
+        </div>
+      `;
+    }
+
+    function toggleRiderOnline() {
+      state.rider.isOnline = !state.rider.isOnline;
+      renderMobileRiderScreen();
+    }
+
+    function acceptRiderJob(jobId) {
+      state.rider.activeJobId = jobId;
+      renderMobileRiderScreen();
+    }
+
+    // ========================================================
+    // ROLE: STORE ADMIN (KITCHEN KDS MOBILE MODE)
+    // Karenderia cooks need large tap targets, no complex menus
+    // ========================================================
+    function renderMobileStoreKds() {
+      const screen = document.getElementById('phone-screen-content');
+      const tabsNav = document.getElementById('mobile-bottom-tabs');
+      tabsNav.classList.add('hidden');
+
+      const m = state.merchant;
+      screen.innerHTML = `
+        <div class="flex-1 pb-4 fade-in flex flex-col bg-slate-100">
+          
+          <!-- Kitchen Top Bar -->
+          <div class="bg-slate-900 text-white px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">🍲</span>
+              <div>
+                <h3 class="text-xs font-black leading-tight">Mama Letty's KDS</h3>
+                <span class="text-[10px] text-slate-400">Kitchen Display & Stock</span>
+              </div>
+            </div>
+
+            <button onclick="toggleStoreOnline()" class="px-2.5 py-1 rounded-full text-xs font-extrabold flex items-center gap-1 ${m.isOnline ? 'bg-emerald-600 text-white' : 'bg-red-800 text-white'}">
+              <span>${m.isOnline ? '🟢 OPEN' : '🔴 PAUSED'}</span>
+            </button>
+          </div>
+
+          <!-- KDS Kitchen Segment Bar -->
+          <div class="bg-white border-b border-slate-200 px-3 py-2 flex items-center gap-1 overflow-x-auto no-scrollbar">
+            <button onclick="setKdsTab('incoming')" class="px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all ${m.activeKdsTab === 'incoming' ? 'bg-sunset-500 text-white' : 'bg-slate-100 text-slate-600'}">
+              Incoming (1)
+            </button>
+            <button onclick="setKdsTab('preparing')" class="px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all ${m.activeKdsTab === 'preparing' ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600'}">
+              Cooking (1)
+            </button>
+            <button onclick="setKdsTab('inventory')" class="px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all ${m.activeKdsTab === 'inventory' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}">
+              Stock Toggle
+            </button>
+            <button onclick="setKdsTab('tables')" class="px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all ${m.activeKdsTab === 'tables' ? 'bg-teal-700 text-white' : 'bg-slate-100 text-slate-600'}">
+              Tables (4)
+            </button>
+          </div>
+
+          <!-- KDS Content -->
+          <div class="flex-1 p-3 overflow-y-auto no-scrollbar">
+            
+            ${m.activeKdsTab === 'incoming' ? `
+              <!-- INCOMING ORDERS (1-TAP ACCEPT) -->
+              <div class="space-y-3">
+                <div class="bg-white rounded-2xl border-2 border-sunset-400 p-4 shadow-sm">
+                  <div class="flex items-center justify-between mb-2 pb-2 border-b border-slate-100">
+                    <span class="text-xs font-black text-slate-800">Order #1095</span>
+                    <span class="text-[10px] font-bold bg-sunset-100 text-sunset-700 px-2 py-0.5 rounded">Just now</span>
+                  </div>
+
+                  <p class="text-xs font-bold text-slate-900 mb-1">Maria Santos • Purok 4, Sainz</p>
+                  <div class="bg-slate-50 p-2.5 rounded-xl mb-3 text-xs text-slate-800 font-mono">
+                    • 2x Native Chicken Tinola<br>
+                    • 2x Extra Rice<br>
+                    <span class="text-sunset-700 font-bold font-sans text-[10px]">Note: Make the soup extra hot</span>
+                  </div>
+
+                  <div class="flex items-center gap-2">
+                    <button onclick="advanceKdsOrderStatus('1095', 'preparing')" class="flex-1 py-3 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-sm transition-all">
+                      ✓ ACCEPT & START COOKING
+                    </button>
+                    <button onclick="declineKdsOrder('1095')" class="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl">
+                      Decline
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ` : m.activeKdsTab === 'preparing' ? `
+              <!-- PREPARING ORDERS (1-TAP MARK READY) -->
+              <div class="space-y-3">
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+                  <div class="flex items-center justify-between mb-2 pb-2 border-b border-slate-100">
+                    <span class="text-xs font-black text-slate-800">Order #1094</span>
+                    <span class="text-[10px] font-bold bg-brand-100 text-brand-700 px-2 py-0.5 rounded">Cooking (4m)</span>
+                  </div>
+
+                  <p class="text-xs font-bold text-slate-900 mb-1">Juan dela Cruz • Baywalk</p>
+                  <div class="bg-slate-50 p-2.5 rounded-xl mb-3 text-xs text-slate-800 font-mono">
+                    • 1x Classic Pork Humba<br>
+                    • 1x Extra Rice
+                  </div>
+
+                  <button onclick="advanceKdsOrderStatus('1094', 'ready')" class="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded-xl shadow-sm transition-all">
+                    🛵 MARK PACKED & READY FOR RIDER
+                  </button>
+                </div>
+              </div>
+            ` : m.activeKdsTab === 'inventory' ? `
+              <!-- LIVE 1-TAP DISH AVAILABILITY TOGGLES -->
+              <div>
+                <p class="text-[11px] text-slate-500 mb-2">Tap toggle when dish runs out in the kitchen</p>
+                <div class="space-y-2">
+                  ${m.menu.map(dish => `
+                    <div class="bg-white p-3 rounded-xl border border-slate-200 flex items-center justify-between">
+                      <div class="flex items-center gap-2.5">
+                        <span class="text-xl">${dish.emoji}</span>
+                        <div>
+                          <h4 class="text-xs font-black text-slate-800">${dish.name}</h4>
+                          <span class="text-[10px] font-bold text-brand-700">₱${dish.price}.00</span>
+                        </div>
+                      </div>
+                      <button 
+                        onclick="toggleDishStock(${dish.id})"
+                        class="px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all ${dish.inStock ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-red-100 text-red-800 border border-red-300'}"
+                      >
+                        ${dish.inStock ? '🟢 In Stock' : '🔴 Sold Out'}
+                      </button>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : `
+              <!-- TABLE RESERVATIONS -->
+              <div class="space-y-3">
+                ${m.reservations.map(res => `
+                  <div class="bg-white p-3.5 rounded-xl border border-slate-200">
+                    <div class="flex items-center justify-between mb-1">
+                      <span class="text-xs font-black text-slate-900">${res.customer}</span>
+                      <span class="text-[10px] font-bold bg-teal-50 text-teal-700 px-2 py-0.5 rounded">${res.status}</span>
+                    </div>
+                    <p class="text-[11px] text-slate-500">${res.guests} Guests • ${res.time} • ${res.tableType}</p>
+                    <div class="mt-2.5 flex items-center gap-2">
+                      <button onclick="alert('Table assigned!')" class="px-3 py-1 bg-brand-600 text-white text-xs font-bold rounded-lg">Mark Seated</button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            `}
+
+          </div>
+
+        </div>
+      `;
+    }
+
+    function setKdsTab(tab) {
+      state.merchant.activeKdsTab = tab;
+      renderMobileStoreKds();
+    }
+
+    function toggleStoreOnline() {
+      state.merchant.isOnline = !state.merchant.isOnline;
+      renderMobileStoreKds();
+    }
+
+    function toggleDishStock(dishId) {
+      const dish = state.merchant.menu.find(d => d.id === dishId);
+      if (dish) {
+        dish.inStock = !dish.inStock;
+        renderMobileStoreKds();
+      }
+    }
+
+    function advanceKdsOrderStatus(orderId, nextStatus) {
+      const ord = state.merchant.orders.find(o => o.id === orderId);
+      if (ord) ord.status = nextStatus;
+      renderMobileStoreKds();
+    }
+
+    function declineKdsOrder(orderId) {
+      state.merchant.orders = state.merchant.orders.filter(o => o.id !== orderId);
+      renderMobileStoreKds();
+    }
+
+    // ========================================================
+    // ROLE: SYSTEM ADMIN (DESKTOP SAAS DASHBOARD)
+    // Platform metrics, store approvals, PayMongo oversight
+    // ========================================================
+    function renderDesktopAdmin() {
+      const container = document.getElementById('desktop-viewport-container');
+      const tab = state.sysAdmin.activeTab;
+
+      container.innerHTML = `
+        <!-- Top App Navigation -->
+        <header class="bg-slate-900 text-white px-8 py-4 border-b border-slate-800 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center font-black text-white">
+              M
+            </div>
+            <div>
+              <h2 class="text-sm font-bold tracking-tight">Mati FoodFinder • Platform System Admin</h2>
+              <span class="text-[10px] text-slate-400">City-wide multi-tenant manager (Davao Oriental)</span>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-4 text-xs">
+            <span class="text-slate-400">Admin: <strong class="text-white">Dave (Developer)</strong></span>
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+          </div>
+        </header>
+
+        <!-- Main Body: Sidebar + Dynamic Content -->
+        <div class="flex-1 flex flex-col md:flex-row bg-slate-50">
+          
+          <!-- Sidebar Nav -->
+          <aside class="w-full md:w-64 bg-white border-r border-slate-200 p-4 space-y-1 shrink-0">
+            <button onclick="setAdminTab('approvals')" class="w-full px-3 py-2.5 rounded-xl text-xs font-bold text-left flex items-center justify-between transition-all ${tab === 'approvals' ? 'bg-brand-50 text-brand-800 font-black' : 'text-slate-600 hover:bg-slate-50'}">
+              <span>📋 Store Approvals</span>
+              <span class="bg-sunset-100 text-sunset-700 text-[10px] px-2 py-0.5 rounded-full font-bold">3</span>
+            </button>
+            <button onclick="setAdminTab('moderation')" class="w-full px-3 py-2.5 rounded-xl text-xs font-bold text-left flex items-center justify-between transition-all ${tab === 'moderation' ? 'bg-brand-50 text-brand-800 font-black' : 'text-slate-600 hover:bg-slate-50'}">
+              <span>🛡️ Feed Moderation</span>
+              <span class="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded-full font-bold">2</span>
+            </button>
+            <button onclick="setAdminTab('paymongo')" class="w-full px-3 py-2.5 rounded-xl text-xs font-bold text-left flex items-center justify-between transition-all ${tab === 'paymongo' ? 'bg-brand-50 text-brand-800 font-black' : 'text-slate-600 hover:bg-slate-50'}">
+              <span>💳 PayMongo Subscriptions</span>
+              <span class="text-emerald-600 text-[10px] font-bold">Active</span>
+            </button>
+            <button onclick="setAdminTab('overview')" class="w-full px-3 py-2.5 rounded-xl text-xs font-bold text-left flex items-center justify-between transition-all ${tab === 'overview' ? 'bg-brand-50 text-brand-800 font-black' : 'text-slate-600 hover:bg-slate-50'}">
+              <span>📊 City Metrics</span>
+            </button>
+          </aside>
+
+          <!-- Main Content Area -->
+          <main class="flex-1 p-6 overflow-y-auto max-h-[700px]">
+            ${tab === 'approvals' ? `
+              <!-- STORE VERIFICATION & APPROVAL QUEUE -->
+              <div>
+                <div class="mb-6 flex items-center justify-between">
+                  <div>
+                    <h3 class="text-lg font-black text-slate-900">Merchant Store Approvals</h3>
+                    <p class="text-xs text-slate-500">Review permits before stores go live on the customer mobile app.</p>
+                  </div>
+                  <span class="text-xs font-bold bg-amber-100 text-amber-800 px-3 py-1 rounded-full">3 Stores Awaiting Review</span>
+                </div>
+
+                <div class="space-y-4">
+                  ${state.sysAdmin.pendingStores.map(store => `
+                    <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                      <div>
+                        <div class="flex items-center gap-2">
+                          <h4 class="font-extrabold text-sm text-slate-900">${store.name}</h4>
+                          <span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-bold">${store.type}</span>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">Owner: <strong>${store.owner}</strong> • Location: ${store.location}</p>
+                        <p class="text-xs text-slate-400 mt-0.5 font-mono">Permit: ${store.permit} • Applied ${store.applied}</p>
+                      </div>
+
+                      <div class="flex items-center gap-2 self-end md:self-center">
+                        <button onclick="alert('Viewing attached permit document PDF for ${store.name}')" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all">
+                          📄 Inspect Permit
+                        </button>
+                        <button onclick="approveStore('${store.id}')" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all">
+                          ✓ Approve Store
+                        </button>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : tab === 'moderation' ? `
+              <!-- SOCIAL FEED MODERATION -->
+              <div>
+                <div class="mb-6">
+                  <h3 class="text-lg font-black text-slate-900">Social Food Feed Moderation</h3>
+                  <p class="text-xs text-slate-500">Keep the Mati City community clean and authentic.</p>
+                </div>
+
+                <div class="space-y-4">
+                  ${state.sysAdmin.flaggedPosts.map(post => `
+                    <div class="bg-white rounded-2xl border border-red-200 p-5 shadow-xs">
+                      <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold text-red-600 bg-red-50 px-2.5 py-0.5 rounded">Flagged: ${post.reason}</span>
+                        <span class="text-xs text-slate-400">${post.time}</span>
+                      </div>
+                      <p class="text-xs font-semibold text-slate-800">Author: ${post.author} • Target: ${post.restaurant}</p>
+                      <blockquote class="bg-slate-50 p-3 rounded-xl text-xs text-slate-600 my-3 border-l-4 border-red-400 font-mono">
+                        "${post.excerpt}"
+                      </blockquote>
+                      <div class="flex items-center gap-2">
+                        <button onclick="removeFlaggedPost('${post.id}')" class="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl">
+                          Delete Post & Warn User
+                        </button>
+                        <button onclick="dismissFlag('${post.id}')" class="px-3.5 py-1.5 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl">
+                          Ignore & Keep
+                        </button>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : tab === 'paymongo' ? `
+              <!-- PAYMONGO REVENUE & SUBSCRIPTION OVERSIGHT -->
+              <div>
+                <div class="mb-6">
+                  <h3 class="text-lg font-black text-slate-900">PayMongo Store Subscriptions</h3>
+                  <p class="text-xs text-slate-500">Store admins receive a 2-month free trial before billing ₱499/month.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div class="bg-white p-5 rounded-2xl border border-slate-200">
+                    <span class="text-xs font-bold text-slate-400 uppercase">Monthly Recurring Revenue</span>
+                    <p class="text-2xl font-black text-slate-900 mt-1">₱45,500.00</p>
+                    <span class="text-[10px] text-emerald-600 font-bold mt-1 block">↑ 12% from last month</span>
+                  </div>
+                  <div class="bg-white p-5 rounded-2xl border border-slate-200">
+                    <span class="text-xs font-bold text-slate-400 uppercase">Active Subscriptions</span>
+                    <p class="text-2xl font-black text-slate-900 mt-1">91 Stores</p>
+                    <span class="text-[10px] text-slate-500 font-medium mt-1 block">₱499/mo standard plan</span>
+                  </div>
+                  <div class="bg-white p-5 rounded-2xl border border-slate-200">
+                    <span class="text-xs font-bold text-slate-400 uppercase">Stores on 2-Month Trial</span>
+                    <p class="text-2xl font-black text-brand-600 mt-1">51 Stores</p>
+                    <span class="text-[10px] text-slate-500 font-medium mt-1 block">Free trial conversion rate: 84%</span>
+                  </div>
+                </div>
+              </div>
+            ` : `
+              <!-- CITY METRICS OVERVIEW -->
+              <div>
+                <h3 class="text-lg font-black text-slate-900 mb-4">Mati City Platform Summary</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div class="bg-white p-4 rounded-xl border border-slate-200">
+                    <span class="text-xs text-slate-400">Total Registered Users</span>
+                    <p class="text-xl font-black text-slate-900">4,209</p>
+                  </div>
+                  <div class="bg-white p-4 rounded-xl border border-slate-200">
+                    <span class="text-xs text-slate-400">Active Delivery Riders</span>
+                    <p class="text-xl font-black text-slate-900">38 Riders</p>
+                  </div>
+                  <div class="bg-white p-4 rounded-xl border border-slate-200">
+                    <span class="text-xs text-slate-400">Daily COD Volume</span>
+                    <p class="text-xl font-black text-slate-900">₱84,200</p>
+                  </div>
+                  <div class="bg-white p-4 rounded-xl border border-slate-200">
+                    <span class="text-xs text-slate-400">Table Reservations Today</span>
+                    <p class="text-xl font-black text-slate-900">34 Bookings</p>
+                  </div>
+                </div>
+              </div>
+            `}
+          </main>
+
+        </div>
+      `;
+    }
+
+    function setAdminTab(t) {
+      state.sysAdmin.activeTab = t;
+      renderDesktopAdmin();
+    }
+
+    function approveStore(id) {
+      state.sysAdmin.pendingStores = state.sysAdmin.pendingStores.filter(s => s.id !== id);
+      alert('Store successfully approved! Now visible to all mobile users in Mati City.');
+      renderDesktopAdmin();
+    }
+
+    function removeFlaggedPost(id) {
+      state.sysAdmin.flaggedPosts = state.sysAdmin.flaggedPosts.filter(p => p.id !== id);
+      alert('Post removed and warning issued.');
+      renderDesktopAdmin();
+    }
+
+    function dismissFlag(id) {
+      state.sysAdmin.flaggedPosts = state.sysAdmin.flaggedPosts.filter(p => p.id !== id);
+      renderDesktopAdmin();
+    }
+
+    // ========================================================
+    // ROLE: STORE ADMIN (DESKTOP WEB PORTAL)
+    // Full SaaS portal for Karenderias & Restaurants
+    // ========================================================
+    function renderDesktopMerchant() {
+      const container = document.getElementById('desktop-viewport-container');
+      container.innerHTML = `
+        <header class="bg-slate-900 text-white px-8 py-4 border-b border-slate-800 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">🍲</span>
+            <div>
+              <h2 class="text-sm font-bold tracking-tight">Mama Letty's Karenderia • Web Merchant Portal</h2>
+              <span class="text-[10px] text-slate-400">Central Poblacion, Mati City</span>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <span class="px-2.5 py-1 bg-emerald-900/60 border border-emerald-500/40 text-emerald-300 text-xs font-bold rounded-lg">PayMongo Trial: 42 Days Left</span>
+            <button onclick="switchStoreView('mobile_kds')" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold rounded-xl">
+              Open Mobile KDS
+            </button>
+          </div>
+        </header>
+
+        <div class="p-8 bg-slate-50 flex-1 space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-white p-5 rounded-2xl border border-slate-200">
+              <span class="text-xs text-slate-400 font-bold uppercase">Today's Total Orders</span>
+              <p class="text-3xl font-black text-slate-900 mt-1">42</p>
+              <span class="text-[11px] text-emerald-600 font-bold mt-1 block">↑ 8 more than yesterday</span>
+            </div>
+            <div class="bg-white p-5 rounded-2xl border border-slate-200">
+              <span class="text-xs text-slate-400 font-bold uppercase">Today's Revenue</span>
+              <p class="text-3xl font-black text-slate-900 mt-1">₱4,250.00</p>
+              <span class="text-[11px] text-slate-500 font-medium mt-1 block">Cash on Delivery collected</span>
+            </div>
+            <div class="bg-white p-5 rounded-2xl border border-slate-200">
+              <span class="text-xs text-slate-400 font-bold uppercase">Average Prep Time</span>
+              <p class="text-3xl font-black text-brand-600 mt-1">14 Mins</p>
+              <span class="text-[11px] text-emerald-600 font-bold mt-1 block">Optimal kitchen flow</span>
+            </div>
+            <div class="bg-white p-5 rounded-2xl border border-slate-200">
+              <span class="text-xs text-slate-400 font-bold uppercase">Table Bookings Today</span>
+              <p class="text-3xl font-black text-teal-700 mt-1">6 Bookings</p>
+              <span class="text-[11px] text-slate-500 font-medium mt-1 block">4 available right now</span>
+            </div>
+          </div>
+
+          <!-- Menu Inventory Table -->
+          <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+            <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 class="font-extrabold text-sm text-slate-900">Live Menu & Pricing Sync</h3>
+                <p class="text-xs text-slate-400">Instantly synced with customer mobile apps</p>
+              </div>
+              <button onclick="alert('Add dish modal')" class="px-3.5 py-1.5 bg-brand-600 text-white text-xs font-bold rounded-xl">+ Add Dish</button>
+            </div>
+
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-500 uppercase font-bold border-b border-slate-100">
+                <tr>
+                  <th class="px-6 py-3">Dish Name</th>
+                  <th class="px-6 py-3">Category</th>
+                  <th class="px-6 py-3">Price</th>
+                  <th class="px-6 py-3">Status</th>
+                  <th class="px-6 py-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 text-slate-700 font-medium">
+                ${state.merchant.menu.map(d => `
+                  <tr>
+                    <td class="px-6 py-3.5 flex items-center gap-2">
+                      <span class="text-lg">${d.emoji}</span>
+                      <span class="font-bold text-slate-900">${d.name}</span>
+                    </td>
+                    <td class="px-6 py-3.5 text-slate-500">${d.category}</td>
+                    <td class="px-6 py-3.5 font-bold">₱${d.price}.00</td>
+                    <td class="px-6 py-3.5">
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold ${d.inStock ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}">
+                        ${d.inStock ? 'In Stock' : 'Sold Out'}
+                      </span>
+                    </td>
+                    <td class="px-6 py-3.5 text-right">
+                      <button onclick="toggleDishStock(${d.id}); renderDesktopMerchant();" class="text-brand-600 hover:text-brand-800 font-bold">
+                        Toggle Stock
+                      </button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    // ========================================================
+    // MODAL DIALOGS (DISCLOSURE & CLEAN WORKFLOWS)
+    // ========================================================
+    
+    // 1. DISH CUSTOMIZATION & ADD TO CART
+    function addToCart(dishName, price, storeName) {
+      if (state.role === 'guest_user') {
+        openGuestGateModal('Sign in to add dishes to your cart and place orders');
+        return;
+      }
+      state.cart = [{ id: Date.now(), name: dishName, price: price, store: storeName, qty: 1, portion: "Regular", spicy: true }];
+      updateCartFloatingBar();
+      openCheckoutModal();
+    }
+
+    function updateCartFloatingBar() {
+      const bar = document.getElementById('mobile-floating-cart');
+      if (!bar) return;
+      if (state.cart.length > 0 && state.role === 'registered_user' && state.activeMobileTab === 'home') {
+        bar.classList.remove('hidden');
+        document.getElementById('cart-total-badge').textContent = state.cart.length;
+        document.getElementById('cart-floating-text').textContent = `${state.cart[0].qty} Item • ₱${(state.cart[0].price * state.cart[0].qty).toFixed(2)}`;
+      } else {
+        bar.classList.add('hidden');
+      }
+    }
+
+    // 2. CHECKOUT MODAL (SPLIT INTO 2 CLEAN PROGRESSIVE STEPS)
+    function openCheckoutModal() {
+      state.checkoutStep = 1;
+      renderCheckoutModalContent();
+    }
+
+    function renderCheckoutModalContent() {
+      const modal = document.getElementById('modal-container');
+      const item = state.cart[0] || { name: "Classic Pork Humba", price: 90, qty: 1, store: "Mama Letty's Karenderia" };
+      const subtotal = item.price * item.qty;
+      const deliveryFee = 25.00;
+      const total = subtotal + deliveryFee;
+
+      modal.innerHTML = `
+        <div class="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 fade-in">
+          <div class="w-full max-w-sm bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden slide-up flex flex-col max-h-[85vh]">
+            
+            <!-- Modal Header with Step Indicator -->
+            <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <span class="text-[10px] font-black uppercase tracking-wider text-brand-700">Step ${state.checkoutStep} of 2</span>
+                <h3 class="text-sm font-black text-slate-900">${state.checkoutStep === 1 ? 'Order Review & Add-ons' : 'Delivery & COD Payment'}</h3>
+              </div>
+              <button onclick="closeModal()" class="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold hover:bg-slate-200">✕</button>
+            </div>
+
+            <!-- Modal Body by Step -->
+            <div class="p-5 overflow-y-auto no-scrollbar space-y-4">
+              
+              ${state.checkoutStep === 1 ? `
+                <!-- STEP 1: ITEM OPTIONS & QUANTITY -->
+                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div>
+                    <h4 class="text-xs font-black text-slate-900">${item.name}</h4>
+                    <span class="text-xs font-bold text-brand-700">₱${item.price}.00</span>
+                    <span class="text-[10px] text-slate-400 block">${item.store}</span>
+                  </div>
+                  
+                  <!-- Quantity Counter -->
+                  <div class="flex items-center gap-2 bg-white px-2 py-1 rounded-xl border border-slate-200">
+                    <button onclick="adjustCartQty(-1)" class="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-700">-</button>
+                    <span class="text-xs font-bold text-slate-900 w-4 text-center">${item.qty}</span>
+                    <button onclick="adjustCartQty(1)" class="w-6 h-6 rounded-lg bg-brand-600 flex items-center justify-center text-xs font-bold text-white">+</button>
+                  </div>
+                </div>
+
+                <!-- Fulfillment Switcher -->
+                <div>
+                  <label class="text-[11px] font-bold text-slate-700 block mb-1.5">Fulfillment Mode</label>
+                  <div class="grid grid-cols-2 gap-2">
+                    <button class="py-2.5 px-3 rounded-xl border-2 border-brand-600 bg-brand-50 text-brand-800 text-xs font-extrabold flex items-center justify-center gap-1.5">
+                      <span>🛵</span>
+                      <span>COD Delivery</span>
+                    </button>
+                    <button class="py-2.5 px-3 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold flex items-center justify-center gap-1.5">
+                      <span>🥡</span>
+                      <span>Self-Pickup</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Price Summary -->
+                <div class="pt-3 border-t border-slate-100 space-y-1.5 text-xs">
+                  <div class="flex justify-between text-slate-600">
+                    <span>Subtotal</span>
+                    <span>₱${subtotal.toFixed(2)}</span>
+                  </div>
+                  <div class="flex justify-between text-slate-600">
+                    <span>Mati City Delivery</span>
+                    <span>₱${deliveryFee.toFixed(2)}</span>
+                  </div>
+                  <div class="flex justify-between font-black text-slate-900 text-sm pt-2 border-t border-slate-100">
+                    <span>Total to Pay</span>
+                    <span class="text-brand-700">₱${total.toFixed(2)}</span>
+                  </div>
+                </div>
+              ` : `
+                <!-- STEP 2: ADDRESS, BARANGAY & COD CONFIRMATION -->
+                <div>
+                  <label class="text-[11px] font-bold text-slate-700 block mb-1">Select Delivery Barangay</label>
+                  <select onchange="state.selectedBarangay = this.value" class="w-full bg-slate-50 text-xs font-bold text-slate-800 p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    ${MATI_BARANGAYS.map(b => `<option value="${b}" ${b === state.selectedBarangay ? 'selected' : ''}>${b}</option>`).join('')}
+                  </select>
+                </div>
+
+                <div>
+                  <label class="text-[11px] font-bold text-slate-700 block mb-1">Landmark / House Note</label>
+                  <input 
+                    type="text" 
+                    value="${state.deliveryAddressNote}" 
+                    class="w-full bg-slate-50 text-xs text-slate-800 p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    placeholder="e.g. Near Baywalk pavilion, blue gate"
+                    oninput="state.deliveryAddressNote = this.value"
+                  />
+                </div>
+
+                <!-- Payment Selection (COD Emphasized) -->
+                <div class="bg-amber-50 border border-amber-200 rounded-2xl p-3.5">
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg">💵</span>
+                    <div>
+                      <h4 class="text-xs font-extrabold text-amber-900">Cash on Delivery (COD)</h4>
+                      <p class="text-[10px] text-amber-700">Hand cash directly to rider. Please prepare exact <strong>₱${total.toFixed(2)}</strong>.</p>
+                    </div>
+                  </div>
+                </div>
+              `}
+
+            </div>
+
+            <!-- Modal Footer Actions -->
+            <div class="p-4 bg-slate-50 border-t border-slate-100 flex items-center gap-2">
+              ${state.checkoutStep === 1 ? `
+                <button onclick="closeModal()" class="flex-1 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-extrabold text-xs rounded-xl">Cancel</button>
+                <button onclick="setCheckoutStep(2)" class="flex-[2] py-3 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1">
+                  <span>Continue to Delivery</span>
+                  <span>→</span>
+                </button>
+              ` : `
+                <button onclick="setCheckoutStep(1)" class="flex-1 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-extrabold text-xs rounded-xl">Back</button>
+                <button onclick="confirmPlaceOrder()" class="flex-[2] py-3 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1">
+                  <span>Place COD Order 🚀</span>
+                </button>
+              `}
+            </div>
+
+          </div>
+        </div>
+      `;
+    }
+
+    function setCheckoutStep(step) {
+      state.checkoutStep = step;
+      renderCheckoutModalContent();
+    }
+
+    function adjustCartQty(delta) {
+      if (state.cart.length > 0) {
+        state.cart[0].qty = Math.max(1, state.cart[0].qty + delta);
+        renderCheckoutModalContent();
+        updateCartFloatingBar();
+      }
+    }
+
+    function confirmPlaceOrder() {
+      closeModal();
+      state.cart = [];
+      updateCartFloatingBar();
+      state.activeOrder.status = "placed";
+      state.activeOrder.estimatedMinutes = 20;
+      switchMobileTab('orders');
+      alert('Order Placed Successfully! 🛵 Mama Letty’s Karenderia has received your order.');
+    }
+
+    // 3. TABLE RESERVATION MODAL (CLEAN 3-STEP DIALOG)
+    function openTableReservationModal(restaurantName) {
+      if (state.role === 'guest_user') {
+        openGuestGateModal('Sign in to reserve tables at Mati restaurants');
+        return;
+      }
+      const modal = document.getElementById('modal-container');
+      modal.innerHTML = `
+        <div class="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 fade-in">
+          <div class="w-full max-w-sm bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden slide-up flex flex-col">
+            
+            <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <span class="text-[10px] font-black uppercase tracking-wider text-teal-700">Dine-in Reservation</span>
+                <h3 class="text-sm font-black text-slate-900">${restaurantName}</h3>
+              </div>
+              <button onclick="closeModal()" class="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold hover:bg-slate-200">✕</button>
+            </div>
+
+            <div class="p-5 space-y-4">
+              <div>
+                <label class="text-[11px] font-bold text-slate-700 block mb-1.5">Number of Guests</label>
+                <div class="flex items-center gap-2">
+                  ${[1, 2, 4, 6, '8+'].map(num => `
+                    <button onclick="selectTableGuestCount(this)" class="flex-1 py-2 rounded-xl text-xs font-bold border border-slate-200 hover:border-brand-500 transition-all ${num === 2 ? 'bg-brand-600 text-white border-brand-600' : 'bg-slate-50 text-slate-700'}">
+                      ${num}
+                    </button>
+                  `).join('')}
+                </div>
+              </div>
+
+              <div>
+                <label class="text-[11px] font-bold text-slate-700 block mb-1.5">Time Slot (Tonight)</label>
+                <div class="grid grid-cols-3 gap-2">
+                  ${['6:30 PM', '7:00 PM', '7:30 PM', '8:00 PM', '8:30 PM', '9:00 PM'].map(time => `
+                    <button onclick="selectTimeSlot(this)" class="py-2 rounded-xl text-xs font-bold border border-slate-200 hover:border-brand-500 transition-all ${time === '7:30 PM' ? 'bg-teal-700 text-white border-teal-700' : 'bg-slate-50 text-slate-700'}">
+                      ${time}
+                    </button>
+                  `).join('')}
+                </div>
+              </div>
+
+              <div>
+                <label class="text-[11px] font-bold text-slate-700 block mb-1">Seating Preference</label>
+                <select class="w-full bg-slate-50 text-xs font-bold text-slate-800 p-2.5 rounded-xl border border-slate-200">
+                  <option>Bayside View / Sea Breeze</option>
+                  <option>Indoor Airconditioned</option>
+                  <option>Standard Karenderia Seating</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="p-4 bg-slate-50 border-t border-slate-100 flex items-center gap-2">
+              <button onclick="closeModal()" class="flex-1 py-3 bg-slate-200 text-slate-700 font-extrabold text-xs rounded-xl">Cancel</button>
+              <button onclick="confirmTableReservation('${restaurantName}')" class="flex-[2] py-3 bg-teal-700 hover:bg-teal-800 text-white font-black text-xs rounded-xl shadow-xs transition-all">
+                Book Table (Instant)
+              </button>
+            </div>
+
+          </div>
+        </div>
+      `;
+    }
+
+    function selectTableGuestCount(btn) {
+      btn.parentElement.querySelectorAll('button').forEach(b => {
+        b.className = 'flex-1 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50 text-slate-700 transition-all';
+      });
+      btn.className = 'flex-1 py-2 rounded-xl text-xs font-bold border border-brand-600 bg-brand-600 text-white transition-all';
+    }
+
+    function selectTimeSlot(btn) {
+      btn.parentElement.querySelectorAll('button').forEach(b => {
+        b.className = 'py-2 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50 text-slate-700 transition-all';
+      });
+      btn.className = 'py-2 rounded-xl text-xs font-bold border border-teal-700 bg-teal-700 text-white transition-all';
+    }
+
+    function confirmTableReservation(restaurantName) {
+      closeModal();
+      alert(`🎉 Table Reserved at ${restaurantName} for 2 Guests! Reference #RES-8914. Confirmation saved in Orders tab.`);
+    }
+
+    // 4. GENTLE GUEST CONVERSION GATE
+    function openGuestGateModal(actionReason) {
+      const modal = document.getElementById('modal-container');
+      modal.innerHTML = `
+        <div class="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 fade-in">
+          <div class="w-full max-w-sm bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden slide-up p-6 text-center">
+            
+            <div class="w-14 h-14 rounded-2xl bg-brand-50 text-brand-600 border border-brand-200 flex items-center justify-center text-2xl mx-auto mb-3">
+              🌴
+            </div>
+
+            <h3 class="text-base font-black text-slate-900">Join Mati FoodFinder</h3>
+            <p class="text-xs text-slate-500 mt-1 leading-relaxed">
+              ${actionReason}
+            </p>
+
+            <div class="my-4 bg-slate-50 rounded-2xl p-3.5 text-left text-xs text-slate-600 space-y-2 border border-slate-100">
+              <div class="flex items-center gap-2">
+                <span class="text-brand-600 font-bold">✓</span>
+                <span>Real-time Cash on Delivery tracking</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-brand-600 font-bold">✓</span>
+                <span>Instant dining table reservations</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-brand-600 font-bold">✓</span>
+                <span>Share local foodie reviews and photos</span>
+              </div>
+            </div>
+
+            <div class="space-y-2">
+              <button onclick="setRole('registered_user'); closeModal();" class="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all">
+                Sign In as Registered User Demo
+              </button>
+              <button onclick="closeModal()" class="w-full py-2.5 text-slate-400 hover:text-slate-600 font-bold text-xs">
+                Continue Browsing as Guest
+              </button>
+            </div>
+
+          </div>
+        </div>
+      `;
+    }
+
+    // 5. RIDER PIN HANDSHAKE VERIFICATION MODAL
+    function openRiderHandshakeModal() {
+      const modal = document.getElementById('modal-container');
+      modal.innerHTML = `
+        <div class="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 fade-in">
+          <div class="w-full max-w-sm bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden slide-up p-6">
+            
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <div class="flex items-center gap-2">
+                <span class="text-xl">🔐</span>
+                <h3 class="text-xs font-black text-slate-900 uppercase">COD Handshake Verification</h3>
+              </div>
+              <button onclick="closeModal()" class="text-slate-400 font-bold text-xs">✕</button>
+            </div>
+
+            <p class="text-xs text-slate-600 mb-3">
+              Ask customer <strong>Juan dela Cruz</strong> for their 4-digit Delivery PIN before releasing order:
+            </p>
+
+            <input 
+              type="text" 
+              maxlength="4" 
+              id="rider-pin-input" 
+              placeholder="Enter PIN (Demo: 4821)" 
+              class="w-full bg-slate-100 text-center font-mono font-black text-lg py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500 mb-4 tracking-widest"
+            />
+
+            <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl mb-4 text-xs text-amber-900 flex items-center justify-between">
+              <span>Cash collected:</span>
+              <strong class="text-sm">₱135.00</strong>
+            </div>
+
+            <button onclick="verifyRiderPinAndComplete()" class="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all">
+              Confirm Cash Received & Complete Delivery ✓
+            </button>
+
+          </div>
+        </div>
+      `;
+    }
+
+    function verifyRiderPinAndComplete() {
+      const pin = document.getElementById('rider-pin-input').value;
+      if (pin.trim() === '4821' || pin.trim() === '') {
+        closeModal();
+        state.rider.todayEarnings += 65.00;
+        state.rider.completedDeliveries += 1;
+        state.rider.activeJobId = null;
+        state.activeOrder.status = "delivered";
+        alert('🎉 Delivery Complete! ₱65.00 delivery fee credited to Rider Wallet.');
+        renderMobileRiderScreen();
+      } else {
+        alert('Incorrect PIN. Please check customer phone or enter demo PIN: 4821');
+      }
+    }
+
+    // 6. UX AUDIT & SPLIT RATIONALE MODAL
+    function toggleUxAuditModal() {
+      const modal = document.getElementById('modal-container');
+      modal.innerHTML = `
+        <div class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 fade-in">
+          <div class="w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            
+            <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+              <div>
+                <span class="text-[10px] font-black uppercase tracking-wider text-brand-400">Architectural Reference</span>
+                <h3 class="text-base font-black">UX Audit: Why & How We Fixed the Monolithic Clutter</h3>
+              </div>
+              <button onclick="closeModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center font-bold hover:bg-slate-700">✕</button>
+            </div>
+
+            <div class="p-6 overflow-y-auto space-y-5 text-xs text-slate-700 leading-relaxed">
+              
+              <!-- Finding 1 -->
+              <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                <h4 class="font-extrabold text-slate-900 text-sm mb-1 text-brand-800">1. Decoupled 2,000-line index.tsx into Focused Tabs</h4>
+                <p class="text-slate-600 mb-2">
+                  <strong>Before:</strong> Home screen attempted to handle discovery, 5 modal forms, social feed, and notifications simultaneously. Users suffered from cognitive text overload.
+                </p>
+                <p class="text-slate-600">
+                  <strong>International Fix:</strong> Split into 3 discrete destinations:
+                  <br>• <strong>Discover Tab:</strong> Pure appetite stimulation, categories, and fast menu browsing.
+                  <br>• <strong>Foodies Tab:</strong> Dedicated social feed with photos, reviews, and community likes.
+                  <br>• <strong>Orders Tab:</strong> Live visual status stepper with COD PIN handshake.
+                </p>
+              </div>
+
+              <!-- Finding 2 -->
+              <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                <h4 class="font-extrabold text-slate-900 text-sm mb-1 text-sunset-700">2. Replaced Dense Text Forms with 2-Step Progressive Disclosure</h4>
+                <p class="text-slate-600 mb-2">
+                  <strong>Before:</strong> Single giant form with barangay dropdowns, instructions, prices, and notes stacked together caused form fatigue.
+                </p>
+                <p class="text-slate-600">
+                  <strong>International Fix:</strong>
+                  <br>• Step 1 handles items, portion, and fulfillment mode.
+                  <br>• Step 2 handles delivery notes and exact COD cash preparation reminder.
+                </p>
+              </div>
+
+              <!-- Finding 3 -->
+              <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                <h4 class="font-extrabold text-slate-900 text-sm mb-1 text-teal-800">3. Kitchen-Grade Ergonomics for Store Admins</h4>
+                <p class="text-slate-600 mb-2">
+                  <strong>Before:</strong> Karenderia cooks on mobile phones had to navigate dense admin settings.
+                </p>
+                <p class="text-slate-600">
+                  <strong>International Fix:</strong> Mobile KDS mode with massive tap buttons: Accept → Cook → Ready. Plus 1-tap in-stock / sold-out toggle switches.
+                </p>
+              </div>
+
+              <!-- Finding 4 -->
+              <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                <h4 class="font-extrabold text-slate-900 text-sm mb-1 text-slate-900">4. Dispute-Proof Cash on Delivery (COD) Handshake</h4>
+                <p class="text-slate-600">
+                  Protects riders and karenderias by requiring a 4-digit PIN exchange and cash confirmation before closing jobs.
+                </p>
+              </div>
+
+            </div>
+
+            <div class="p-4 bg-slate-100 border-t border-slate-200 flex justify-end">
+              <button onclick="closeModal()" class="px-5 py-2.5 bg-slate-900 text-white font-bold text-xs rounded-xl">
+                Close Guide
+              </button>
+            </div>
+
+          </div>
+        </div>
+      `;
+    }
+
+    function openBarangayPickerModal() {
+      const modal = document.getElementById('modal-container');
+      modal.innerHTML = `
+        <div class="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 fade-in">
+          <div class="w-full max-w-sm bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden slide-up p-5">
+            <h3 class="text-xs font-black text-slate-900 uppercase tracking-wider mb-3">Select Mati Barangay</h3>
+            <div class="space-y-1.5">
+              ${MATI_BARANGAYS.map(b => `
+                <button onclick="setBarangay('${b}')" class="w-full p-3 rounded-xl text-xs font-bold text-left flex items-center justify-between hover:bg-slate-50 transition-all ${b === state.selectedBarangay ? 'bg-brand-50 text-brand-800 border border-brand-200' : 'text-slate-700'}">
+                  <span>${b}</span>
+                  ${b === state.selectedBarangay ? '<span>✓</span>' : ''}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function setBarangay(b) {
+      state.selectedBarangay = b;
+      closeModal();
+      renderMobileScreen();
+    }
+
+    function openNotificationsModal() {
+      alert('🔔 Notifications: You have 1 order in preparation at Mama Letty’s Karenderia.');
+    }
+
+    function openCreatePostModal() {
+      alert('📸 Photo Review Creator: Allows users to tag Mati restaurants and rate dishes.');
+    }
+
+    function openCommentsModal(postId) {
+      alert('💬 Conversation modal for foodie review #' + postId);
+    }
+
+    function toggleLike(postId) {
+      const post = state.posts.find(p => p.id === postId);
+      if (post) {
+        post.liked = !post.liked;
+        post.likes += post.liked ? 1 : -1;
+        renderMobileScreen();
+      }
+    }
+
+    function handleSearch(q) {
+      state.searchQuery = q.toLowerCase();
+    }
+
+    function setCategory(cat) {
+      state.selectedCategory = cat;
+      renderMobileScreen();
+    }
+
+    function simulateOrderDeliveryStep() {
+      const stages = ["placed", "accepted", "preparing", "ready_for_pickup", "out_for_delivery", "delivered"];
+      const current = stages.indexOf(state.activeOrder.status);
+      const next = stages[(current + 1) % stages.length];
+      state.activeOrder.status = next;
+      renderMobileScreen();
+    }
+
+    function closeModal() {
+      document.getElementById('modal-container').innerHTML = '';
+    }
+
+    // ========================================================
+    // INITIALIZATION ON LOAD
+    // ========================================================
+    window.addEventListener('DOMContentLoaded', () => {
+      // Set realistic time
+      const now = new Date();
+      const hours = now.getHours();
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      document.getElementById('phone-time').textContent = `${hours % 12 || 12}:${minutes}`;
+
+      // Start with Registered User view
+      setRole('registered_user');
+    });
+  </script>
+</body>
+</html>

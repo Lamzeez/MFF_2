@@ -201,6 +201,23 @@ export default function MobileOrdersScreen() {
                     </View>
                   </View>
 
+                  {/* Delivery Handshake PIN Card */}
+                  <View className="bg-amber-50 p-3.5 rounded-xl border border-amber-200 mb-3 flex-row items-center justify-between">
+                    <View className="flex-1 pr-2">
+                      <Text className="text-[10px] font-black text-amber-900 uppercase tracking-wider">
+                        Delivery Handshake PIN
+                      </Text>
+                      <Text className="text-[11px] text-amber-800 leading-tight mt-0.5">
+                        Tell this 4-digit code to Kuya Mark upon arrival
+                      </Text>
+                    </View>
+                    <View className="bg-white px-3 py-1.5 rounded-lg border border-amber-300 shadow-2xs">
+                      <Text className="text-base font-black text-amber-950 font-mono tracking-widest">
+                        4821
+                      </Text>
+                    </View>
+                  </View>
+
                   {/* Rider Info Card */}
                   <View className="flex-row items-center justify-between bg-gray-50 p-3 rounded-xl">
                     <View className="flex-row items-center gap-2.5">

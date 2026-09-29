@@ -16,23 +16,23 @@ export default function MobileTabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#047857", // emerald-700
-        tabBarInactiveTintColor: "#374151", // gray-700 (high-contrast, clearly visible)
+        tabBarActiveTintColor: "#EA5410", // prototype --brand
+        tabBarInactiveTintColor: "#98A2B3", // prototype --ink-3
         tabBarStyle: {
           backgroundColor: "#ffffff",
-          borderTopWidth: 1.5,
-          borderTopColor: "#e5e7eb",
+          borderTopWidth: 1,
+          borderTopColor: "#E7EAEF",
           height: tabHeight,
           paddingBottom: bottomInset,
           paddingTop: 8,
-          elevation: 12,
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: -3 },
-          shadowOpacity: 0.1,
-          shadowRadius: 6,
+          elevation: 8,
+          shadowColor: "#101828",
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.06,
+          shadowRadius: 4,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: "700",
           marginTop: 2,
         },
@@ -41,8 +41,8 @@ export default function MobileTabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Feed",
-          tabBarIcon: ({ color, focused }) => (
+          title: "Home",
+          tabBarIcon: ({ focused }) => (
             <View 
               style={{
                 alignItems: "center",
@@ -50,13 +50,38 @@ export default function MobileTabsLayout() {
                 width: 44,
                 height: 30,
                 borderRadius: 15,
-                backgroundColor: focused ? "#ecfdf5" : "transparent",
+                backgroundColor: focused ? "#FEF1E8" : "transparent",
               }}
             >
               <Ionicons 
-                name={focused ? "restaurant" : "restaurant-outline"} 
-                size={22} 
-                color={focused ? "#047857" : "#374151"} 
+                name={focused ? "home" : "home-outline"} 
+                size={21} 
+                color={focused ? "#EA5410" : "#98A2B3"} 
+              />
+            </View>
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="community"
+        options={{
+          title: "Feed",
+          tabBarIcon: ({ focused }) => (
+            <View 
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+                width: 44,
+                height: 30,
+                borderRadius: 15,
+                backgroundColor: focused ? "#FEF1E8" : "transparent",
+              }}
+            >
+              <Ionicons 
+                name={focused ? "chatbubbles" : "chatbubbles-outline"} 
+                size={21} 
+                color={focused ? "#EA5410" : "#98A2B3"} 
               />
             </View>
           ),
@@ -66,8 +91,8 @@ export default function MobileTabsLayout() {
       <Tabs.Screen
         name="map"
         options={{
-          title: "Map",
-          tabBarIcon: ({ color, focused }) => (
+          title: "Explore",
+          tabBarIcon: ({ focused }) => (
             <View 
               style={{
                 alignItems: "center",
@@ -75,13 +100,13 @@ export default function MobileTabsLayout() {
                 width: 44,
                 height: 30,
                 borderRadius: 15,
-                backgroundColor: focused ? "#ecfdf5" : "transparent",
+                backgroundColor: focused ? "#FEF1E8" : "transparent",
               }}
             >
               <Ionicons 
                 name={focused ? "map" : "map-outline"} 
-                size={22} 
-                color={focused ? "#047857" : "#374151"} 
+                size={21} 
+                color={focused ? "#EA5410" : "#98A2B3"} 
               />
             </View>
           ),
@@ -92,9 +117,7 @@ export default function MobileTabsLayout() {
         name="orders"
         options={{
           title: "Orders",
-          // Completely hidden if user is not yet logged in as a registered user
-          href: isLoggedIn ? "/(mobile)/(tabs)/orders" : null,
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ focused }) => (
             <View 
               style={{
                 alignItems: "center",
@@ -102,13 +125,13 @@ export default function MobileTabsLayout() {
                 width: 44,
                 height: 30,
                 borderRadius: 15,
-                backgroundColor: focused ? "#ecfdf5" : "transparent",
+                backgroundColor: focused ? "#FEF1E8" : "transparent",
               }}
             >
               <Ionicons 
                 name={focused ? "receipt" : "receipt-outline"} 
-                size={22} 
-                color={focused ? "#047857" : "#374151"} 
+                size={21} 
+                color={focused ? "#EA5410" : "#98A2B3"} 
               />
             </View>
           ),
@@ -118,8 +141,8 @@ export default function MobileTabsLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Account",
-          tabBarIcon: ({ color, focused }) => (
+          title: "Profile",
+          tabBarIcon: ({ focused }) => (
             <View 
               style={{
                 alignItems: "center",
@@ -127,13 +150,13 @@ export default function MobileTabsLayout() {
                 width: 44,
                 height: 30,
                 borderRadius: 15,
-                backgroundColor: focused ? "#ecfdf5" : "transparent",
+                backgroundColor: focused ? "#FEF1E8" : "transparent",
               }}
             >
               <Ionicons 
                 name={focused ? "person" : "person-outline"} 
-                size={22} 
-                color={focused ? "#047857" : "#374151"} 
+                size={21} 
+                color={focused ? "#EA5410" : "#98A2B3"} 
               />
             </View>
           ),
