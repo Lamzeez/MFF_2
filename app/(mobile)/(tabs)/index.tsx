@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../context/AuthContext";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { RestaurantProfile, FoodItem } from "../../../types/restaurant";
 import { CATEGORIES, MATI_RESTAURANTS_DATA } from "../../../mock/restaurants";
 import { MATI_BARANGAYS } from "../../../mock/barangays";
@@ -38,10 +38,14 @@ export default function MobileHomeScreen() {
     orders,
   } = useAuth();
   const router = useRouter();
+  const { category } = useLocalSearchParams<{ category?: string }>();
 
   // Filter & Search
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
+  useEffect(() => {
+    setSelectedCategory(CATEGORIES.find((item) => item === category) ?? "All");
+  }, [category]);
 
   // Modals visibility
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);

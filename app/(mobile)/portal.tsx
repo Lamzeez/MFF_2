@@ -1,904 +1,211 @@
-import React, { useState } from "react";
-import { View, Text, ScrollView, Pressable, Image } from "react-native";
+import React, { useRef, useState } from "react";
+import { View, Text, ScrollView, TouchableOpacity, Image, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+
+const colors = { ink: "#183C32", green: "#075E46", orange: "#C94216", muted: "#53655B", cream: "#FAF9F5" };
+const cuisines = [
+  { name: "Karenderias", caption: "Comfort in every bite", emoji: "🍲", color: "#FFE0A3" },
+  { name: "Seafood", caption: "A taste of the coast", emoji: "🐟", color: "#BCEADD" },
+  { name: "BBQ & Grill", caption: "Fresh off the grill", emoji: "🍢", color: "#FFCBBB" },
+] as const;
+const benefits = [
+  { emoji: "🍲", color: "#FFE0A3", title: "Fresh daily menus", detail: "See what’s cooking before you order." },
+  { emoji: "🛵", color: "#BCEADD", title: "Cash on delivery", detail: "Good food now. Pay when it arrives." },
+  { emoji: "📅", color: "#DFD1FF", title: "A table for you", detail: "Find your next dine-in spot in Mati." },
+] as const;
+
+
+const highlights = [
+  { image: require("../../assets/food/welcome-feast.jpg"), badge: "For the love of local", eyebrow: "A LITTLE LOCAL. A LOT TO LOVE.", title: "Good food. Happy mood.", detail: "Discover neighborhood kitchens & coastal favorites.", color: "#075E46", category: undefined },
+  { image: require("../../assets/food/grill.jpg"), badge: "Bring your appetite", eyebrow: "FIRE UP YOUR NEXT FOOD TRIP", title: "Big grill energy.", detail: "Find smoky favorites and your next BBQ craving.", color: "#863413", category: "BBQ & Grill" },
+  { image: require("../../assets/food/dining.jpg"), badge: "Make a little time for good food", eyebrow: "MORE THAN A MEAL", title: "Good company. Great bites.", detail: "Explore local dining spots for your next get-together.", color: "#403369", category: undefined },
+];
+
+function HighlightCarousel({ onExplore }: { onExplore: (category?: string) => void }) {
+  const [width, setWidth] = useState(0);
+  const [active, setActive] = useState(0);
+  const scroll = useRef<ScrollView>(null);
+  return (
+    <View style={s.carousel} onLayout={({ nativeEvent }) => {
+      const nextWidth = nativeEvent.layout.width;
+      if (nextWidth !== width) { setWidth(nextWidth); setActive(0); }
+    }}>
+      {width > 0 && <ScrollView key={width} ref={scroll} horizontal pagingEnabled showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={({ nativeEvent }) => setActive(Math.max(0, Math.min(highlights.length - 1, Math.round(nativeEvent.contentOffset.x / width))))}>
+        {highlights.map((highlight, index) => (
+          <TouchableOpacity key={highlight.title} accessibilityRole="button" accessibilityLabel={`${index + 1} of ${highlights.length}. ${highlight.title} Explore food.`}
+            onPress={() => onExplore(highlight.category)} activeOpacity={0.9} style={[s.hero, { width, backgroundColor: highlight.color }]}>
+            <View style={s.heroPhoto}>
+              <Image source={highlight.image} style={s.foodImage} resizeMode="cover" />
+              <View style={s.photoBadge}><Ionicons name="heart" size={13} color={colors.orange} /><Text style={s.photoBadgeText}>{highlight.badge}</Text></View>
+            </View>
+            <View style={[s.heroCopy, { backgroundColor: highlight.color }]}>
+              <View style={s.heroText}><Text style={s.heroEyebrow}>{highlight.eyebrow}</Text><Text style={s.heroTitle}>{highlight.title}</Text><Text style={s.heroDetail}>{highlight.detail}</Text></View>
+              <View style={s.heroArrow}><Ionicons name="arrow-forward" size={23} color={colors.green} /></View>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>}
+      <View style={s.pagination}>
+        {highlights.map((highlight, index) => <TouchableOpacity key={highlight.title} accessibilityRole="button" accessibilityLabel={`Show highlight ${index + 1}: ${highlight.title}`} accessibilityState={{ selected: active === index }} style={s.dotButton}
+          onPress={() => { scroll.current?.scrollTo({ x: width * index, animated: true }); setActive(index); }}><View style={[s.dot, active === index && s.activeDot]} /></TouchableOpacity>)}
+        <Text style={s.swipeHint}>Swipe to discover</Text>
+      </View>
+    </View>
+  );
+}
 
 export default function MobileWelcomePortal() {
   const router = useRouter();
   const [partnerMode, setPartnerMode] = useState<"merchant" | "rider">("merchant");
+  const explore = (category?: string) => router.push({ pathname: "/(mobile)/(tabs)", params: category ? { category } : {} });
+  const signIn = () => router.push("/(mobile)/auth/customer-register");
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#063B2A" }}>
-      <ScrollView
-        style={{ flex: 1, backgroundColor: "#F4F6F4" }}
-        contentContainerStyle={{ paddingBottom: 40 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* =========================================================================
-            1. CINEMATIC HERO SECTION (Deep Brand Emerald #064E3B)
-           ========================================================================= */}
-        <View
-          style={{
-            backgroundColor: "#064E3B",
-            paddingHorizontal: 20,
-            paddingTop: 12,
-            paddingBottom: 28,
-            borderBottomLeftRadius: 32,
-            borderBottomRightRadius: 32,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.15,
-            shadowRadius: 10,
-            elevation: 8,
-          }}
-        >
-          {/* Top Brand Bar */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 18,
-            }}
-          >
-            {/* Logo + Title Group */}
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <View
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 14,
-                  backgroundColor: "#ffffff",
-                  padding: 2,
-                  borderWidth: 2,
-                  borderColor: "#10B981",
-                  overflow: "hidden",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 4,
-                  elevation: 3,
-                }}
-              >
-                <Image
-                  source={require("../../assets/logo.jpg")}
-                  style={{ width: 40, height: 40, borderRadius: 10 }}
-                  resizeMode="cover"
-                />
-              </View>
-
-              <View style={{ marginLeft: 12 }}>
-                <Text
-                  style={{
-                    fontSize: 18,
-                    fontWeight: "900",
-                    color: "#ffffff",
-                    letterSpacing: -0.3,
-                  }}
-                >
-                  Mati FoodFinder
-                </Text>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginTop: 2,
-                  }}
-                >
-                  <Ionicons name="location-sharp" size={12} color="#34D399" />
-                  <Text
-                    style={{
-                      fontSize: 11,
-                      fontWeight: "700",
-                      color: "#A7F3D0",
-                      marginLeft: 3,
-                      letterSpacing: 0.5,
-                    }}
-                  >
-                    MATI CITY · DAVAO ORIENTAL
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Version Badge */}
-            <View
-              style={{
-                backgroundColor: "rgba(2, 44, 34, 0.7)",
-                borderWidth: 1,
-                borderColor: "rgba(16, 185, 129, 0.4)",
-                paddingHorizontal: 10,
-                paddingVertical: 4,
-                borderRadius: 99,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 10.5,
-                  fontWeight: "800",
-                  color: "#6EE7B7",
-                }}
-              >
-                v1.0 Mobile
-              </Text>
+    <SafeAreaView style={s.safe} edges={["top", "left", "right", "bottom"]}>
+      <StatusBar style="dark" />
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>
+        <View style={s.header}>
+          <View style={s.brand}>
+            <Image source={require("../../assets/logo.jpg")} style={s.logo} accessibilityLabel="Mati FoodFinder logo" />
+            <View style={s.brandCopy}>
+              <Text style={s.brandName}>Mati FoodFinder</Text>
+              <View style={s.location}><Ionicons name="location" size={12} color={colors.green} /><Text style={s.locationText}>Mati City, Davao Oriental</Text></View>
             </View>
           </View>
-
-          {/* Eyebrow Tag */}
-          <View
-            style={{
-              alignSelf: "flex-start",
-              backgroundColor: "rgba(2, 44, 34, 0.7)",
-              borderWidth: 1,
-              borderColor: "rgba(245, 158, 11, 0.35)",
-              paddingHorizontal: 10,
-              paddingVertical: 4,
-              borderRadius: 99,
-              marginBottom: 12,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 10.5,
-                fontWeight: "800",
-                color: "#FCD34D",
-                textTransform: "uppercase",
-                letterSpacing: 0.6,
-              }}
-            >
-              🌴 Local Karenderia & Coastal Dining
-            </Text>
-          </View>
-
-          {/* Headline */}
-          <Text
-            style={{
-              fontSize: 26,
-              fontWeight: "900",
-              color: "#ffffff",
-              lineHeight: 32,
-              letterSpacing: -0.5,
-              marginBottom: 8,
-            }}
-          >
-            Taste the Authentic{"\n"}Soul of Mati City.
-          </Text>
-
-          {/* Subtitle */}
-          <Text
-            style={{
-              fontSize: 12.5,
-              color: "#D1FAE5",
-              lineHeight: 18,
-              marginBottom: 16,
-              fontWeight: "500",
-            }}
-          >
-            From steaming bowls of native sabaw in Central to morning tuna catches along Pujada Bay and chill Dahican surf eats.
-          </Text>
-
-          {/* Specialty Food Badges */}
-          <View
-            style={{
-              flexDirection: "row",
-              flexWrap: "wrap",
-              gap: 8,
-              marginBottom: 20,
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                backgroundColor: "rgba(255, 255, 255, 0.12)",
-                borderWidth: 1,
-                borderColor: "rgba(255, 255, 255, 0.2)",
-                paddingHorizontal: 10,
-                paddingVertical: 5,
-                borderRadius: 99,
-              }}
-            >
-              <Text style={{ fontSize: 13, marginRight: 5 }}>🍲</Text>
-              <Text style={{ fontSize: 11.5, fontWeight: "700", color: "#ffffff" }}>
-                Classic Humba{" "}
-              </Text>
-              <Text style={{ fontSize: 10, fontWeight: "900", color: "#FCD34D" }}>
-                ★ 4.8
-              </Text>
-            </View>
-
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                backgroundColor: "rgba(255, 255, 255, 0.12)",
-                borderWidth: 1,
-                borderColor: "rgba(255, 255, 255, 0.2)",
-                paddingHorizontal: 10,
-                paddingVertical: 5,
-                borderRadius: 99,
-              }}
-            >
-              <Text style={{ fontSize: 13, marginRight: 5 }}>🐟</Text>
-              <Text style={{ fontSize: 11.5, fontWeight: "700", color: "#ffffff" }}>
-                Pujada Bay Tuna{" "}
-              </Text>
-              <Text style={{ fontSize: 10, fontWeight: "900", color: "#FCD34D" }}>
-                ★ 4.9
-              </Text>
-            </View>
-
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                backgroundColor: "rgba(255, 255, 255, 0.12)",
-                borderWidth: 1,
-                borderColor: "rgba(255, 255, 255, 0.2)",
-                paddingHorizontal: 10,
-                paddingVertical: 5,
-                borderRadius: 99,
-              }}
-            >
-              <Text style={{ fontSize: 13, marginRight: 5 }}>🍢</Text>
-              <Text style={{ fontSize: 11.5, fontWeight: "700", color: "#ffffff" }}>
-                Subangan BBQ{" "}
-              </Text>
-              <Text style={{ fontSize: 10, fontWeight: "900", color: "#FCD34D" }}>
-                ★ 4.9
-              </Text>
-            </View>
-          </View>
-
-          {/* Primary Action Buttons */}
-          <View style={{ gap: 10 }}>
-            {/* Primary Orange Action */}
-            <Pressable
-              onPress={() => router.push("/(mobile)/(tabs)")}
-              style={{
-                backgroundColor: "#EA5410",
-                borderRadius: 16,
-                height: 52,
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                paddingHorizontal: 18,
-                shadowColor: "#EA5410",
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.35,
-                shadowRadius: 8,
-                elevation: 4,
-              }}
-            >
-              <Ionicons name="restaurant" size={18} color="#ffffff" style={{ marginRight: 8 }} />
-              <Text
-                style={{
-                  fontSize: 15,
-                  fontWeight: "900",
-                  color: "#ffffff",
-                  letterSpacing: 0.2,
-                }}
-              >
-                Explore Menus & Dine as Guest
-              </Text>
-              <Ionicons name="arrow-forward" size={17} color="#ffffff" style={{ marginLeft: 6 }} />
-            </Pressable>
-
-            {/* Secondary Foodie Account Action */}
-            <Pressable
-              onPress={() => router.push("/(mobile)/auth/customer-register")}
-              style={{
-                backgroundColor: "rgba(2, 44, 34, 0.65)",
-                borderWidth: 1.5,
-                borderColor: "rgba(52, 211, 153, 0.4)",
-                borderRadius: 16,
-                height: 48,
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                paddingHorizontal: 16,
-              }}
-            >
-              <Ionicons name="person-circle-outline" size={18} color="#A7F3D0" style={{ marginRight: 6 }} />
-              <Text
-                style={{
-                  fontSize: 13.5,
-                  fontWeight: "800",
-                  color: "#D1FAE5",
-                }}
-              >
-                Sign In or Register Foodie Account
-              </Text>
-            </Pressable>
-          </View>
+          <TouchableOpacity accessibilityRole="button" onPress={signIn} style={s.login}><Text style={s.loginText}>Sign in</Text></TouchableOpacity>
         </View>
 
-        {/* =========================================================================
-            2. "BUILT FOR LOCAL DINERS" — SPACIOUS & SUBSTANTIAL CARDS
-           ========================================================================= */}
-        <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
-          {/* Section Header */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "flex-end",
-              justifyContent: "space-between",
-              marginBottom: 14,
-            }}
-          >
-            <View>
-              <Text
-                style={{
-                  fontSize: 11,
-                  fontWeight: "900",
-                  color: "#047857",
-                  letterSpacing: 1,
-                  textTransform: "uppercase",
-                }}
-              >
-                Designed for Mati City
-              </Text>
-              <Text
-                style={{
-                  fontSize: 18,
-                  fontWeight: "900",
-                  color: "#17191D",
-                  marginTop: 1,
-                }}
-              >
-                Built for Local Diners
-              </Text>
-            </View>
-
-            <View
-              style={{
-                backgroundColor: "#E7F7F0",
-                paddingHorizontal: 10,
-                paddingVertical: 4,
-                borderRadius: 99,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 10.5,
-                  fontWeight: "800",
-                  color: "#0E9F6E",
-                }}
-              >
-                100% Local
-              </Text>
-            </View>
-          </View>
-
-          {/* Card 1: Daily Live Menus */}
-          <View
-            style={{
-              backgroundColor: "#ffffff",
-              borderRadius: 20,
-              padding: 16,
-              marginBottom: 12,
-              borderWidth: 1,
-              borderColor: "#E7EAEF",
-              flexDirection: "row",
-              alignItems: "center",
-              shadowColor: "#101828",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.05,
-              shadowRadius: 4,
-              elevation: 2,
-            }}
-          >
-            <View
-              style={{
-                width: 54,
-                height: 54,
-                borderRadius: 16,
-                backgroundColor: "#FEF1E8",
-                borderWidth: 1,
-                borderColor: "#FCE0CE",
-                alignItems: "center",
-                justifyContent: "center",
-                marginRight: 14,
-              }}
-            >
-              <Text style={{ fontSize: 28 }}>🍲</Text>
-            </View>
-
-            <View style={{ flex: 1 }}>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: 3,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 15,
-                    fontWeight: "900",
-                    color: "#17191D",
-                  }}
-                >
-                  Daily Live Menus
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontWeight: "700",
-                    color: "#EA5410",
-                  }}
-                >
-                  Fresh Sabaw
-                </Text>
-              </View>
-
-              <Text
-                style={{
-                  fontSize: 12,
-                  color: "#4B5563",
-                  lineHeight: 17,
-                }}
-              >
-                Karenderias post what's freshly cooked each morning. See what’s on the counter before visiting.
-              </Text>
-            </View>
-          </View>
-
-          {/* Card 2: Cash on Delivery */}
-          <View
-            style={{
-              backgroundColor: "#ffffff",
-              borderRadius: 20,
-              padding: 16,
-              marginBottom: 12,
-              borderWidth: 1,
-              borderColor: "#E7EAEF",
-              flexDirection: "row",
-              alignItems: "center",
-              shadowColor: "#101828",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.05,
-              shadowRadius: 4,
-              elevation: 2,
-            }}
-          >
-            <View
-              style={{
-                width: 54,
-                height: 54,
-                borderRadius: 16,
-                backgroundColor: "#E7F7F0",
-                borderWidth: 1,
-                borderColor: "#A7F3D0",
-                alignItems: "center",
-                justifyContent: "center",
-                marginRight: 14,
-              }}
-            >
-              <Text style={{ fontSize: 28 }}>🛵</Text>
-            </View>
-
-            <View style={{ flex: 1 }}>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: 3,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 15,
-                    fontWeight: "900",
-                    color: "#17191D",
-                  }}
-                >
-                  Cash on Delivery
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontWeight: "700",
-                    color: "#0E9F6E",
-                  }}
-                >
-                  Safe & Simple
-                </Text>
-              </View>
-
-              <Text
-                style={{
-                  fontSize: 12,
-                  color: "#4B5563",
-                  lineHeight: 17,
-                }}
-              >
-                Pay in cash when your food arrives. Verify your delivery rider with a secure handoff PIN.
-              </Text>
-            </View>
-          </View>
-
-          {/* Card 3: Dining Table Bookings */}
-          <View
-            style={{
-              backgroundColor: "#ffffff",
-              borderRadius: 20,
-              padding: 16,
-              borderWidth: 1,
-              borderColor: "#E7EAEF",
-              flexDirection: "row",
-              alignItems: "center",
-              shadowColor: "#101828",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.05,
-              shadowRadius: 4,
-              elevation: 2,
-            }}
-          >
-            <View
-              style={{
-                width: 54,
-                height: 54,
-                borderRadius: 16,
-                backgroundColor: "#F1EBFE",
-                borderWidth: 1,
-                borderColor: "#DDD6FE",
-                alignItems: "center",
-                justifyContent: "center",
-                marginRight: 14,
-              }}
-            >
-              <Text style={{ fontSize: 28 }}>📅</Text>
-            </View>
-
-            <View style={{ flex: 1 }}>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: 3,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 15,
-                    fontWeight: "900",
-                    color: "#17191D",
-                  }}
-                >
-                  Book Dining Tables
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontWeight: "700",
-                    color: "#7C3AED",
-                  }}
-                >
-                  Skip Waiting
-                </Text>
-              </View>
-
-              <Text
-                style={{
-                  fontSize: 12,
-                  color: "#4B5563",
-                  lineHeight: 17,
-                }}
-              >
-                Reserve seaside tables at Baywalk or Dahican with live seat counts and instant confirmation.
-              </Text>
-            </View>
-          </View>
+        <View style={s.intro}>
+          <Text style={s.eyebrow}>LOCAL FLAVORS. BIG CRAVINGS.</Text>
+          <Text style={s.headline}>Your next delicious{"\n"}discovery starts here.</Text>
+          <Text style={s.subtitle}>Made in Mati. Ready for your appetite.</Text>
         </View>
 
-        {/* =========================================================================
-            3. PARTNER PORTAL (Clean Segment for Store Owners & Riders)
-           ========================================================================= */}
-        <View style={{ paddingHorizontal: 20, marginTop: 28 }}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 12,
-            }}
-          >
-            <View>
-              <Text
-                style={{
-                  fontSize: 11,
-                  fontWeight: "900",
-                  color: "#047857",
-                  letterSpacing: 1,
-                  textTransform: "uppercase",
-                }}
-              >
-                Business & Logistics
-              </Text>
-              <Text
-                style={{
-                  fontSize: 18,
-                  fontWeight: "900",
-                  color: "#17191D",
-                  marginTop: 1,
-                }}
-              >
-                Partner With Us
-              </Text>
+        <HighlightCarousel onExplore={explore} />
+
+        <View style={s.sectionHeading}><Text style={s.sectionTitle}>What’s your craving?</Text><Text style={s.smallNote}>Find your flavor</Text></View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.cuisines}>
+          {cuisines.map((cuisine) => (
+            <TouchableOpacity key={cuisine.name} accessibilityRole="button" accessibilityLabel={`Browse ${cuisine.name}`} onPress={() => explore(cuisine.name)} style={[s.cuisine, { backgroundColor: cuisine.color }]}>
+              <View style={s.cuisineTop}><View style={s.cuisineIcon}><Text style={s.foodEmoji}>{cuisine.emoji}</Text></View><Ionicons name="arrow-forward" size={16} color={colors.ink} /></View>
+              <Text style={s.cuisineName}>{cuisine.name}</Text><Text style={s.cuisineCaption}>{cuisine.caption}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        <View style={s.benefits}>
+          <Text style={s.sectionTitle}>Good food, made easy.</Text>
+          {benefits.map((benefit) => (
+            <View key={benefit.title} style={s.benefitRow}>
+              <View style={[s.benefitIcon, { backgroundColor: benefit.color }]}><Text style={s.benefitEmoji}>{benefit.emoji}</Text></View>
+              <View style={s.flex}><Text style={s.benefitTitle}>{benefit.title}</Text><Text style={s.benefitDetail}>{benefit.detail}</Text></View>
+              <Ionicons name="checkmark-circle" size={20} color="#08744F" />
             </View>
-
-            {/* Toggle Pill */}
-            <View
-              style={{
-                flexDirection: "row",
-                backgroundColor: "#E5E7EB",
-                borderRadius: 99,
-                padding: 3,
-              }}
-            >
-              <Pressable
-                onPress={() => setPartnerMode("merchant")}
-                style={{
-                  paddingHorizontal: 12,
-                  paddingVertical: 5,
-                  borderRadius: 99,
-                  backgroundColor: partnerMode === "merchant" ? "#047857" : "transparent",
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontWeight: "800",
-                    color: partnerMode === "merchant" ? "#ffffff" : "#4B5563",
-                  }}
-                >
-                  Store Owner
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => setPartnerMode("rider")}
-                style={{
-                  paddingHorizontal: 12,
-                  paddingVertical: 5,
-                  borderRadius: 99,
-                  backgroundColor: partnerMode === "rider" ? "#0284C7" : "transparent",
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontWeight: "800",
-                    color: partnerMode === "rider" ? "#ffffff" : "#4B5563",
-                  }}
-                >
-                  Rider
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-
-          {/* STORE MERCHANT CARD */}
-          {partnerMode === "merchant" && (
-            <View
-              style={{
-                backgroundColor: "#ffffff",
-                borderRadius: 22,
-                padding: 18,
-                borderWidth: 1,
-                borderColor: "#E7EAEF",
-                shadowColor: "#101828",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.05,
-                shadowRadius: 4,
-                elevation: 2,
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "flex-start", marginBottom: 14 }}>
-                <View
-                  style={{
-                    width: 50,
-                    height: 50,
-                    borderRadius: 16,
-                    backgroundColor: "#FED7AA",
-                    borderWidth: 1,
-                    borderColor: "#FDBA74",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginRight: 12,
-                  }}
-                >
-                  <Text style={{ fontSize: 26 }}>🍳</Text>
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                    <Text style={{ fontSize: 16, fontWeight: "900", color: "#17191D" }}>
-                      Store Merchant
-                    </Text>
-                    <View
-                      style={{
-                        backgroundColor: "#ECFDF5",
-                        paddingHorizontal: 7,
-                        paddingVertical: 2,
-                        borderRadius: 6,
-                        borderWidth: 1,
-                        borderColor: "#A7F3D0",
-                      }}
-                    >
-                      <Text style={{ fontSize: 9.5, fontWeight: "800", color: "#065F46" }}>
-                        KITCHEN
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={{ fontSize: 12, color: "#4B5563", lineHeight: 17 }}>
-                    Manage live orders, update daily menu trays, and confirm table bookings.
-                  </Text>
-                </View>
-              </View>
-
-              <View style={{ flexDirection: "row", gap: 10, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#F0F2F5" }}>
-                <Pressable
-                  onPress={() => router.push("/(mobile)/auth/merchant-login")}
-                  style={{
-                    flex: 1,
-                    height: 44,
-                    backgroundColor: "#047857",
-                    borderRadius: 14,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Ionicons name="key" size={13} color="#ffffff" style={{ marginRight: 5 }} />
-                  <Text style={{ fontSize: 12.5, fontWeight: "800", color: "#ffffff" }}>Kitchen Login</Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={() => router.push("/(mobile)/auth/merchant-register")}
-                  style={{
-                    flex: 1,
-                    height: 44,
-                    backgroundColor: "#ffffff",
-                    borderWidth: 1.5,
-                    borderColor: "#047857",
-                    borderRadius: 14,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Ionicons name="storefront" size={13} color="#047857" style={{ marginRight: 5 }} />
-                  <Text style={{ fontSize: 12.5, fontWeight: "800", color: "#047857" }}>Register Store</Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
-
-          {/* DELIVERY RIDER CARD */}
-          {partnerMode === "rider" && (
-            <View
-              style={{
-                backgroundColor: "#ffffff",
-                borderRadius: 22,
-                padding: 18,
-                borderWidth: 1,
-                borderColor: "#E7EAEF",
-                shadowColor: "#101828",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.05,
-                shadowRadius: 4,
-                elevation: 2,
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "flex-start", marginBottom: 14 }}>
-                <View
-                  style={{
-                    width: 50,
-                    height: 50,
-                    borderRadius: 16,
-                    backgroundColor: "#BAE6FD",
-                    borderWidth: 1,
-                    borderColor: "#7DD3FC",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginRight: 12,
-                  }}
-                >
-                  <Text style={{ fontSize: 26 }}>🛵</Text>
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                    <Text style={{ fontSize: 16, fontWeight: "900", color: "#17191D" }}>
-                      Mati Courier Dispatch
-                    </Text>
-                    <View
-                      style={{
-                        backgroundColor: "#F0F9FF",
-                        paddingHorizontal: 7,
-                        paddingVertical: 2,
-                        borderRadius: 6,
-                        borderWidth: 1,
-                        borderColor: "#BAE6FD",
-                      }}
-                    >
-                      <Text style={{ fontSize: 9.5, fontWeight: "800", color: "#0369A1" }}>
-                        DISPATCH
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={{ fontSize: 12, color: "#4B5563", lineHeight: 17 }}>
-                    Accept local deliveries across Mati City, view drop-off routes, and track daily earnings.
-                  </Text>
-                </View>
-              </View>
-
-              <View style={{ flexDirection: "row", gap: 10, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#F0F2F5" }}>
-                <Pressable
-                  onPress={() => router.push("/(mobile)/auth/rider-login")}
-                  style={{
-                    flex: 1,
-                    height: 44,
-                    backgroundColor: "#0284C7",
-                    borderRadius: 14,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Ionicons name="bicycle" size={14} color="#ffffff" style={{ marginRight: 5 }} />
-                  <Text style={{ fontSize: 12.5, fontWeight: "800", color: "#ffffff" }}>Rider Login</Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={() => router.push("/(mobile)/auth/rider-register")}
-                  style={{
-                    flex: 1,
-                    height: 44,
-                    backgroundColor: "#ffffff",
-                    borderWidth: 1.5,
-                    borderColor: "#0284C7",
-                    borderRadius: 14,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Ionicons name="person-add" size={13} color="#0284C7" style={{ marginRight: 5 }} />
-                  <Text style={{ fontSize: 12.5, fontWeight: "800", color: "#0284C7" }}>Apply as Rider</Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
+          ))}
         </View>
 
-        {/* =========================================================================
-            4. FOOTER (Mati Pride)
-           ========================================================================= */}
-        <View style={{ marginTop: 32, paddingHorizontal: 24, alignItems: "center" }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
-            <Image
-              source={require("../../assets/logo.jpg")}
-              style={{ width: 18, height: 18, borderRadius: 5 }}
-              resizeMode="cover"
-            />
-            <Text style={{ fontSize: 12, fontWeight: "900", color: "#17191D" }}>
-              Mati FoodFinder
-            </Text>
+        <View style={s.partner}>
+          <View style={s.partnerHeading}><Text style={s.foodEmoji}>{partnerMode === "merchant" ? "🏪" : "🛵"}</Text><Text style={s.partnerTitle}>Grow with Mati FoodFinder</Text></View>
+          <Text style={s.partnerDetail}>Bring your kitchen or your wheels. Let’s feed Mati.</Text>
+          <View style={s.segments}>
+            {(["merchant", "rider"] as const).map((mode) => (
+              <TouchableOpacity key={mode} accessibilityRole="tab" accessibilityState={{ selected: partnerMode === mode }} onPress={() => setPartnerMode(mode)} style={[s.segment, partnerMode === mode && s.segmentActive]}>
+                <Text style={[s.segmentText, partnerMode === mode && s.segmentTextActive]}>{mode === "merchant" ? "Store owners" : "Delivery riders"}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
-          <Text style={{ fontSize: 11, color: "#98A2B3", textAlign: "center", fontWeight: "500" }}>
-            Supporting Local Karenderias & Diners across Mati City, Davao Oriental
-          </Text>
+          <Text style={s.partnerDescription}>{partnerMode === "merchant" ? "Share your menu, manage orders, and welcome more local diners." : "Deliver local favorites and manage your deliveries around Mati City."}</Text>
+          <View style={s.partnerActions}>
+            <TouchableOpacity accessibilityRole="button" onPress={() => router.push(partnerMode === "merchant" ? "/(mobile)/auth/merchant-register" : "/(mobile)/auth/rider-register")} style={s.partnerPrimary}><Text style={s.partnerPrimaryText}>{partnerMode === "merchant" ? "Register your store" : "Apply as a rider"}</Text><Ionicons name="arrow-forward" size={16} color={colors.ink} /></TouchableOpacity>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel={partnerMode === "merchant" ? "Merchant login" : "Rider login"} onPress={() => router.push(partnerMode === "merchant" ? "/(mobile)/auth/merchant-login" : "/(mobile)/auth/rider-login")} style={s.partnerLogin}><Text style={s.partnerLoginText}>Log in</Text></TouchableOpacity>
+          </View>
         </View>
+        <View style={s.footer}><Ionicons name="heart-outline" size={15} color={colors.green} /><Text style={s.footerText}>Local kitchens. Coastal soul. All Mati.</Text></View>
       </ScrollView>
+
+      <View style={s.dock}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Explore food as a guest" onPress={() => explore()} style={s.primary}>
+          <Ionicons name="restaurant-outline" size={20} color="white" /><Text style={s.primaryText}>Explore food</Text><Ionicons name="arrow-forward" size={21} color="white" />
+        </TouchableOpacity>
+        <Text style={s.dockHint}>Come hungry. Browse freely. No account needed.</Text>
+      </View>
     </SafeAreaView>
   );
 }
+
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.cream },
+  content: { paddingBottom: 16 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 14, gap: 8 },
+  brand: { flexDirection: "row", alignItems: "center", gap: 9, flex: 1 },
+  brandCopy: { flex: 1 },
+  logo: { width: 42, height: 42, borderRadius: 13 },
+  brandName: { fontSize: 16, fontWeight: "800", color: colors.ink, letterSpacing: -0.5 },
+  location: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 4 },
+  locationText: { fontSize: 10, color: colors.muted, flexShrink: 1 },
+  login: { minHeight: 44, justifyContent: "center", paddingHorizontal: 13, borderRadius: 22, backgroundColor: "#EAF1E9" },
+  loginText: { fontSize: 13, fontWeight: "700", color: colors.green },
+  intro: { paddingHorizontal: 22, paddingTop: 16, paddingBottom: 22 },
+  eyebrow: { fontSize: 10, fontWeight: "800", letterSpacing: 1.8, color: colors.orange, marginBottom: 10 },
+  headline: { fontSize: 32, lineHeight: 38, fontWeight: "800", letterSpacing: -1.3, color: colors.ink },
+  subtitle: { fontSize: 14, lineHeight: 21, color: colors.muted, marginTop: 10 },
+  hero: { borderRadius: 24, overflow: "hidden", backgroundColor: colors.green },
+  heroPhoto: { height: 210, backgroundColor: "#E7E9DB" },
+  foodImage: { width: "100%", height: "100%" },
+  photoBadge: { position: "absolute", top: 14, left: 14, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#FFFCF3", paddingHorizontal: 11, paddingVertical: 8, borderRadius: 20 },
+  photoBadgeText: { fontSize: 10, fontWeight: "700", color: colors.ink },
+  heroCopy: { flexDirection: "row", alignItems: "center", padding: 19, gap: 12, minHeight: 140 },
+  heroText: { flex: 1 },
+  heroEyebrow: { fontSize: 10, fontWeight: "800", letterSpacing: 1.1, color: "#D7EAA8", marginBottom: 7 },
+  heroTitle: { fontSize: 21, fontWeight: "800", color: "white", letterSpacing: -0.5 },
+  heroDetail: { fontSize: 13, lineHeight: 20, color: "#FFFFFF", marginTop: 6 },
+  heroArrow: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#E9F0CE", justifyContent: "center", alignItems: "center" },
+  sectionHeading: { paddingHorizontal: 22, marginTop: 28, marginBottom: 15, gap: 5 },
+  sectionTitle: { fontSize: 20, fontWeight: "800", color: colors.ink, letterSpacing: -0.5 },
+  smallNote: { fontSize: 12, color: colors.muted },
+  cuisines: { paddingHorizontal: 20, gap: 12 },
+  cuisine: { width: 155, padding: 15, borderRadius: 20 },
+  cuisineTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 17 },
+  cuisineIcon: { width: 58, height: 58, backgroundColor: "#FFFFFFA6", borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  cuisineName: { fontSize: 15, fontWeight: "800", color: colors.ink },
+  cuisineCaption: { fontSize: 12, lineHeight: 17, color: "#344F43", marginTop: 4 },
+  benefits: { margin: 20, marginTop: 28, padding: 20, borderRadius: 24, backgroundColor: "#FFF2D8", borderWidth: 1, borderColor: "#F1D8A6" },
+  benefitRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 22 },
+  benefitIcon: { width: 50, height: 50, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: "#F0F5ED" },
+  flex: { flex: 1 },
+  benefitTitle: { fontSize: 14, fontWeight: "700", color: colors.ink },
+  benefitDetail: { fontSize: 12, lineHeight: 18, color: colors.muted, marginTop: 3 },
+  partner: { marginHorizontal: 20, padding: 20, borderRadius: 24, backgroundColor: "#075E46" },
+  partnerHeading: { flexDirection: "row", alignItems: "center", gap: 8 },
+  partnerTitle: { fontSize: 18, fontWeight: "800", color: "white", flex: 1 },
+  partnerDetail: { fontSize: 13, lineHeight: 20, color: "#E3F3EA", marginTop: 8 },
+  segments: { flexDirection: "row", backgroundColor: "#034632", padding: 4, borderRadius: 14, marginTop: 17 },
+  segment: { flex: 1, minHeight: 44, paddingVertical: 10, alignItems: "center", justifyContent: "center", borderRadius: 11 },
+  segmentActive: { backgroundColor: "white" },
+  segmentText: { fontSize: 13, fontWeight: "600", color: "#FFFFFF" },
+  segmentTextActive: { color: colors.green, fontWeight: "800" },
+  partnerDescription: { fontSize: 13, lineHeight: 20, color: "#E3F3EA", marginVertical: 16 },
+  partnerActions: { flexDirection: "row", gap: 12, alignItems: "center" },
+  partnerPrimary: { flex: 1, minHeight: 46, padding: 12, borderRadius: 13, backgroundColor: "#FFCE70", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  partnerPrimaryText: { fontSize: 12, fontWeight: "800", color: colors.ink, flexShrink: 1 },
+  partnerLogin: { minHeight: 46, paddingHorizontal: 12, justifyContent: "center" },
+  footer: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingVertical: 25 },
+  footerText: { fontSize: 11, color: colors.muted },
+  dock: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, backgroundColor: colors.cream, borderTopWidth: 1, borderTopColor: "#E9EBE2" },
+  primary: { minHeight: 54, paddingHorizontal: 20, paddingVertical: 15, borderRadius: 17, backgroundColor: colors.orange, flexDirection: "row", alignItems: "center", gap: 10 },
+  primaryText: { flex: 1, fontSize: 16, fontWeight: "800", color: "white" },
+  dockHint: { fontSize: 11, color: colors.muted, textAlign: "center", marginTop: 8 },
+  foodEmoji: { fontSize: 36 },
+  benefitEmoji: { fontSize: 28 },
+  partnerLoginText: { fontSize: 13, fontWeight: "700", color: "white" },
+  carousel: { marginHorizontal: 20 },
+  pagination: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 2, marginTop: 4 },
+  dotButton: { minWidth: 32, minHeight: 44, justifyContent: "center", alignItems: "center" },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#B4C5BB" },
+  activeDot: { width: 23, backgroundColor: colors.green },
+  swipeHint: { fontSize: 11, color: colors.muted, marginLeft: 9 },
+});
