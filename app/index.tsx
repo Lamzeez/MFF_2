@@ -1,7 +1,15 @@
 import { Redirect } from "expo-router";
-import { Platform } from "react-native";
+import { Platform, useWindowDimensions } from "react-native";
+import { isMobileDevice } from "../lib/platform-policy";
 
 export default function Index() {
-  // Direct entry points to mobile portal so web preview and mobile app both load the mobile UI
-  return <Redirect href="/(mobile)/portal" />;
+  const { width } = useWindowDimensions();
+
+  // If on native mobile device (iOS/Android) or mobile-emulation view (< 768px in F12)
+  if (Platform.OS !== "web" || isMobileDevice(width)) {
+    return <Redirect href="/(mobile)/(tabs)" />;
+  }
+
+  // Desktop web browser workstation (width >= 768px)
+  return <Redirect href="/portal" />;
 }

@@ -5,12 +5,15 @@
   "dependencies": {
     "@expo/metro-runtime": "~57.0.15",
     "@expo/vector-icons": "^15.0.2",
+    "@supabase/supabase-js": "^2.117.2",
     "expo": "~57.0.21",
     "expo-constants": "~57.0.17",
+    "expo-crypto": "~57.0.3",
     "expo-font": "~57.0.3",
     "expo-linking": "~57.0.9",
     "expo-location": "~57.0.16",
     "expo-router": "~57.0.20",
+    "expo-sqlite": "~57.0.3",
     "expo-status-bar": "~57.0.1",
     "nativewind": "^4.2.6",
     "react": "19.2.3",
@@ -24,15 +27,30 @@
     "tailwindcss": "^3.4.19"
   },
   "devDependencies": {
+    "@types/node": "^26.6.3",
+    "@types/pg": "^8.23.1",
     "@types/react": "~19.2.2",
     "babel-preset-expo": "^57.0.11",
+    "pg": "^8.23.0",
+    "supabase": "^2.118.0",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/foundation/*.test.ts",
+    "check": "npm run typecheck && npm test",
+    "db:start": "supabase start",
+    "db:lint": "supabase db lint --local --schema public,private --level warning --fail-on warning",
+    "db:test": "supabase test db",
+    "db:types": "node scripts/generate-database-types.mjs",
+    "db:types:check": "node scripts/generate-database-types.mjs --check",
+    "check:client-bundle": "node scripts/verify-client-bundle.mjs",
+    "test:auth:local": "tsx --test tests/integration/auth.local.test.ts"
   },
   "private": true
 }

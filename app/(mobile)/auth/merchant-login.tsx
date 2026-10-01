@@ -8,25 +8,66 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, Redirect } from "expo-router";
+import { useSession } from "../../../context/SessionContext";
+import { authMessage } from "../../../services/auth";
+import { getSupabaseClient } from "../../../lib/supabase/client";
+import { ENFORCE_STRICT_PLATFORM_GUARDS, isDesktopDevice } from "../../../lib/platform-policy";
 
 export default function MerchantLoginScreen() {
+  const { width } = useWindowDimensions();
+  if (ENFORCE_STRICT_PLATFORM_GUARDS && isDesktopDevice(width)) {
+    return <Redirect href="/(web)/auth/store-login" />;
+  }
+
   const router = useRouter();
+  const { signIn, logoutToGuest } = useSession();
 
-  // Demo credentials pre-filled in development only
-  const [merchantEmail, setMerchantEmail] = useState(__DEV__ ? "lette@karenderia.com" : "");
-  const [merchantPassword, setMerchantPassword] = useState(__DEV__ ? "password123" : "");
+  const [merchantEmail, setMerchantEmail] = useState("");
+  const [merchantPassword, setMerchantPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!merchantEmail.trim() || !merchantPassword.trim()) {
       Alert.alert("Credentials Required", "Please enter your Store Admin email and password.");
       return;
     }
 
-    router.replace("/(mobile)/merchant");
+    setLoading(true);
+    try {
+      await signIn(merchantEmail.trim(), merchantPassword);
+      const client = getSupabaseClient();
+      const { data: { user } } = await client.auth.getUser();
+      if (!user) throw new Error("Authentication failed.");
+
+      const { data: memberships, error: memError } = await client
+        .from("store_memberships")
+        .select("role, store_id, is_active")
+        .eq("user_id", user.id)
+        .eq("is_active", true);
+
+      if (memError || !memberships || memberships.length === 0) {
+        await logoutToGuest();
+        Alert.alert(
+          "Merchant Access Denied",
+          "This account is not registered as an active store merchant in Mati FoodFinder. Please register your store or use customer sign-in."
+        );
+        return;
+      }
+
+      router.replace("/(mobile)/merchant");
+    } catch (err: any) {
+      const msg = authMessage(err);
+      Alert.alert("Sign In Failed", err.message && !err.code ? err.message : msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -72,7 +113,7 @@ export default function MerchantLoginScreen() {
             <View>
               <Text className="text-xs font-bold text-gray-700 mb-1.5">Store Email *</Text>
               <TextInput
-                placeholder="e.g. lette@karenderia.com"
+                placeholder="e.g. merchant.letty@mati-foodfinder.com"
                 value={merchantEmail}
                 onChangeText={setMerchantEmail}
                 keyboardType="email-address"
@@ -84,22 +125,42 @@ export default function MerchantLoginScreen() {
 
             <View>
               <Text className="text-xs font-bold text-gray-700 mb-1.5">Password *</Text>
-              <TextInput
-                placeholder="••••••••"
-                value={merchantPassword}
-                onChangeText={setMerchantPassword}
-                secureTextEntry
-                className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-3 text-sm text-gray-900"
-                placeholderTextColor="#9ca3af"
-              />
+              <View className="relative flex-row items-center">
+                <TextInput
+                  placeholder="••••••••"
+                  value={merchantPassword}
+                  onChangeText={setMerchantPassword}
+                  secureTextEntry={!showPassword}
+                  className="flex-1 bg-gray-50 border border-gray-200 rounded-xl pl-3.5 pr-11 py-3 text-sm text-gray-900"
+                  placeholderTextColor="#9ca3af"
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                  onPress={() => setShowPassword(!showPassword)}
+                  hitSlop={10}
+                  className="absolute right-3.5 z-10"
+                >
+                  <Ionicons
+                    name={showPassword ? "eye-off-outline" : "eye-outline"}
+                    size={20}
+                    color="#6b7280"
+                  />
+                </Pressable>
+              </View>
             </View>
           </View>
 
           <Pressable
             onPress={handleLogin}
+            disabled={loading}
             className="w-full py-3.5 bg-orange-500 rounded-xl items-center shadow-md mb-4"
           >
-            <Text className="text-white font-bold text-sm">Verify & Enter Kitchen Mode</Text>
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text className="text-white font-bold text-sm">Verify & Enter Kitchen Mode</Text>
+            )}
           </Pressable>
 
           <Pressable

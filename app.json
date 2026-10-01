@@ -32,7 +32,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Allow Mati FoodFinder to use your location to show nearby Karenderias and restaurants."
         }
-      ]
+      ],
+      "expo-sqlite"
     ]
   }
 }

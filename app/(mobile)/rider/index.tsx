@@ -1,10 +1,16 @@
 import React, { useState } from "react";
-import { View, Text, ScrollView, Pressable, Switch, Modal, Alert, TextInput } from "react-native";
+import { View, Text, ScrollView, Pressable, Switch, Modal, Alert, TextInput, Platform, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, Redirect } from "expo-router";
+import { ENFORCE_STRICT_PLATFORM_GUARDS, isDesktopDevice } from "../../../lib/platform-policy";
 
 export default function MobileRiderMode() {
+  const { width } = useWindowDimensions();
+  if (ENFORCE_STRICT_PLATFORM_GUARDS && isDesktopDevice(width)) {
+    return <Redirect href="/portal" />;
+  }
+
   const router = useRouter();
   const [isOnline, setIsOnline] = useState(true);
   const [activeJobId, setActiveJobId] = useState<number | null>(null);

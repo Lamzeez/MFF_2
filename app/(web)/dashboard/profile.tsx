@@ -1,72 +1,125 @@
+import React, { useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function StoreProfile() {
+  const [storeName, setStoreName] = useState("Mama Letty's Karenderia");
+  const [description, setDescription] = useState(
+    "Serving authentic home-cooked Filipino meals, seafood, and Mati specialties in the heart of Poblacion."
+  );
+  const [openTime, setOpenTime] = useState("07:00 AM");
+  const [closeTime, setCloseTime] = useState("08:00 PM");
+  const [phone, setPhone] = useState("+63 917 234 5678");
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = () => {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+  };
+
   return (
     <View className="flex-1 p-6 md:p-10 w-full max-w-4xl self-center">
+      {/* Header */}
       <View className="mb-8">
-        <Text className="text-3xl font-extrabold text-gray-900 mb-2">Store Profile</Text>
-        <Text className="text-gray-500 text-lg">Update how your Karenderia appears to users in Mati City.</Text>
+        <View className="flex-row items-center gap-2 mb-1">
+          <Text className="text-[11px] font-black text-[#EA5410] uppercase tracking-wider">
+            STORE SETTINGS
+          </Text>
+        </View>
+        <Text className="text-3xl font-black text-gray-900 tracking-tight">Store Profile & Operating Hours</Text>
+        <Text className="text-gray-500 text-sm mt-1">
+          Update how your Karenderia or Restaurant appears to customers across Mati City.
+        </Text>
       </View>
 
-      <ScrollView className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden" contentContainerStyle={{ padding: 32 }}>
-        
+      <ScrollView
+        className="bg-white rounded-3xl shadow-sm border border-gray-200/80 overflow-hidden"
+        contentContainerStyle={{ padding: 32 }}
+      >
         {/* Banner/Logo Uploads */}
-        <View className="flex-row items-center gap-6 mb-10">
-          <View className="w-24 h-24 bg-gray-100 rounded-full items-center justify-center border-2 border-dashed border-gray-300">
-            <Text className="text-2xl">🏪</Text>
+        <View className="flex-row items-center gap-6 mb-8 pb-8 border-b border-gray-100">
+          <View className="w-24 h-24 bg-[#EA5410]/10 rounded-2xl items-center justify-center border-2 border-dashed border-[#EA5410]/30">
+            <Ionicons name="storefront" size={36} color="#EA5410" />
           </View>
           <View>
-            <Pressable className="px-5 py-2.5 bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors mb-2 self-start">
-              <Text className="text-white font-bold">Upload Logo</Text>
+            <Pressable
+              onPress={() => alert("Upload Logo: In production, uploads cover image to Supabase Storage.")}
+              className="px-5 py-2.5 bg-[#111827] rounded-xl hover:bg-black transition-colors mb-2 self-start flex-row items-center gap-2"
+            >
+              <Ionicons name="cloud-upload-outline" size={16} color="white" />
+              <Text className="text-white font-bold text-xs">Upload Store Cover Photo</Text>
             </Pressable>
-            <Text className="text-gray-400 text-sm">JPEG or PNG, up to 2MB</Text>
+            <Text className="text-gray-400 text-xs">Recommended: 1200x600 PNG or JPEG, up to 5MB</Text>
           </View>
         </View>
 
-        <View className="gap-6">
+        {/* Form Fields */}
+        <View className="gap-5">
           <View>
-            <Text className="font-bold text-gray-700 mb-2">Store Name</Text>
-            <TextInput 
-              value="Mama Letty's Karenderia"
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:border-orange-500"
+            <Text className="font-extrabold text-xs text-gray-700 uppercase tracking-wider mb-2">Store Name</Text>
+            <TextInput
+              value={storeName}
+              onChangeText={setStoreName}
+              className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-900 focus:border-[#EA5410] focus:bg-white"
             />
           </View>
-          
+
           <View>
-            <Text className="font-bold text-gray-700 mb-2">Short Description</Text>
-            <TextInput 
-              value="Serving authentic home-cooked Filipino meals in the heart of Poblacion."
+            <Text className="font-extrabold text-xs text-gray-700 uppercase tracking-wider mb-2">Short Description</Text>
+            <TextInput
+              value={description}
+              onChangeText={setDescription}
               multiline
               numberOfLines={3}
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:border-orange-500 h-24 text-top"
+              className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-900 focus:border-[#EA5410] focus:bg-white h-24"
               textAlignVertical="top"
             />
           </View>
 
-          <View className="flex-col md:flex-row gap-6">
+          <View className="flex-col md:flex-row gap-5">
             <View className="flex-1">
-              <Text className="font-bold text-gray-700 mb-2">Operating Hours (Open)</Text>
-              <TextInput 
-                value="07:00 AM"
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:border-orange-500"
+              <Text className="font-extrabold text-xs text-gray-700 uppercase tracking-wider mb-2">Opening Time</Text>
+              <TextInput
+                value={openTime}
+                onChangeText={setOpenTime}
+                className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-900 focus:border-[#EA5410] focus:bg-white"
               />
             </View>
             <View className="flex-1">
-              <Text className="font-bold text-gray-700 mb-2">Operating Hours (Close)</Text>
-              <TextInput 
-                value="08:00 PM"
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:border-orange-500"
+              <Text className="font-extrabold text-xs text-gray-700 uppercase tracking-wider mb-2">Closing Time</Text>
+              <TextInput
+                value={closeTime}
+                onChangeText={setCloseTime}
+                className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-900 focus:border-[#EA5410] focus:bg-white"
               />
             </View>
           </View>
+
+          <View>
+            <Text className="font-extrabold text-xs text-gray-700 uppercase tracking-wider mb-2">Official Contact Phone</Text>
+            <TextInput
+              value={phone}
+              onChangeText={setPhone}
+              className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-900 focus:border-[#EA5410] focus:bg-white"
+            />
+          </View>
         </View>
 
-        <View className="mt-10 pt-8 border-t border-gray-100 flex-row justify-end">
-          <Pressable className="px-8 py-4 bg-orange-500 rounded-xl hover:bg-orange-600 transition-colors">
-            <Text className="text-white font-bold text-lg">Save Changes</Text>
+        {saved && (
+          <View className="mt-6 bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex-row items-center gap-2">
+            <Ionicons name="checkmark-circle" size={18} color="#047857" />
+            <Text className="text-emerald-800 text-xs font-bold">Store profile updated successfully!</Text>
+          </View>
+        )}
+
+        <View className="mt-8 pt-6 border-t border-gray-100 flex-row justify-end">
+          <Pressable
+            onPress={handleSave}
+            className="px-8 py-3.5 bg-[#EA5410] rounded-2xl hover:bg-[#D04508] transition-colors shadow-sm"
+          >
+            <Text className="text-white font-extrabold text-sm">Save Store Changes</Text>
           </Pressable>
         </View>
-
       </ScrollView>
     </View>
   );

@@ -5,7 +5,10 @@ import {
   ScrollView,
   TextInput,
   Pressable,
+  Image,
   Alert,
+  RefreshControl,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,6 +18,7 @@ import { RestaurantProfile, FoodItem } from "../../../types/restaurant";
 import { CATEGORIES, MATI_RESTAURANTS_DATA } from "../../../mock/restaurants";
 import { MATI_BARANGAYS } from "../../../mock/barangays";
 import { FOOD_ITEMS } from "../../../mock/dishes";
+import { fetchLiveStores, fetchLiveMenuItems } from "../../../services/catalog";
 import { NotificationsSheet } from "../../../components/notifications/NotificationsSheet";
 import { CheckoutSheet } from "../../../components/checkout/CheckoutSheet";
 import { ReservationSheet } from "../../../components/reservation/ReservationSheet";
@@ -26,7 +30,6 @@ export default function MobileHomeScreen() {
   const {
     isLoggedIn,
     user,
-    loginAsRegistered,
     notifications,
     unreadCount,
     markAllNotificationsRead,
@@ -61,8 +64,43 @@ export default function MobileHomeScreen() {
 
   const categories = CATEGORIES;
   const matiBarangays = MATI_BARANGAYS;
-  const matiRestaurantsData = MATI_RESTAURANTS_DATA;
-  const foodItems = FOOD_ITEMS;
+  const [restaurants, setRestaurants] = useState<Record<string, RestaurantProfile>>(MATI_RESTAURANTS_DATA);
+  const [foodItems, setFoodItems] = useState<FoodItem[]>(FOOD_ITEMS);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const loadLiveCatalog = async () => {
+    try {
+      const [liveStores, liveMenu] = await Promise.all([
+        fetchLiveStores(),
+        fetchLiveMenuItems(),
+      ]);
+      if (liveStores.length > 0) {
+        const storeMap: Record<string, RestaurantProfile> = {};
+        Object.assign(storeMap, MATI_RESTAURANTS_DATA);
+        for (const s of liveStores) {
+          storeMap[s.name] = s;
+        }
+        setRestaurants(storeMap);
+      }
+      if (liveMenu.length > 0) {
+        setFoodItems(liveMenu);
+      }
+    } catch (err) {
+      console.warn("Live catalog fetch error:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadLiveCatalog();
+  }, []);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await loadLiveCatalog();
+    setIsRefreshing(false);
+  };
+
+  const matiRestaurantsData = restaurants;
 
   // Handle Guest Gate Check
   const verifyRegisteredUser = (actionDescription: string): boolean => {
@@ -90,6 +128,7 @@ export default function MobileHomeScreen() {
       deliveryTime: "20-30 min",
       reviews: 95,
       bgColor: "#FED7AA",
+      imageUrl: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop&q=80",
     };
     setActiveRestaurant(resto);
     setShowRestaurantModal(true);
@@ -112,40 +151,32 @@ export default function MobileHomeScreen() {
     date: string;
     time: string;
     seatingPreference: string;
-    specialNotes: string;
+    specialNotes?: string;
   }) => {
-    if (!verifyRegisteredUser("book dining tables")) return;
-
     createReservation({
       restaurantName: data.restaurantName,
       date: data.date,
       time: data.time,
       partySize: data.partySize,
-      specialNotes: data.specialNotes
-        ? `${data.seatingPreference} • ${data.specialNotes}`
-        : data.seatingPreference,
+      specialNotes: data.specialNotes,
     });
-
     setShowReservationModal(false);
 
     Alert.alert(
-      "Table Booking Requested! 📅",
-      `Your reservation for ${data.partySize} at ${data.restaurantName} (${data.date} at ${data.time}) is confirmed!`,
-      [
-        { text: "Continue Browsing" },
-        { text: "View in Bookings", onPress: () => router.push("/(mobile)/(tabs)/orders") },
-      ]
+      "Table Reservation Submitted! 📅",
+      `Your reservation for ${data.partySize} at ${data.restaurantName} on ${data.date} (${data.time}) is waiting for store confirmation. You will be notified in the Orders tab.`,
+      [{ text: "Great!" }]
     );
   };
 
-  // Open COD Checkout Drawer
-  const handleOpenCheckout = (dish: any) => {
-    if (!verifyRegisteredUser("place Cash-on-Delivery orders")) return;
+  // Open Checkout Modal for a Dish
+  const handleOpenCheckout = (dish: FoodItem) => {
+    if (!verifyRegisteredUser("order food with Cash on Delivery")) return;
     setCheckoutDish(dish);
     setShowCheckoutModal(true);
   };
 
-  // Confirm COD Order from Sheet
+  // Submit Order from Checkout Sheet
   const handlePlaceOrderFromSheet = (orderPayload: {
     dish: FoodItem;
     qty: number;
@@ -155,14 +186,10 @@ export default function MobileHomeScreen() {
     fulfillment: "delivery" | "pickup";
     total: number;
   }) => {
-    if (!verifyRegisteredUser("place Cash-on-Delivery orders")) return;
-
     const subtotal = orderPayload.dish.price * orderPayload.qty;
     const deliveryFee = orderPayload.fulfillment === "delivery" ? 35 : 0;
-    const total = subtotal + deliveryFee;
-
-    const orderNumber = placeActiveOrder({
-      restaurantName: orderPayload.dish.store,
+    const orderNum = placeActiveOrder({
+      restaurantName: orderPayload.dish.store || "Mama Letty's Karenderia",
       items: [
         {
           name: orderPayload.dish.name,
@@ -172,45 +199,31 @@ export default function MobileHomeScreen() {
       ],
       subtotal,
       deliveryFee,
-      total,
-      deliveryAddress: orderPayload.address.trim() || "Main Street, Central",
+      total: orderPayload.total,
+      deliveryAddress: orderPayload.address,
       barangay: orderPayload.barangay,
-      notes: orderPayload.notes.trim() || undefined,
+      notes: orderPayload.notes,
     });
 
     setShowCheckoutModal(false);
 
     Alert.alert(
-      "Order Placed! 🛵",
-      `Order ${orderNumber} from ${orderPayload.dish.store} has been placed via Cash-on-Delivery! Total COD to prepare: ₱${total.toFixed(2)}.`,
+      "Order Placed Successfully! 🛵",
+      `Order ${orderNum} has been received! The kitchen is preparing your meal. Track live rider updates in the Orders tab.`,
       [
-        { text: "Done" },
-        { text: "Track Order", onPress: () => router.push("/(mobile)/(tabs)/orders") },
+        { text: "View Orders", onPress: () => router.push("/(mobile)/(tabs)/orders") },
+        { text: "Continue Browsing" },
       ]
     );
   };
 
   // Open QR Scanner
   const handleOpenScanner = () => {
-    if (!isLoggedIn) {
-      verifyRegisteredUser("scan in-store restaurant QR codes");
-      return;
-    }
-    if (!personalizationEnabled) {
-      Alert.alert(
-        "Personalization Mode Paused ⚠️",
-        "Please enable Personalization in your Profile to scan restaurant QR codes and track visits.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Open Profile", onPress: () => router.push("/(mobile)/(tabs)/profile") },
-        ]
-      );
-      return;
-    }
+    if (!verifyRegisteredUser("check in at store counters")) return;
     setShowScanQrModal(true);
   };
 
-  // Perform Store Stand Check-in
+  // QR Check-in completed
   const handlePerformCheckIn = (storeName: string) => {
     const visitCount = checkInToStore(storeName);
     setShowScanQrModal(false);
@@ -234,98 +247,180 @@ export default function MobileHomeScreen() {
     return matchesCat && matchesQuery;
   });
 
-  // Filtered dishes for search or category
-  const filteredDishes = foodItems.filter((dish) => {
-    const matchesCat = selectedCategory === "All" || dish.category === selectedCategory;
-    const matchesQuery =
-      searchQuery === "" ||
-      dish.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      dish.store.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCat && matchesQuery;
-  });
-
   // Trending dishes list
   const trendingDishes = foodItems.filter((d) => d.available);
 
   return (
-    <SafeAreaView className="flex-1 bg-[#F4F5F7]">
-      {/* 1. APPBAR: Deliver to Mati City & Notifications */}
-      <View className="px-4.5 pt-2.5 pb-2 flex-row items-center justify-between bg-[#F4F5F7]">
-        <View className="flex-1">
-          <Text className="text-[11px] font-semibold text-[#98A2B3] tracking-wider uppercase">
+    <SafeAreaView edges={["top"]} className="flex-1 bg-[#F8FAFC]">
+      {/* 1. TOP APP BAR: Brand, Delivery Location, Quick Auth / Profile */}
+      <View className="px-4 pt-2 pb-3 flex-row items-center justify-between bg-white border-b border-gray-100">
+        <View className="flex-1 mr-3">
+          <Text className="text-[10px] font-bold text-gray-400 tracking-wider uppercase">
             DELIVER TO
           </Text>
           <Pressable
             onPress={() => router.push("/(mobile)/(tabs)/map")}
-            className="flex-row items-center gap-1 mt-0.5"
+            className="flex-row items-center gap-1.5 mt-0.5"
           >
-            <Ionicons name="location-sharp" size={15} color="#EA5410" />
-            <Text className="text-[15px] font-black text-[#17191D]">
-              Mati City
+            <Ionicons name="location-sharp" size={16} color="#EA5410" />
+            <Text className="text-sm font-black text-gray-900 tracking-tight" numberOfLines={1}>
+              Mati City, Davao Oriental
             </Text>
-            <Ionicons name="chevron-down" size={13} color="#98A2B3" />
+            <Ionicons name="chevron-down" size={14} color="#6B7280" />
           </Pressable>
         </View>
 
-        {/* Action icons */}
+        {/* Right Action Icons */}
         <View className="flex-row items-center gap-2">
           {/* QR Scan Button */}
           <Pressable
+            accessibilityLabel="Scan Store QR Code"
             onPress={handleOpenScanner}
-            className="w-10 h-10 rounded-full bg-white border border-[#E7EAEF] items-center justify-center shadow-sm"
+            className="w-9 h-9 rounded-full bg-gray-50 border border-gray-200 items-center justify-center active:bg-gray-100"
           >
-            <Ionicons name="qr-code-outline" size={18} color="#4B5563" />
+            <Ionicons name="qr-code-outline" size={17} color="#374151" />
           </Pressable>
 
-          {/* Notifications Bell */}
-          <Pressable
-            onPress={() => {
-              if (verifyRegisteredUser("view personal notifications")) {
-                setShowNotificationsModal(true);
-              }
-            }}
-            className="w-10 h-10 rounded-full bg-white border border-[#E7EAEF] items-center justify-center shadow-sm relative"
-          >
-            <Ionicons name="notifications-outline" size={18} color="#4B5563" />
-            {unreadCount > 0 && (
-              <View className="absolute -top-1 -right-1 bg-[#E02424] rounded-full min-w-[18px] h-[18px] items-center justify-center px-1 border-2 border-white">
-                <Text className="text-white text-[9.5px] font-extrabold">{unreadCount}</Text>
-              </View>
-            )}
-          </Pressable>
+          {/* If Logged In: Notifications Bell */}
+          {isLoggedIn ? (
+            <Pressable
+              accessibilityLabel="View Notifications"
+              onPress={() => setShowNotificationsModal(true)}
+              className="w-9 h-9 rounded-full bg-gray-50 border border-gray-200 items-center justify-center relative active:bg-gray-100"
+            >
+              <Ionicons name="notifications-outline" size={17} color="#374151" />
+              {unreadCount > 0 && (
+                <View className="absolute -top-1 -right-1 bg-red-600 rounded-full min-w-[17px] h-[17px] items-center justify-center px-1 border-2 border-white">
+                  <Text className="text-white text-[9px] font-black">{unreadCount}</Text>
+                </View>
+              )}
+            </Pressable>
+          ) : (
+            /* If Guest: Prominent One-Tap Sign In Pill */
+            <Pressable
+              onPress={() => router.push("/(mobile)/auth/customer-login")}
+              className="bg-[#EA5410] px-3.5 py-1.5 rounded-full flex-row items-center gap-1 shadow-sm active:opacity-90"
+            >
+              <Ionicons name="log-in-outline" size={14} color="white" />
+              <Text className="text-white text-xs font-black">Sign In</Text>
+            </Pressable>
+          )}
         </View>
       </View>
 
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingBottom: 90 }}
+        contentContainerStyle={{ paddingBottom: 110 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor="#EA5410"
+            colors={["#EA5410"]}
+          />
+        }
       >
-        {/* 2. SEARCH BAR */}
-        <View className="px-4.5 mb-3">
-          <View className="flex-row items-center bg-white border border-[#E7EAEF] rounded-xl px-3.5 py-2.5 shadow-sm">
-            <Ionicons name="search" size={17} color="#98A2B3" />
+        {/* 2. GUEST WELCOME BANNER OR REGISTERED USER GREETING */}
+        {!isLoggedIn ? (
+          <View className="mx-4 mt-3 p-4 bg-gradient-to-r bg-orange-50 border border-orange-200 rounded-2xl">
+            <View className="flex-row items-center justify-between mb-1.5">
+              <View className="flex-row items-center gap-1.5">
+                <Ionicons name="sparkles" size={15} color="#EA5410" />
+                <Text className="text-sm font-black text-gray-900">
+                  Welcome to Mati FoodFinder! 👋
+                </Text>
+              </View>
+              <View className="bg-orange-100 px-2 py-0.5 rounded-full">
+                <Text className="text-[10px] font-black text-[#EA5410]">GUEST MODE</Text>
+              </View>
+            </View>
+            <Text className="text-xs text-gray-600 leading-relaxed mb-3">
+              Explore authentic local menus and secret food spots freely. Sign in when you're ready to order COD or book dining tables.
+            </Text>
+            <View className="flex-row items-center gap-2">
+              <Pressable
+                onPress={() => router.push("/(mobile)/auth/customer-login")}
+                className="flex-1 py-2.5 bg-[#EA5410] rounded-xl items-center shadow-sm active:opacity-90"
+              >
+                <Text className="text-white font-extrabold text-xs">Create Account / Sign In</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.push("/(mobile)/(tabs)/map")}
+                className="py-2.5 px-3 bg-white border border-gray-200 rounded-xl items-center active:bg-gray-50"
+              >
+                <Text className="text-gray-700 font-bold text-xs">Explore Map 🗺️</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <View className="mx-4 mt-3 mb-1">
+            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+              {new Date().getHours() < 12 ? "Maayong Buntag" : new Date().getHours() < 18 ? "Maayong Hapon" : "Maayong Gabii"}
+            </Text>
+            <Text className="text-xl font-black text-gray-900 tracking-tight mt-0.5">
+              Hello, {user?.name?.split(" ")[0] || "Foodie"}! 👋
+            </Text>
+            <Text className="text-xs text-gray-500 mt-0.5">
+              What are you craving today in Mati City?
+            </Text>
+          </View>
+        )}
+
+        {/* 3. ACTIVE ORDER BANNER (Only when registered and order exists - clean in-line, no overlapping floating pill!) */}
+        {isLoggedIn && orders && orders.length > 0 && (
+          <Pressable
+            onPress={() => router.push("/(mobile)/(tabs)/orders")}
+            className="mx-4 mt-3 bg-gray-900 rounded-2xl p-3.5 flex-row items-center justify-between shadow-md active:opacity-95"
+          >
+            <View className="flex-row items-center gap-3 flex-1 mr-3">
+              <View className="w-10 h-10 rounded-full bg-[#EA5410] items-center justify-center">
+                <Ionicons name="bicycle" size={20} color="white" />
+              </View>
+              <View className="flex-1">
+                <View className="flex-row items-center gap-2">
+                  <Text className="text-[11px] font-black text-[#EA5410] uppercase tracking-wider">
+                    Order In Progress
+                  </Text>
+                  <Text className="text-[11px] text-gray-400">· {orders[0].orderNumber}</Text>
+                </View>
+                <Text className="text-xs font-bold text-white mt-0.5" numberOfLines={1}>
+                  {orders[0].restaurantName}
+                </Text>
+              </View>
+            </View>
+            <View className="flex-row items-center gap-1 bg-white/10 px-3 py-1.5 rounded-xl">
+              <Text className="text-xs font-bold text-white">Track</Text>
+              <Ionicons name="arrow-forward" size={12} color="white" />
+            </View>
+          </Pressable>
+        )}
+
+        {/* 4. SEARCH BAR */}
+        <View className="px-4 mt-3 mb-3">
+          <View className="flex-row items-center bg-white border border-gray-200 rounded-2xl px-3.5 py-2.5 shadow-sm">
+            <Ionicons name="search" size={18} color="#9CA3AF" />
             <TextInput
               placeholder='Search "humba", "seafood", "karenderia"...'
               value={searchQuery}
               onChangeText={setSearchQuery}
-              className="flex-1 text-[13.5px] text-[#17191D] ml-2.5"
-              placeholderTextColor="#98A2B3"
+              className="flex-1 text-sm text-gray-900 ml-2.5 font-medium"
+              placeholderTextColor="#9CA3AF"
             />
             {searchQuery ? (
-              <Pressable onPress={() => setSearchQuery("")}>
-                <Ionicons name="close-circle" size={16} color="#98A2B3" />
+              <Pressable onPress={() => setSearchQuery("")} hitSlop={10}>
+                <Ionicons name="close-circle" size={18} color="#9CA3AF" />
               </Pressable>
             ) : null}
           </View>
         </View>
 
-        {/* 3. CATEGORY CHIP ROW */}
-        <View className="mb-3">
+        {/* 5. CATEGORY FILTER CHIPS */}
+        <View className="mb-4">
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 18 }}
+            contentContainerStyle={{ paddingHorizontal: 16 }}
           >
             {categories.map((c) => {
               const active = selectedCategory === c;
@@ -333,15 +428,15 @@ export default function MobileHomeScreen() {
                 <Pressable
                   key={c}
                   onPress={() => setSelectedCategory(c)}
-                  className={`mr-2 px-3.5 py-2 rounded-full border ${
+                  className={`mr-2 px-4 py-2 rounded-full border ${
                     active
-                      ? "bg-[#17191D] border-[#17191D]"
-                      : "bg-white border-[#E7EAEF]"
+                      ? "bg-gray-900 border-gray-900 shadow-sm"
+                      : "bg-white border-gray-200"
                   }`}
                 >
                   <Text
-                    className={`text-[12.5px] font-bold ${
-                      active ? "text-white" : "text-[#4B5563]"
+                    className={`text-xs font-bold ${
+                      active ? "text-white" : "text-gray-700"
                     }`}
                   >
                     {c}
@@ -352,144 +447,99 @@ export default function MobileHomeScreen() {
           </ScrollView>
         </View>
 
-        {/* 4. GUEST BANNER (Polite, uncrowded) */}
-        {!isLoggedIn && (
-          <View className="mx-4.5 mb-4 p-3.5 bg-[#FEF1E8] border border-[#FCE0CE] rounded-2xl flex-row items-center justify-between">
-            <View className="flex-1 pr-3">
-              <View className="flex-row items-center gap-1.5 mb-0.5">
-                <Ionicons name="sparkles" size={14} color="#EA5410" />
-                <Text className="font-extrabold text-[#17191D] text-xs">
-                  Browsing as Guest
-                </Text>
-              </View>
-              <Text className="text-[11.5px] text-[#4B5563] leading-snug">
-                Explore menus freely. Sign in when ready to order COD or reserve tables.
+        {/* 6. POPULAR NEAR YOU (High-Quality Foodie Restaurant Cards) */}
+        <View className="mb-5">
+          <View className="px-4 pb-2.5 flex-row items-baseline justify-between">
+            <View>
+              <Text className="text-lg font-black text-gray-900 tracking-tight">
+                Popular near you
+              </Text>
+              <Text className="text-xs text-gray-500 mt-0.5">
+                Top rated dining spots across Mati City
               </Text>
             </View>
-            <Pressable
-              onPress={() => router.push("/(mobile)/(tabs)/profile")}
-              className="bg-[#EA5410] px-3 py-1.5 rounded-xl shadow-xs"
-            >
-              <Text className="text-white font-extrabold text-xs">Sign In</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {/* 5. ML PERSONALIZATION: FOR YOU TODAY (Prototype Section) */}
-        {isLoggedIn && personalizationEnabled && (
-          <View className="mb-4">
-            <View className="px-4.5 pb-2 flex-row items-baseline justify-between">
-              <Text className="text-[16px] font-extrabold text-[#17191D]">
-                For you, {user?.name?.split(" ")[0] || "Foodie"} 🍲
-              </Text>
-              <Text className="text-[11px] font-semibold text-[#98A2B3]">
-                Based on your visits
-              </Text>
-            </View>
-
-            <View className="px-4.5">
-              <Pressable
-                onPress={() =>
-                  handleOpenRestaurant(
-                    mostVisitedStore?.name || "Mama Letty's Karenderia"
-                  )
-                }
-                className="bg-white rounded-2xl border border-[#E7EAEF] p-3 flex-row items-center gap-3 shadow-sm"
-              >
-                <View className="w-13 h-13 rounded-xl bg-[#FED7AA] items-center justify-center">
-                  <Text className="text-2xl">🍲</Text>
-                </View>
-                <View className="flex-1 min-w-0">
-                  <Text className="text-[13.5px] font-extrabold text-[#17191D] mb-0.5">
-                    Classic Pork Humba
-                  </Text>
-                  <Text className="text-[11.5px] text-[#4B5563] truncate">
-                    {mostVisitedStore?.name || "Mama Letty's"} · your most-visited spot
-                  </Text>
-                </View>
-                <View className="bg-[#F1EBFE] px-2 py-0.5 rounded-full">
-                  <Text className="text-[10.5px] font-extrabold text-[#7C3AED]">
-                    ML pick
-                  </Text>
-                </View>
-              </Pressable>
-            </View>
-          </View>
-        )}
-
-        {/* 6. POPULAR NEAR YOU (Restaurant Cards) */}
-        <View className="mb-4">
-          <View className="px-4.5 pb-2.5 flex-row items-baseline justify-between">
-            <Text className="text-[16px] font-extrabold text-[#17191D]">
-              Popular near you
-            </Text>
             <Pressable onPress={() => setSelectedCategory("All")}>
-              <Text className="text-[11.5px] font-bold text-[#EA5410]">
+              <Text className="text-xs font-bold text-[#EA5410]">
                 See all
               </Text>
             </Pressable>
           </View>
 
-          <View className="px-4.5 gap-3.5">
+          <View className="px-4 gap-4">
             {restaurantList.map((resto) => (
               <Pressable
                 key={resto.name}
                 onPress={() => handleOpenRestaurant(resto.name)}
-                className="bg-white rounded-2xl border border-[#E7EAEF] overflow-hidden shadow-sm active:scale-[0.985] transition-transform"
+                className="bg-white rounded-3xl border border-gray-200 overflow-hidden shadow-sm active:scale-[0.99] transition-transform"
               >
-                {/* Hero Banner with Emoji & Promo */}
-                <View
-                  style={{ backgroundColor: resto.bgColor || "#FED7AA" }}
-                  className="h-23 items-center justify-center relative"
-                >
-                  <Text className="text-4xl">{resto.emoji}</Text>
-                  {resto.promo ? (
-                    <View className="absolute top-2.5 left-2.5 bg-white/90 px-2 py-0.5 rounded-full shadow-xs">
-                      <Text className="text-[10px] font-extrabold text-[#17191D]">
-                        {resto.promo}
+                {/* Hero Food Photography Banner */}
+                <View className="h-44 w-full relative bg-gray-100">
+                  <Image
+                    source={{ uri: resto.imageUrl || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop&q=80" }}
+                    className="w-full h-full"
+                    resizeMode="cover"
+                  />
+
+                  {/* Gradient / Dark overlay on top for badge readability */}
+                  <View className="absolute inset-0 bg-black/15" />
+
+                  {/* Top Badges */}
+                  <View className="absolute top-3 left-3 right-3 flex-row items-center justify-between">
+                    <View className="bg-white/95 px-2.5 py-1 rounded-full shadow-sm flex-row items-center gap-1">
+                      <Ionicons name="bicycle" size={12} color="#EA5410" />
+                      <Text className="text-[10px] font-black text-gray-900">
+                        {resto.promo || "Fast Mati delivery"}
                       </Text>
                     </View>
-                  ) : null}
+
+                    <View className="bg-emerald-600/95 px-2.5 py-1 rounded-full shadow-sm flex-row items-center gap-1">
+                      <Ionicons name="restaurant-outline" size={11} color="white" />
+                      <Text className="text-[10px] font-black text-white">
+                        {resto.availableTables} tables open
+                      </Text>
+                    </View>
+                  </View>
                 </View>
 
-                {/* Card Content */}
-                <View className="p-3.5">
+                {/* Card Content & Details */}
+                <View className="p-4">
                   <View className="flex-row items-center justify-between mb-1">
-                    <Text className="text-[15px] font-extrabold text-[#17191D] flex-1 mr-2" numberOfLines={1}>
+                    <Text className="text-base font-black text-gray-900 flex-1 mr-2 tracking-tight" numberOfLines={1}>
                       {resto.name}
                     </Text>
-                    <View className="flex-row items-center gap-1">
-                      <Ionicons name="star" size={13} color="#D97706" />
-                      <Text className="text-[12px] font-extrabold text-[#17191D]">
+                    <View className="flex-row items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                      <Ionicons name="star" size={12} color="#D97706" />
+                      <Text className="text-xs font-black text-amber-900">
                         {resto.rating}
                       </Text>
-                      <Text className="text-[11px] text-[#98A2B3]">
+                      <Text className="text-[10px] text-amber-700 font-semibold">
                         ({resto.reviews || 84})
                       </Text>
                     </View>
                   </View>
 
-                  <Text className="text-[12px] text-[#4B5563] mb-2.5" numberOfLines={1}>
+                  <Text className="text-xs text-gray-500 font-medium mb-3" numberOfLines={1}>
                     {resto.category} · {resto.address.split(",")[0]}
                   </Text>
 
-                  {/* Clean meta pills in 1 row */}
-                  <View className="flex-row items-center gap-3">
-                    <View className="flex-row items-center gap-1">
-                      <Ionicons name="time-outline" size={13} color="#4B5563" />
-                      <Text className="text-[11.5px] font-semibold text-[#4B5563]">
+                  {/* Clean Metadata Pills */}
+                  <View className="flex-row items-center gap-3 pt-2.5 border-t border-gray-100">
+                    <View className="flex-row items-center gap-1.5">
+                      <Ionicons name="time-outline" size={14} color="#6B7280" />
+                      <Text className="text-xs font-bold text-gray-700">
                         {resto.deliveryTime || "20-30 min"}
                       </Text>
                     </View>
-                    <View className="flex-row items-center gap-1">
-                      <Ionicons name="bicycle-outline" size={13} color="#4B5563" />
-                      <Text className="text-[11.5px] font-semibold text-[#4B5563]">
+                    <View className="flex-row items-center gap-1.5">
+                      <Ionicons name="bicycle-outline" size={14} color="#6B7280" />
+                      <Text className="text-xs font-bold text-gray-700">
                         ₱{resto.deliveryFee || 35} fee
                       </Text>
                     </View>
-                    <View className="ml-auto bg-[#E7F7F0] px-2 py-0.5 rounded-full">
-                      <Text className="text-[10.5px] font-extrabold text-[#0E9F6E]">
-                        {resto.availableTables} tables open
+                    <View className="ml-auto flex-row items-center gap-1">
+                      <Ionicons name="checkmark-circle" size={13} color="#047857" />
+                      <Text className="text-[11px] font-bold text-emerald-800">
+                        Verified
                       </Text>
                     </View>
                   </View>
@@ -499,44 +549,60 @@ export default function MobileHomeScreen() {
           </View>
         </View>
 
-        {/* 7. TRENDING DISHES (Horizontal Carousel) */}
-        <View className="mb-6">
-          <View className="px-4.5 pb-2.5">
-            <Text className="text-[16px] font-extrabold text-[#17191D]">
+        {/* 7. TRENDING DISHES (Horizontal Food Carousel) */}
+        <View className="mb-4">
+          <View className="px-4 pb-2.5">
+            <Text className="text-lg font-black text-gray-900 tracking-tight">
               Trending dishes
+            </Text>
+            <Text className="text-xs text-gray-500 mt-0.5">
+              Popular orders enjoyed by Mati foodies today
             </Text>
           </View>
 
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 18 }}
+            contentContainerStyle={{ paddingHorizontal: 16 }}
           >
             {trendingDishes.map((dish) => (
               <Pressable
                 key={dish.id}
                 onPress={() => handleOpenCheckout(dish)}
-                className="w-38 mr-3 bg-white rounded-2xl border border-[#E7EAEF] overflow-hidden shadow-sm"
+                className="w-44 mr-3.5 bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm active:scale-[0.98] transition-transform"
               >
-                <View className="h-21 bg-[#FEF1E8] items-center justify-center">
-                  <Text className="text-3xl">{dish.emoji || "🍲"}</Text>
+                <View className="h-28 w-full bg-gray-100 relative">
+                  <Image
+                    source={{ uri: dish.imageUrl || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&auto=format&fit=crop&q=80" }}
+                    className="w-full h-full"
+                    resizeMode="cover"
+                  />
+                  <View className="absolute top-2 right-2 bg-white/90 px-2 py-0.5 rounded-full shadow-xs">
+                    <Text className="text-[10px] font-bold text-gray-800">★ {dish.rating}</Text>
+                  </View>
                 </View>
-                <View className="p-2.5">
+
+                <View className="p-3">
                   <Text
-                    className="text-[12.5px] font-extrabold text-[#17191D]"
+                    className="text-xs font-extrabold text-gray-900 leading-tight"
                     numberOfLines={1}
                   >
                     {dish.name}
                   </Text>
                   <Text
-                    className="text-[11px] text-[#98A2B3] mt-0.5"
+                    className="text-[11px] text-gray-500 mt-0.5"
                     numberOfLines={1}
                   >
                     {dish.store}
                   </Text>
-                  <Text className="text-[13px] font-black text-[#EA5410] mt-1.5">
-                    ₱{dish.price.toFixed(2)}
-                  </Text>
+                  <View className="flex-row items-center justify-between mt-2 pt-2 border-t border-gray-100">
+                    <Text className="text-sm font-black text-[#EA5410]">
+                      ₱{dish.price.toFixed(2)}
+                    </Text>
+                    <View className="w-6 h-6 rounded-full bg-orange-50 items-center justify-center border border-orange-200">
+                      <Ionicons name="add" size={14} color="#EA5410" />
+                    </View>
+                  </View>
                 </View>
               </Pressable>
             ))}
@@ -544,25 +610,7 @@ export default function MobileHomeScreen() {
         </View>
       </ScrollView>
 
-      {/* 8. ACTIVE ORDERS / CART FAB (Prototype Floating Action Pill) */}
-      {orders && orders.length > 0 && (
-        <Pressable
-          onPress={() => router.push("/(mobile)/(tabs)/orders")}
-          className="absolute bottom-5 right-4.5 bg-[#17191D] px-4.5 py-3 rounded-full flex-row items-center gap-2.5 shadow-lg active:scale-95 transition-transform"
-        >
-          <View className="bg-[#EA5410] rounded-full min-w-[20px] h-[20px] items-center justify-center px-1">
-            <Text className="text-white text-[10.5px] font-black">
-              {orders.length}
-            </Text>
-          </View>
-          <Text className="text-white text-[12.5px] font-bold">
-            Track Active Order
-          </Text>
-          <Ionicons name="arrow-forward" size={14} color="white" />
-        </Pressable>
-      )}
-
-      {/* 9. MODALS & SHEETS */}
+      {/* 8. MODALS & SHEETS */}
       <StoreQrScannerModal
         visible={showScanQrModal}
         onClose={() => setShowScanQrModal(false)}
@@ -602,6 +650,16 @@ export default function MobileHomeScreen() {
           setShowRestaurantModal(false);
           router.push("/(mobile)/(tabs)/map");
         }}
+        menuItems={foodItems.filter(
+          (f) =>
+            activeRestaurant?.name &&
+            (f.store.toLowerCase().includes(activeRestaurant.name.toLowerCase()) ||
+              activeRestaurant.name.toLowerCase().includes(f.store.toLowerCase()))
+        )}
+        onSelectDish={(dish) => {
+          setShowRestaurantModal(false);
+          handleOpenCheckout(dish);
+        }}
       />
 
       <ReservationSheet
@@ -617,9 +675,8 @@ export default function MobileHomeScreen() {
         onClose={() => setShowGuestGateModal(false)}
         actionDescription={guestGateAction}
         onQuickSignIn={() => {
-          loginAsRegistered("Juan dela Cruz", "juan.mati@example.com");
+          router.push("/(mobile)/auth/customer-login");
           setShowGuestGateModal(false);
-          Alert.alert("Welcome, Juan!", "You are now signed in.");
         }}
         onNavigateToAuth={() => {
           setShowGuestGateModal(false);

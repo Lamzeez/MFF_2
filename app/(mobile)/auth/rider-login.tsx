@@ -8,24 +8,58 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, Redirect } from "expo-router";
+import { useSession } from "../../../context/SessionContext";
+import { authMessage } from "../../../services/auth";
+import { getSupabaseClient } from "../../../lib/supabase/client";
+import { ENFORCE_STRICT_PLATFORM_GUARDS, isDesktopDevice } from "../../../lib/platform-policy";
 
 export default function RiderLoginScreen() {
+  const { width } = useWindowDimensions();
+  if (ENFORCE_STRICT_PLATFORM_GUARDS && isDesktopDevice(width)) {
+    return <Redirect href="/portal" />;
+  }
+
   const router = useRouter();
+  const { signIn, logoutToGuest } = useSession();
 
-  const [riderId, setRiderId] = useState(__DEV__ ? "R-402" : "");
-  const [riderPin, setRiderPin] = useState(__DEV__ ? "1234" : "");
+  const [riderEmail, setRiderEmail] = useState("");
+  const [riderPassword, setRiderPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
-    if (!riderId.trim() || !riderPin.trim()) {
-      Alert.alert("Credentials Required", "Please enter your Rider ID / Phone and PIN.");
+  const handleLogin = async () => {
+    if (!riderEmail.trim() || !riderPassword.trim()) {
+      Alert.alert("Credentials Required", "Please enter your Rider email and password.");
       return;
     }
 
-    router.replace("/(mobile)/rider");
+    setLoading(true);
+    try {
+      await signIn(riderEmail.trim(), riderPassword);
+      const client = getSupabaseClient();
+      const { data: roles, error: rolesError } = await client.rpc("get_my_application_roles");
+      if (rolesError || !roles || !roles.includes("rider")) {
+        await logoutToGuest();
+        Alert.alert(
+          "Rider Access Denied",
+          "This account is not authorized as an active delivery rider in Mati City. Please apply or wait for admin approval."
+        );
+        return;
+      }
+
+      router.replace("/(mobile)/rider");
+    } catch (err: any) {
+      const msg = authMessage(err);
+      Alert.alert("Sign In Failed", err.message && !err.code ? err.message : msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -69,11 +103,12 @@ export default function RiderLoginScreen() {
 
           <View className="gap-4 mb-6">
             <View>
-              <Text className="text-xs font-bold text-gray-700 mb-1.5">Rider ID / Phone *</Text>
+              <Text className="text-xs font-bold text-gray-700 mb-1.5">Rider Email *</Text>
               <TextInput
-                placeholder="e.g. R-402 or 0917-xxx-xxxx"
-                value={riderId}
-                onChangeText={setRiderId}
+                placeholder="e.g. rider.juan@mati-foodfinder.com"
+                value={riderEmail}
+                onChangeText={setRiderEmail}
+                keyboardType="email-address"
                 className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-3 text-sm text-gray-900"
                 placeholderTextColor="#9ca3af"
                 autoCapitalize="none"
@@ -81,25 +116,43 @@ export default function RiderLoginScreen() {
             </View>
 
             <View>
-              <Text className="text-xs font-bold text-gray-700 mb-1.5">Security PIN *</Text>
-              <TextInput
-                placeholder="••••"
-                value={riderPin}
-                onChangeText={setRiderPin}
-                keyboardType="number-pad"
-                maxLength={6}
-                secureTextEntry
-                className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-3 text-sm text-gray-900"
-                placeholderTextColor="#9ca3af"
-              />
+              <Text className="text-xs font-bold text-gray-700 mb-1.5">Password *</Text>
+              <View className="relative flex-row items-center">
+                <TextInput
+                  placeholder="••••••••"
+                  value={riderPassword}
+                  onChangeText={setRiderPassword}
+                  secureTextEntry={!showPassword}
+                  className="flex-1 bg-gray-50 border border-gray-200 rounded-xl pl-3.5 pr-11 py-3 text-sm text-gray-900"
+                  placeholderTextColor="#9ca3af"
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                  onPress={() => setShowPassword(!showPassword)}
+                  hitSlop={10}
+                  className="absolute right-3.5 z-10"
+                >
+                  <Ionicons
+                    name={showPassword ? "eye-off-outline" : "eye-outline"}
+                    size={20}
+                    color="#6b7280"
+                  />
+                </Pressable>
+              </View>
             </View>
           </View>
 
           <Pressable
             onPress={handleLogin}
+            disabled={loading}
             className="w-full py-3.5 bg-sky-600 rounded-xl items-center shadow-md mb-4"
           >
-            <Text className="text-white font-bold text-sm">Verify & Enter Rider Mode</Text>
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text className="text-white font-bold text-sm">Verify & Enter Rider Mode</Text>
+            )}
           </Pressable>
 
           <Pressable

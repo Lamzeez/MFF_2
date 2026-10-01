@@ -5,13 +5,12 @@ import {
   ScrollView,
   TextInput,
   Pressable,
-  Modal,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { RestaurantProfile } from "../../types/restaurant";
+import { BottomSheetModal } from "../ui/BottomSheetModal";
 
 interface ReservationSheetProps {
   visible: boolean;
@@ -44,7 +43,7 @@ export function ReservationSheet({
 
   const activeResto = restaurants[selectedResto] || Object.values(restaurants)[0];
 
-  const handleSubmit = () => {
+  const handleSubmit = (handleDismiss: () => void) => {
     onConfirmReservation({
       restaurantName: selectedResto,
       partySize,
@@ -53,42 +52,53 @@ export function ReservationSheet({
       seatingPreference: seating,
       specialNotes: notes.trim(),
     });
-    onClose();
+    handleDismiss();
   };
 
   return (
-    <Modal visible={visible} transparent={true} animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1 justify-end bg-black/60"
-      >
-        <View className="bg-white rounded-t-3xl p-5 max-h-[92%]">
+    <BottomSheetModal visible={visible} onClose={onClose} heightPercent={0.88}>
+      {({ handleDismiss }) => (
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          className="flex-1 bg-white p-5 flex-col"
+        >
+          {/* Visual Drag Handle Pill */}
+          <View className="w-12 h-1.5 rounded-full bg-gray-300 self-center mb-3" />
+
           {/* Header */}
           <View className="flex-row justify-between items-center pb-3 border-b border-gray-100">
-            <View>
-              <View className="flex-row items-center gap-1.5 mb-0.5">
-                <View className="bg-teal-100 px-2 py-0.5 rounded-full">
-                  <Text className="text-[10px] font-black text-teal-800 uppercase tracking-wider">
+            <View className="flex-1 mr-2">
+              <View className="flex-row items-center gap-2 mb-1">
+                <View className="bg-orange-100 px-2.5 py-0.5 rounded-full">
+                  <Text className="text-[10px] font-black text-[#EA5410] uppercase tracking-wider">
                     Dine-in Booking
                   </Text>
                 </View>
-                <Text className="text-xs text-teal-800 font-bold">
-                  🟢 {activeResto?.availableTables || 4} Tables Free
-                </Text>
+                <View className="bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex-row items-center gap-1">
+                  <View className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                  <Text className="text-[10px] text-emerald-800 font-bold">
+                    {activeResto?.availableTables || 4} Tables Open
+                  </Text>
+                </View>
               </View>
-              <Text className="text-lg font-black text-gray-900">{selectedResto}</Text>
+              <Text className="text-xl font-black text-gray-900 tracking-tight" numberOfLines={1}>
+                {selectedResto}
+              </Text>
             </View>
+
             <Pressable
-              onPress={onClose}
-              className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center"
+              onPress={handleDismiss}
+              accessibilityRole="button"
+              accessibilityLabel="Close reservation sheet"
+              className="w-9 h-9 rounded-full bg-gray-100 items-center justify-center active:bg-gray-200"
             >
-              <Ionicons name="close" size={20} color="#4b5563" />
+              <Ionicons name="close" size={20} color="#374151" />
             </Pressable>
           </View>
 
-          <ScrollView className="mt-3" showsVerticalScrollIndicator={false}>
+          <ScrollView className="flex-1 mt-3.5" showsVerticalScrollIndicator={false}>
             {/* Restaurant Selector Pills */}
-            <Text className="text-xs font-bold text-gray-700 mb-1.5">Select Restaurant *</Text>
+            <Text className="text-xs font-bold text-gray-700 mb-2">Select Restaurant *</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -103,7 +113,7 @@ export function ReservationSheet({
                     onPress={() => setSelectedResto(resto)}
                     className={`mr-2 px-3.5 py-2 rounded-xl border ${
                       isSelected
-                        ? "bg-teal-700 border-teal-700"
+                        ? "bg-[#EA5410] border-[#EA5410] shadow-xs"
                         : "bg-gray-100 border-gray-200"
                     }`}
                   >
@@ -120,7 +130,7 @@ export function ReservationSheet({
             </ScrollView>
 
             {/* Tap 1: Party Size Selector */}
-            <Text className="text-xs font-bold text-gray-700 mb-1.5">Party Size (Guests) *</Text>
+            <Text className="text-xs font-bold text-gray-700 mb-2">Party Size (Guests) *</Text>
             <View className="flex-row gap-2 mb-4">
               {[1, 2, 4, 6, 8].map((num) => (
                 <Pressable
@@ -128,7 +138,7 @@ export function ReservationSheet({
                   onPress={() => setPartySize(num)}
                   className={`flex-1 py-2.5 rounded-xl border items-center justify-center ${
                     partySize === num
-                      ? "bg-emerald-700 border-emerald-700"
+                      ? "bg-[#EA5410] border-[#EA5410] shadow-xs"
                       : "bg-gray-50 border-gray-200"
                   }`}
                 >
@@ -144,14 +154,16 @@ export function ReservationSheet({
             </View>
 
             {/* Tap 2: Time Slot Pills */}
-            <Text className="text-xs font-bold text-gray-700 mb-1.5">Time Slot (Tonight) *</Text>
+            <Text className="text-xs font-bold text-gray-700 mb-2">Time Slot (Tonight) *</Text>
             <View className="flex-row flex-wrap gap-2 mb-4">
               {["6:00 PM", "6:30 PM", "7:00 PM", "7:30 PM", "8:00 PM", "8:30 PM"].map((t) => (
                 <Pressable
                   key={t}
                   onPress={() => setTime(t)}
                   className={`px-3.5 py-2 rounded-xl border ${
-                    time === t ? "bg-teal-700 border-teal-700" : "bg-gray-50 border-gray-200"
+                    time === t
+                      ? "bg-[#EA5410] border-[#EA5410] shadow-xs"
+                      : "bg-gray-50 border-gray-200"
                   }`}
                 >
                   <Text
@@ -164,15 +176,15 @@ export function ReservationSheet({
             </View>
 
             {/* Tap 3: Seating Preference */}
-            <Text className="text-xs font-bold text-gray-700 mb-1.5">Seating Preference</Text>
+            <Text className="text-xs font-bold text-gray-700 mb-2">Seating Preference</Text>
             <View className="flex-row gap-2 mb-4">
               {["Bayside Sea Breeze", "Indoor AC", "Family Booth"].map((opt) => (
                 <Pressable
                   key={opt}
                   onPress={() => setSeating(opt)}
-                  className={`flex-1 py-2 rounded-xl border items-center justify-center ${
+                  className={`flex-1 py-2.5 rounded-xl border items-center justify-center ${
                     seating === opt
-                      ? "bg-emerald-700 border-emerald-700"
+                      ? "bg-[#EA5410] border-[#EA5410] shadow-xs"
                       : "bg-gray-50 border-gray-200"
                   }`}
                 >
@@ -188,30 +200,30 @@ export function ReservationSheet({
             </View>
 
             {/* Special Instructions */}
-            <Text className="text-xs font-bold text-gray-700 mb-1">
+            <Text className="text-xs font-bold text-gray-700 mb-1.5">
               Special Requests (Optional)
             </Text>
             <TextInput
               placeholder="e.g. High chair needed, celebrating anniversary"
               value={notes}
               onChangeText={setNotes}
-              className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 mb-5"
-              placeholderTextColor="#9ca3af"
+              className="bg-gray-50 border border-gray-200 rounded-2xl px-3.5 py-2.5 text-sm text-gray-900 mb-5 font-medium"
+              placeholderTextColor="#9CA3AF"
             />
 
             {/* Submit Action */}
             <Pressable
-              onPress={handleSubmit}
-              className="bg-teal-700 py-3.5 rounded-xl flex-row items-center justify-center gap-2 shadow-xs mb-3"
+              onPress={() => handleSubmit(handleDismiss)}
+              className="bg-[#EA5410] py-3.5 rounded-2xl flex-row items-center justify-center gap-2 shadow-sm active:opacity-95 mb-6"
             >
               <Ionicons name="calendar" size={17} color="white" />
-              <Text className="text-white font-extrabold text-sm">
-                Confirm Reservation ({partySize} Guests • {time})
+              <Text className="text-white font-black text-sm">
+                Confirm Reservation ({partySize} Guests · {time})
               </Text>
             </Pressable>
           </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+        </KeyboardAvoidingView>
+      )}
+    </BottomSheetModal>
   );
 }

@@ -11,6 +11,7 @@ export const FOOD_ITEMS: FoodItem[] = [
     rating: "4.9",
     deliveryTime: "25-35 min",
     emoji: "🐟",
+    imageUrl: "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=500&auto=format&fit=crop&q=80",
   },
   {
     id: 2,
@@ -22,6 +23,7 @@ export const FOOD_ITEMS: FoodItem[] = [
     rating: "4.8",
     deliveryTime: "15-20 min",
     emoji: "🍲",
+    imageUrl: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&auto=format&fit=crop&q=80",
   },
   {
     id: 3,
@@ -33,6 +35,7 @@ export const FOOD_ITEMS: FoodItem[] = [
     rating: "4.7",
     deliveryTime: "20-30 min",
     emoji: "🐟",
+    imageUrl: "https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=500&auto=format&fit=crop&q=80",
   },
   {
     id: 4,
@@ -44,6 +47,7 @@ export const FOOD_ITEMS: FoodItem[] = [
     rating: "4.6",
     deliveryTime: "30-40 min",
     emoji: "🥣",
+    imageUrl: "https://images.unsplash.com/photo-1547592180-85f173990554?w=500&auto=format&fit=crop&q=80",
   },
   {
     id: 5,
@@ -55,5 +59,6 @@ export const FOOD_ITEMS: FoodItem[] = [
     rating: "4.9",
     deliveryTime: "15-25 min",
     emoji: "🍢",
+    imageUrl: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=500&auto=format&fit=crop&q=80",
   },
 ];

@@ -18,9 +18,9 @@ export default function VerificationPending() {
           This usually takes less than 24 hours. We will email you once approved!
         </Text>
 
-        <Link href="/(web)/portal" asChild>
-          <Pressable className="w-full bg-gray-900 py-4 rounded-xl items-center hover:bg-black transition-colors">
-            <Text className="text-white font-bold text-lg">Return to Portal</Text>
+        <Link href="/portal" asChild>
+          <Pressable className="w-full bg-[#111827] py-4 rounded-2xl items-center hover:bg-black transition-colors shadow-sm">
+            <Text className="text-white font-extrabold text-base">Return to Portal</Text>
           </Pressable>
         </Link>
         

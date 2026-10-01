@@ -8,27 +8,51 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, Redirect } from "expo-router";
 import { MATI_BARANGAYS } from "../../../mock/barangays";
+import { useSession } from "../../../context/SessionContext";
+import { authMessage } from "../../../services/auth";
+import { ENFORCE_STRICT_PLATFORM_GUARDS, isDesktopDevice } from "../../../lib/platform-policy";
 
 export default function RiderRegisterScreen() {
+  const { width } = useWindowDimensions();
+  if (ENFORCE_STRICT_PLATFORM_GUARDS && isDesktopDevice(width)) {
+    return <Redirect href="/portal" />;
+  }
+
   const router = useRouter();
+  const { signUp } = useSession();
 
   const [riderName, setRiderName] = useState("");
+  const [riderEmail, setRiderEmail] = useState("");
+  const [riderPassword, setRiderPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [riderPhone, setRiderPhone] = useState("");
   const [riderMotorcycle, setRiderMotorcycle] = useState("");
   const [riderPlate, setRiderPlate] = useState("");
   const [riderLicense, setRiderLicense] = useState("");
   const [riderBarangay, setRiderBarangay] = useState("Central (Poblacion)");
-  const [riderNewPin, setRiderNewPin] = useState("");
   const [riderCodAgreed, setRiderCodAgreed] = useState(true);
+  const [loading, setLoading] = useState(false);
 
-  const handleRegister = () => {
-    if (!riderName.trim() || !riderPhone.trim() || !riderMotorcycle.trim() || !riderNewPin.trim()) {
-      Alert.alert("Missing Fields", "Please fill in your Name, Phone, Motorcycle Model, and 4-Digit PIN.");
+  const handleRegister = async () => {
+    if (
+      !riderName.trim() ||
+      !riderEmail.trim() ||
+      !riderPassword.trim() ||
+      !riderPhone.trim() ||
+      !riderMotorcycle.trim()
+    ) {
+      Alert.alert("Missing Fields", "Please fill in your Name, Email, Password, Phone, and Motorcycle details.");
+      return;
+    }
+    if (riderPassword.trim().length < 12) {
+      Alert.alert("Password Too Short", "Please choose a strong password with at least 12 characters.");
       return;
     }
     if (!riderCodAgreed) {
@@ -36,11 +60,20 @@ export default function RiderRegisterScreen() {
       return;
     }
 
-    Alert.alert(
-      "Rider Application Approved! 🏍️",
-      `Welcome ${riderName}! You have been registered as Independent Courier #M-403 in Mati City.`,
-      [{ text: "Open Rider Mode", onPress: () => router.replace("/(mobile)/rider") }]
-    );
+    setLoading(true);
+    try {
+      await signUp(riderName.trim(), riderEmail.trim(), riderPassword, riderPhone.trim());
+      Alert.alert(
+        "Rider Application Submitted! 🏍️",
+        `Thank you ${riderName}! We have sent a verification email to ${riderEmail}. Please verify your email. Once approved by the Mati FoodFinder admin team, your rider account will be active!`,
+        [{ text: "Go to Rider Login", onPress: () => router.replace("/(mobile)/auth/rider-login") }]
+      );
+    } catch (err: any) {
+      const msg = authMessage(err);
+      Alert.alert("Registration Failed", err.message && !err.code ? err.message : msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -139,17 +172,41 @@ export default function RiderRegisterScreen() {
             ))}
           </ScrollView>
 
-          <Text className="text-xs font-bold text-gray-700 mb-1.5">Create 4-Digit Shift Login PIN *</Text>
+          <Text className="text-xs font-bold text-gray-700 mb-1.5">Rider Email (For Account Sign-In) *</Text>
           <TextInput
-            placeholder="••••"
-            value={riderNewPin}
-            onChangeText={setRiderNewPin}
-            keyboardType="number-pad"
-            maxLength={4}
-            secureTextEntry
-            className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-3 text-sm text-gray-900 mb-4"
+            placeholder="e.g. roberto.tan@example.com"
+            value={riderEmail}
+            onChangeText={setRiderEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-3 text-sm text-gray-900 mb-3.5"
             placeholderTextColor="#9ca3af"
           />
+
+          <Text className="text-xs font-bold text-gray-700 mb-1.5">Account Password (Min. 12 characters) *</Text>
+          <View className="relative flex-row items-center mb-4">
+            <TextInput
+              placeholder="••••••••••••"
+              value={riderPassword}
+              onChangeText={setRiderPassword}
+              secureTextEntry={!showPassword}
+              className="flex-1 bg-gray-50 border border-gray-200 rounded-xl pl-3.5 pr-11 py-3 text-sm text-gray-900"
+              placeholderTextColor="#9ca3af"
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+              onPress={() => setShowPassword(!showPassword)}
+              hitSlop={10}
+              className="absolute right-3.5 z-10"
+            >
+              <Ionicons
+                name={showPassword ? "eye-off-outline" : "eye-outline"}
+                size={20}
+                color="#6b7280"
+              />
+            </Pressable>
+          </View>
 
           {/* COD Remittance Checkbox */}
           <Pressable
@@ -168,9 +225,14 @@ export default function RiderRegisterScreen() {
 
           <Pressable
             onPress={handleRegister}
+            disabled={loading}
             className="w-full py-3.5 bg-sky-600 rounded-xl items-center shadow-md mb-6"
           >
-            <Text className="text-white font-bold text-sm">Submit Rider Application</Text>
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text className="text-white font-bold text-sm">Submit Rider Application</Text>
+            )}
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>

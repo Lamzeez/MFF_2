@@ -1,10 +1,16 @@
-import { Tabs } from "expo-router";
+import { Tabs, Redirect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../context/AuthContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { View, Platform } from "react-native";
+import { View, Platform, useWindowDimensions } from "react-native";
+import { ENFORCE_STRICT_PLATFORM_GUARDS, isDesktopDevice } from "../../../lib/platform-policy";
 
 export default function MobileTabsLayout() {
+  const { width } = useWindowDimensions();
+  if (ENFORCE_STRICT_PLATFORM_GUARDS && isDesktopDevice(width)) {
+    return <Redirect href="/portal" />;
+  }
+
   const { isLoggedIn } = useAuth();
   const insets = useSafeAreaInsets();
 

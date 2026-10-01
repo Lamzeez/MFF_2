@@ -24,6 +24,7 @@ export interface SocialPost {
   photoEmoji?: string;
   photoBg?: string;
   photoCaption?: string;
+  imageUrl?: string;
   likes: number;
   hasLiked: boolean;
   comments: FeedComment[];

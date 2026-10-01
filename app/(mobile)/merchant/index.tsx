@@ -9,12 +9,14 @@ import {
   Modal,
   Alert,
   Platform,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Link, useRouter } from "expo-router";
+import { Link, useRouter, Redirect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../context/AuthContext";
 import { OrderStatus } from "../../../types/order";
+import { ENFORCE_STRICT_PLATFORM_GUARDS, isDesktopDevice } from "../../../lib/platform-policy";
 
 interface KitchenOrder {
   id: string;
@@ -30,6 +32,11 @@ interface KitchenOrder {
 }
 
 export default function MobileMerchantMode() {
+  const { width } = useWindowDimensions();
+  if (ENFORCE_STRICT_PLATFORM_GUARDS && isDesktopDevice(width)) {
+    return <Redirect href="/(web)/auth/store-login" />;
+  }
+
   const router = useRouter();
   const { reservations, updateReservationStatus } = useAuth();
   

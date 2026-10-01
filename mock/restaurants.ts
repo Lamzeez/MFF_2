@@ -25,6 +25,7 @@ export const MATI_RESTAURANTS_DATA: Record<string, RestaurantProfile> = {
     deliveryTime: "15-25 min",
     promo: "Free sabaw refill",
     bgColor: "#FED7AA",
+    imageUrl: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop&q=80",
   },
   "Mati Baywalk Seafood Grill": {
     name: "Mati Baywalk Seafood Grill",
@@ -41,6 +42,7 @@ export const MATI_RESTAURANTS_DATA: Record<string, RestaurantProfile> = {
     deliveryTime: "25-35 min",
     promo: "Fresh catch daily",
     bgColor: "#BAE6FD",
+    imageUrl: "https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=800&auto=format&fit=crop&q=80",
   },
   "Subangan Street Grills": {
     name: "Subangan Street Grills",
@@ -57,6 +59,7 @@ export const MATI_RESTAURANTS_DATA: Record<string, RestaurantProfile> = {
     deliveryTime: "20-30 min",
     promo: "Buy 10 skewers get 1",
     bgColor: "#FECDD3",
+    imageUrl: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&auto=format&fit=crop&q=80",
   },
   "Dahican Beach Bites": {
     name: "Dahican Beach Bites",
@@ -73,6 +76,7 @@ export const MATI_RESTAURANTS_DATA: Record<string, RestaurantProfile> = {
     deliveryTime: "30-40 min",
     promo: "Free halo-halo upsell",
     bgColor: "#DDD6FE",
+    imageUrl: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80",
   },
   "Aling Nena's Kitchen": {
     name: "Aling Nena's Kitchen",
@@ -89,5 +93,6 @@ export const MATI_RESTAURANTS_DATA: Record<string, RestaurantProfile> = {
     deliveryTime: "20-30 min",
     promo: "Hot sabaw guarantee",
     bgColor: "#FEF08A",
+    imageUrl: "https://images.unsplash.com/photo-1547592180-85f173990554?w=800&auto=format&fit=crop&q=80",
   },
 };
