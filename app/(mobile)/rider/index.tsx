@@ -1,9 +1,36 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, ScrollView, Pressable, Switch, Modal, Alert, TextInput, Platform, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, Redirect } from "expo-router";
 import { ENFORCE_STRICT_PLATFORM_GUARDS, isDesktopDevice } from "../../../lib/platform-policy";
+import {
+  fetchAvailableRiderJobs,
+  fetchRiderDeliveries,
+  claimRiderJob,
+  completeDeliveryWithPin,
+  subscribeToOrders,
+  LiveOrder,
+} from "../../../services/orders";
+import { useSession } from "../../../context/SessionContext";
+
+interface RiderJob {
+  id: string | number;
+  rawOrderId?: string;
+  orderNumber?: string;
+  restaurant: string;
+  pickupArea: string;
+  dropoffArea: string;
+  distance: string;
+  estTime: string;
+  deliveryFee: string;
+  deliveryFeeNum: number;
+  codAmount: string;
+  customerName: string;
+  customerPhone: string;
+  items: string;
+  completionPin: string;
+}
 
 export default function MobileRiderMode() {
   const { width } = useWindowDimensions();
@@ -12,8 +39,9 @@ export default function MobileRiderMode() {
   }
 
   const router = useRouter();
+  const { identity } = useSession();
   const [isOnline, setIsOnline] = useState(true);
-  const [activeJobId, setActiveJobId] = useState<number | null>(null);
+  const [activeJobId, setActiveJobId] = useState<string | number | null>(null);
   const [jobStage, setJobStage] = useState<"heading_to_store" | "picked_up" | "arrived">("heading_to_store");
   const [showHandshakeModal, setShowHandshakeModal] = useState(false);
   const [handshakePin, setHandshakePin] = useState("");
@@ -21,49 +49,101 @@ export default function MobileRiderMode() {
   const [todayEarnings, setTodayEarnings] = useState(620.0);
   const [completedTrips, setCompletedTrips] = useState(7);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [availableJobs, setAvailableJobs] = useState<RiderJob[]>([]);
 
-  const [availableJobs, setAvailableJobs] = useState([
-    {
-      id: 2048,
-      restaurant: "Mama Letty's Karenderia",
-      pickupArea: "Central Public Market, Mati City",
-      dropoffArea: "Madang District, Mati City",
-      distance: "2.1 km",
-      estTime: "15 min",
-      deliveryFee: "₱65.00",
-      deliveryFeeNum: 65,
-      codAmount: "₱220.00",
-      customerName: "Maria Santos",
-      customerPhone: "0917-889-1234",
-      items: "2x Pork Humba, 2x Extra Rice",
-      completionPin: "4821",
-    },
-    {
-      id: 2049,
-      restaurant: "Mati Baywalk Seafood Grill",
-      pickupArea: "Mati Baywalk Park",
-      dropoffArea: "Dahican Beach Resort Area",
-      distance: "6.8 km",
-      estTime: "25 min",
-      deliveryFee: "₱120.00",
-      deliveryFeeNum: 120,
-      codAmount: "₱580.00",
-      customerName: "John Reyes",
-      customerPhone: "0928-554-9876",
-      items: "1x Tuna Panga Grill, 1x Kinilaw",
-      completionPin: "3914",
-    },
-  ]);
+  const loadRiderJobs = async () => {
+    try {
+      const [jobs, myDeliveries] = await Promise.all([
+        fetchAvailableRiderJobs(),
+        fetchRiderDeliveries(),
+      ]);
 
-  const acceptJob = (id: number) => {
+      const mappedJobs: RiderJob[] = jobs.map((o) => ({
+        id: o.orderNumber.replace("MFF-", "") || o.id.slice(0, 5),
+        rawOrderId: o.id,
+        orderNumber: o.orderNumber,
+        restaurant: o.storeName,
+        pickupArea: o.storeAddress || "Mati City",
+        dropoffArea: `${o.deliveryAddress}, Brgy. ${o.barangay}`,
+        distance: "2.1 km",
+        estTime: "15 min",
+        deliveryFee: `₱${o.deliveryFee}.00`,
+        deliveryFeeNum: o.deliveryFee || 35,
+        codAmount: `₱${o.total.toFixed(2)}`,
+        customerName: o.customerName || "Customer",
+        customerPhone: o.customerPhone || "Mati City",
+        items: o.items.map((i) => `${i.quantity}x ${i.name}`).join(", "),
+        completionPin: o.handshakePin,
+      }));
+      setAvailableJobs(mappedJobs);
+
+      if (myDeliveries.completed.length > 0) {
+        const earned = myDeliveries.completed.reduce((acc, c) => acc + (c.deliveryFee || 35), 0);
+        setTodayEarnings(620.0 + earned);
+        setCompletedTrips(7 + myDeliveries.completed.length);
+      }
+
+      if (myDeliveries.active.length > 0) {
+        const activeO = myDeliveries.active[0];
+        const activeMapped: RiderJob = {
+          id: activeO.orderNumber.replace("MFF-", "") || activeO.id.slice(0, 5),
+          rawOrderId: activeO.id,
+          orderNumber: activeO.orderNumber,
+          restaurant: activeO.storeName,
+          pickupArea: activeO.storeAddress || "Mati City",
+          dropoffArea: `${activeO.deliveryAddress}, Brgy. ${activeO.barangay}`,
+          distance: "2.1 km",
+          estTime: "15 min",
+          deliveryFee: `₱${activeO.deliveryFee}.00`,
+          deliveryFeeNum: activeO.deliveryFee || 35,
+          codAmount: `₱${activeO.total.toFixed(2)}`,
+          customerName: activeO.customerName || "Customer",
+          customerPhone: activeO.customerPhone || "Mati City",
+          items: activeO.items.map((i) => `${i.quantity}x ${i.name}`).join(", "),
+          completionPin: activeO.handshakePin,
+        };
+        setActiveJobId(activeMapped.id);
+        // Ensure active job is in availableJobs so find() works
+        setAvailableJobs((prev) => {
+          if (!prev.some((j) => j.id === activeMapped.id)) {
+            return [activeMapped, ...prev];
+          }
+          return prev;
+        });
+      }
+    } catch (err) {
+      console.error("Error loading rider jobs:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadRiderJobs();
+    const unsubscribe = subscribeToOrders(null, loadRiderJobs);
+    return () => unsubscribe();
+  }, []);
+
+  const acceptJob = async (id: number | string) => {
+    const currentJob = availableJobs.find((j) => j.id === id);
+    if (!currentJob) return;
+
+    if (currentJob.rawOrderId) {
+      try {
+        await claimRiderJob(currentJob.rawOrderId);
+      } catch (err: any) {
+        Alert.alert("Claim Job Error", err?.message || "This delivery job is no longer available.");
+        loadRiderJobs();
+        return;
+      }
+    }
+
     setActiveJobId(id);
     setJobStage("heading_to_store");
     setCashCollectedConfirmed(false);
     setHandshakePin("");
-    Alert.alert("Job Accepted! 🛵", `Accepted Delivery #MFF-${id}! Navigate to restaurant for pickup.`);
+    Alert.alert("Job Accepted! 🛵", `Accepted Delivery #${currentJob.orderNumber || id}! Navigate to restaurant for pickup.`);
   };
 
-  const handleVerifyHandshakeAndComplete = () => {
+  const handleVerifyHandshakeAndComplete = async () => {
     if (!cashCollectedConfirmed) {
       Alert.alert(
         "Cash Collection Required",
@@ -83,6 +163,15 @@ export default function MobileRiderMode() {
       return;
     }
 
+    if (currentJob?.rawOrderId) {
+      try {
+        await completeDeliveryWithPin(currentJob.rawOrderId, handshakePin.trim() || expectedPin);
+      } catch (err: any) {
+        Alert.alert("Delivery Completion Error", err?.message || "Failed to complete delivery in Supabase.");
+        return;
+      }
+    }
+
     const fee = currentJob?.deliveryFeeNum || 65;
     setTodayEarnings((prev) => prev + fee);
     setCompletedTrips((prev) => prev + 1);
@@ -94,6 +183,7 @@ export default function MobileRiderMode() {
       "Delivery Completed! 🎉",
       `Cash on Delivery collected successfully! ₱${fee}.00 delivery fee has been credited to your Rider Wallet.`
     );
+    loadRiderJobs();
   };
 
   const handleExitToPortal = () => {

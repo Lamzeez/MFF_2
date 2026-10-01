@@ -1,115 +1,64 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, ScrollView, Pressable, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../context/AuthContext";
-import { useRouter } from "expo-router";
+import { useRouter, Redirect } from "expo-router";
+import { fetchCustomerOrders, subscribeToOrders, LiveOrder } from "../../../services/orders";
+import {
+  fetchCustomerReservations,
+  subscribeToCustomerReservations,
+  updateReservationStatus,
+  CustomerReservation,
+} from "../../../services/reservations";
 
 export default function MobileOrdersScreen() {
-  const { isLoggedIn, user, orders, reservations } = useAuth();
+  const { isLoggedIn, user } = useAuth();
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<"deliveries" | "reservations">("deliveries");
+  const [liveOrders, setLiveOrders] = useState<LiveOrder[]>([]);
+  const [liveReservations, setLiveReservations] = useState<CustomerReservation[]>([]);
 
+  const loadLiveOrders = async () => {
+    try {
+      const data = await fetchCustomerOrders();
+      setLiveOrders(data);
+    } catch (err) {
+      console.error("Error fetching live orders:", err);
+    }
+  };
+
+  const loadLiveReservations = async () => {
+    try {
+      const data = await fetchCustomerReservations();
+      setLiveReservations(data);
+    } catch (err) {
+      console.error("Error fetching live reservations:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      loadLiveOrders();
+      loadLiveReservations();
+      const unsubOrders = subscribeToOrders(null, loadLiveOrders);
+      const unsubReservations = user?.id
+        ? subscribeToCustomerReservations(user.id, loadLiveReservations)
+        : () => {};
+      return () => {
+        unsubOrders();
+        unsubReservations();
+      };
+    }
+  }, [isLoggedIn, user?.id]);
+
+  const displayOrders = liveOrders;
+  const displayReservations = liveReservations;
+
+  // Orders screen is strictly for registered customers. Guest users are redirected to Home.
   if (!isLoggedIn) {
-    return (
-      <SafeAreaView className="flex-1 bg-[#F8FAFC]">
-        {/* Top Header */}
-        <View className="px-5 pt-3 pb-3 bg-white border-b border-gray-100 flex-row justify-between items-center shadow-xs">
-          <View>
-            <Text className="text-[11px] font-extrabold text-[#EA5410] uppercase tracking-wider">
-              MATI ORDERS
-            </Text>
-            <Text className="text-xl font-black text-gray-900 tracking-tight">
-              Track & History
-            </Text>
-          </View>
-          <Pressable
-            onPress={() => router.push("/(mobile)/auth/customer-login")}
-            className="bg-[#EA5410]/10 border border-[#EA5410]/20 px-3.5 py-1.5 rounded-full flex-row items-center gap-1.5"
-          >
-            <Ionicons name="log-in-outline" size={15} color="#EA5410" />
-            <Text className="text-xs font-bold text-[#EA5410]">Sign In</Text>
-          </Pressable>
-        </View>
-
-        <ScrollView
-          className="flex-1 px-5 pt-5"
-          contentContainerStyle={{ paddingBottom: 110 }}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Guest Hero Card */}
-          <View className="bg-white rounded-3xl border border-gray-200/80 p-6 shadow-sm mb-5">
-            <View className="flex-row items-center gap-2 mb-3">
-              <View className="bg-orange-100 px-2.5 py-0.5 rounded-full">
-                <Text className="text-[10px] font-extrabold text-[#EA5410] uppercase tracking-wider">
-                  GUEST MODE
-                </Text>
-              </View>
-            </View>
-
-            <View className="w-16 h-16 bg-[#EA5410]/10 rounded-2xl items-center justify-center mb-4">
-              <Ionicons name="receipt-outline" size={32} color="#EA5410" />
-            </View>
-
-            <Text className="text-xl font-black text-gray-900 mb-2 leading-snug">
-              Track Live Orders & Table Bookings
-            </Text>
-            <Text className="text-xs text-gray-500 leading-relaxed mb-5">
-              Sign in to your Mati FoodFinder account to track real-time Cash on Delivery orders, view your 4-digit rider handshake PIN, and manage dine-in table reservations.
-            </Text>
-
-            {/* Feature Perks */}
-            <View className="gap-3 mb-6 bg-gray-50/80 p-4 rounded-2xl border border-gray-100">
-              <View className="flex-row items-center gap-3">
-                <View className="w-8 h-8 rounded-xl bg-orange-100 items-center justify-center">
-                  <Ionicons name="bicycle" size={16} color="#EA5410" />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-xs font-bold text-gray-900">Live Delivery Tracking</Text>
-                  <Text className="text-[11px] text-gray-500">Track your courier from store to door</Text>
-                </View>
-              </View>
-
-              <View className="flex-row items-center gap-3">
-                <View className="w-8 h-8 rounded-xl bg-orange-100 items-center justify-center">
-                  <Ionicons name="key-outline" size={16} color="#EA5410" />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-xs font-bold text-gray-900">Secure Handshake PIN</Text>
-                  <Text className="text-[11px] text-gray-500">4-digit PIN ensures safe COD handoffs</Text>
-                </View>
-              </View>
-
-              <View className="flex-row items-center gap-3">
-                <View className="w-8 h-8 rounded-xl bg-orange-100 items-center justify-center">
-                  <Ionicons name="calendar-outline" size={16} color="#EA5410" />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-xs font-bold text-gray-900">Table Reservations</Text>
-                  <Text className="text-[11px] text-gray-500">Skip lines at top Mati restaurants</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Actions */}
-            <Pressable
-              onPress={() => router.push("/(mobile)/auth/customer-login")}
-              className="w-full py-3.5 bg-[#EA5410] rounded-2xl items-center shadow-sm mb-3"
-            >
-              <Text className="text-white font-extrabold text-sm">Sign In to Your Account</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => router.push("/(mobile)/(tabs)")}
-              className="w-full py-3 bg-gray-100 rounded-2xl items-center border border-gray-200/80"
-            >
-              <Text className="text-gray-700 font-bold text-xs">Explore Mati Restaurants</Text>
-            </Pressable>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    );
+    return <Redirect href="/(mobile)/(tabs)" />;
   }
 
   return (
@@ -164,7 +113,7 @@ export default function MobileOrdersScreen() {
                   activeTab === "deliveries" ? "text-[#EA5410]" : "text-gray-600"
                 }`}
               >
-                {orders.length}
+                {displayOrders.length}
               </Text>
             </View>
           </Pressable>
@@ -197,7 +146,7 @@ export default function MobileOrdersScreen() {
                   activeTab === "reservations" ? "text-[#EA5410]" : "text-gray-600"
                 }`}
               >
-                {reservations.length}
+                {liveReservations.length}
               </Text>
             </View>
           </Pressable>
@@ -214,11 +163,11 @@ export default function MobileOrdersScreen() {
           <View>
             <View className="flex-row items-center justify-between mb-3">
               <Text className="text-xs font-extrabold text-gray-400 uppercase tracking-wider">
-                ACTIVE DELIVERIES ({orders.length})
+                ACTIVE DELIVERIES ({displayOrders.length})
               </Text>
             </View>
 
-            {orders.length === 0 ? (
+            {displayOrders.length === 0 ? (
               <View className="bg-white p-8 rounded-3xl border border-gray-200/80 items-center justify-center mb-6 shadow-sm">
                 <View className="w-16 h-16 rounded-2xl bg-[#EA5410]/10 items-center justify-center mb-3">
                   <Ionicons name="fast-food-outline" size={32} color="#EA5410" />
@@ -235,117 +184,143 @@ export default function MobileOrdersScreen() {
                 </Pressable>
               </View>
             ) : (
-              orders.map((order) => (
-                <View
-                  key={order.id}
-                  className="bg-white rounded-3xl border border-gray-200/90 p-5 shadow-sm mb-4"
-                >
-                  {/* Order Header */}
-                  <View className="flex-row justify-between items-start border-b border-gray-100 pb-3.5 mb-3.5">
-                    <View className="flex-1 pr-2">
-                      <View className="flex-row items-center gap-2 mb-1">
-                        <Text className="font-black text-gray-900 text-base">
-                          {order.orderNumber}
+              displayOrders.map((order: any) => {
+                const restaurantTitle = order.restaurantName || order.storeName || "Mati Kitchen";
+                const isStep1 = ["placed", "accepted", "confirmed", "preparing", "prepped", "ready_for_pickup", "out_for_delivery", "on_the_way", "delivered"].includes(order.status);
+                const isStep2 = ["accepted", "preparing", "prepped", "ready_for_pickup", "out_for_delivery", "on_the_way", "delivered"].includes(order.status);
+                const isStep3 = ["out_for_delivery", "on_the_way", "delivered"].includes(order.status);
+                const isStep4 = order.status === "delivered";
+
+                const statusLabel =
+                  order.status === "placed"
+                    ? "Kitchen Received"
+                    : order.status === "accepted" || order.status === "confirmed"
+                    ? "Kitchen Confirmed"
+                    : order.status === "preparing" || order.status === "prepped"
+                    ? "Kitchen Preparing"
+                    : order.status === "ready_for_pickup"
+                    ? "Food Ready for Courier"
+                    : order.status === "out_for_delivery" || order.status === "on_the_way"
+                    ? "Out for Delivery"
+                    : order.status === "delivered"
+                    ? "Delivered"
+                    : "Cancelled";
+
+                return (
+                  <View
+                    key={order.id}
+                    className="bg-white rounded-3xl border border-gray-200/90 p-5 shadow-sm mb-4"
+                  >
+                    {/* Order Header */}
+                    <View className="flex-row justify-between items-start border-b border-gray-100 pb-3.5 mb-3.5">
+                      <View className="flex-1 pr-2">
+                        <View className="flex-row items-center gap-2 mb-1">
+                          <Text className="font-black text-gray-900 text-base">
+                            {order.orderNumber}
+                          </Text>
+                          <View className="bg-orange-100 px-2 py-0.5 rounded-md">
+                            <Text className="text-[10px] font-black text-[#EA5410] uppercase">
+                              COD
+                            </Text>
+                          </View>
+                        </View>
+                        <Text className="text-xs text-gray-600 font-semibold">
+                          {restaurantTitle}
                         </Text>
-                        <View className="bg-orange-100 px-2 py-0.5 rounded-md">
-                          <Text className="text-[10px] font-black text-[#EA5410] uppercase">
-                            COD
+                      </View>
+                      <View className="items-end">
+                        <Text className="font-black text-[#EA5410] text-lg">
+                          ₱{order.total.toFixed(2)}
+                        </Text>
+                        <Text className="text-[10px] text-gray-400 font-medium">{order.createdAt}</Text>
+                      </View>
+                    </View>
+
+                    {/* Order Items */}
+                    <View className="gap-1.5 mb-4 bg-gray-50/80 p-3.5 rounded-2xl border border-gray-100">
+                      {order.items.map((item: any, idx: number) => (
+                        <View key={idx} className="flex-row justify-between items-center">
+                          <Text className="text-xs text-gray-800 font-medium">
+                            {item.quantity}x {item.name}
+                          </Text>
+                          <Text className="text-xs text-gray-500 font-semibold">
+                            ₱{(item.price * item.quantity).toFixed(2)}
                           </Text>
                         </View>
-                      </View>
-                      <Text className="text-xs text-gray-600 font-semibold">
-                        {order.restaurantName}
-                      </Text>
-                    </View>
-                    <View className="items-end">
-                      <Text className="font-black text-[#EA5410] text-lg">
-                        ₱{order.total.toFixed(2)}
-                      </Text>
-                      <Text className="text-[10px] text-gray-400 font-medium">{order.createdAt}</Text>
-                    </View>
-                  </View>
-
-                  {/* Order Items */}
-                  <View className="gap-1.5 mb-4 bg-gray-50/80 p-3.5 rounded-2xl border border-gray-100">
-                    {order.items.map((item, idx) => (
-                      <View key={idx} className="flex-row justify-between items-center">
-                        <Text className="text-xs text-gray-800 font-medium">
-                          {item.quantity}x {item.name}
-                        </Text>
-                        <Text className="text-xs text-gray-500 font-semibold">
-                          ₱{(item.price * item.quantity).toFixed(2)}
+                      ))}
+                      <View className="flex-row items-center gap-1.5 pt-2 mt-1 border-t border-gray-200/60">
+                        <Ionicons name="location-sharp" size={12} color="#EA5410" />
+                        <Text className="text-[11px] text-gray-500 flex-1" numberOfLines={1}>
+                          {order.deliveryAddress}, Brgy. {order.barangay}
                         </Text>
                       </View>
-                    ))}
-                    <View className="flex-row items-center gap-1.5 pt-2 mt-1 border-t border-gray-200/60">
-                      <Ionicons name="location-sharp" size={12} color="#EA5410" />
-                      <Text className="text-[11px] text-gray-500 flex-1" numberOfLines={1}>
-                        {order.deliveryAddress}, Brgy. {order.barangay}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Delivery Progress Bar */}
-                  <View className="bg-orange-50/50 rounded-2xl p-4 border border-orange-100/80 mb-4">
-                    <View className="flex-row justify-between items-center mb-3">
-                      <View className="flex-row items-center gap-2">
-                        <View className="w-2.5 h-2.5 rounded-full bg-[#EA5410]" />
-                        <Text className="text-xs font-black text-gray-900">
-                          Status: {order.status === "on_the_way" ? "Out for Delivery" : "Kitchen Preparing"}
-                        </Text>
-                      </View>
-                      <Text className="text-xs font-bold text-[#EA5410]">~10-15 mins away</Text>
                     </View>
 
-                    {/* Timeline Steps */}
-                    <View className="flex-row items-center justify-between mt-1 px-1">
-                      <View className="items-center">
-                        <View className="w-6 h-6 rounded-full bg-[#EA5410] items-center justify-center shadow-2xs">
-                          <Ionicons name="checkmark" size={13} color="white" />
+                    {/* Delivery Progress Bar */}
+                    <View className="bg-orange-50/50 rounded-2xl p-4 border border-orange-100/80 mb-4">
+                      <View className="flex-row justify-between items-center mb-3">
+                        <View className="flex-row items-center gap-2">
+                          <View className="w-2.5 h-2.5 rounded-full bg-[#EA5410]" />
+                          <Text className="text-xs font-black text-gray-900">
+                            Status: {statusLabel}
+                          </Text>
                         </View>
-                        <Text className="text-[9px] font-bold text-gray-800 mt-1">Confirmed</Text>
-                      </View>
-                      <View className="flex-1 h-0.5 bg-[#EA5410] mx-1" />
-                      <View className="items-center">
-                        <View className="w-6 h-6 rounded-full bg-[#EA5410] items-center justify-center shadow-2xs">
-                          <Ionicons name="checkmark" size={13} color="white" />
-                        </View>
-                        <Text className="text-[9px] font-bold text-gray-800 mt-1">Prepped</Text>
-                      </View>
-                      <View className="flex-1 h-0.5 bg-[#EA5410] mx-1" />
-                      <View className="items-center">
-                        <View className="w-6 h-6 rounded-full bg-[#EA5410] items-center justify-center shadow-2xs">
-                          <Ionicons name="bicycle" size={13} color="white" />
-                        </View>
-                        <Text className="text-[9px] font-bold text-[#EA5410] mt-1">On the Way</Text>
-                      </View>
-                      <View className="flex-1 h-0.5 bg-gray-200 mx-1" />
-                      <View className="items-center">
-                        <View className="w-6 h-6 rounded-full bg-gray-200 items-center justify-center" />
-                        <Text className="text-[9px] text-gray-400 mt-1">Delivered</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Delivery Handshake PIN Card */}
-                  <View className="bg-[#EA5410]/5 p-4 rounded-2xl border border-[#EA5410]/20 mb-3.5 flex-row items-center justify-between">
-                    <View className="flex-1 pr-3">
-                      <View className="flex-row items-center gap-1.5 mb-0.5">
-                        <Ionicons name="shield-checkmark" size={13} color="#EA5410" />
-                        <Text className="text-[10px] font-black text-[#EA5410] uppercase tracking-wider">
-                          DELIVERY HANDSHAKE PIN
+                        <Text className="text-xs font-bold text-[#EA5410]">
+                          {order.status === "delivered" ? "Completed" : "~10-15 mins away"}
                         </Text>
                       </View>
-                      <Text className="text-[11px] text-gray-600 leading-snug">
-                        Tell this 4-digit code to the rider upon arrival for safe COD handoff
-                      </Text>
+
+                      {/* Timeline Steps */}
+                      <View className="flex-row items-center justify-between mt-1 px-1">
+                        <View className="items-center">
+                          <View className={`w-6 h-6 rounded-full items-center justify-center shadow-2xs ${isStep1 ? "bg-[#EA5410]" : "bg-gray-200"}`}>
+                            <Ionicons name="checkmark" size={13} color="white" />
+                          </View>
+                          <Text className="text-[9px] font-bold text-gray-800 mt-1">Confirmed</Text>
+                        </View>
+                        <View className={`flex-1 h-0.5 mx-1 ${isStep2 ? "bg-[#EA5410]" : "bg-gray-200"}`} />
+                        <View className="items-center">
+                          <View className={`w-6 h-6 rounded-full items-center justify-center shadow-2xs ${isStep2 ? "bg-[#EA5410]" : "bg-gray-200"}`}>
+                            <Ionicons name="checkmark" size={13} color="white" />
+                          </View>
+                          <Text className="text-[9px] font-bold text-gray-800 mt-1">Prepped</Text>
+                        </View>
+                        <View className={`flex-1 h-0.5 mx-1 ${isStep3 ? "bg-[#EA5410]" : "bg-gray-200"}`} />
+                        <View className="items-center">
+                          <View className={`w-6 h-6 rounded-full items-center justify-center shadow-2xs ${isStep3 ? "bg-[#EA5410]" : "bg-gray-200"}`}>
+                            <Ionicons name="bicycle" size={13} color="white" />
+                          </View>
+                          <Text className={`text-[9px] font-bold mt-1 ${isStep3 ? "text-[#EA5410]" : "text-gray-400"}`}>On the Way</Text>
+                        </View>
+                        <View className={`flex-1 h-0.5 mx-1 ${isStep4 ? "bg-[#EA5410]" : "bg-gray-200"}`} />
+                        <View className="items-center">
+                          <View className={`w-6 h-6 rounded-full items-center justify-center ${isStep4 ? "bg-[#EA5410]" : "bg-gray-200"}`}>
+                            {isStep4 && <Ionicons name="checkmark" size={13} color="white" />}
+                          </View>
+                          <Text className={`text-[9px] mt-1 ${isStep4 ? "font-bold text-[#EA5410]" : "text-gray-400"}`}>Delivered</Text>
+                        </View>
+                      </View>
                     </View>
-                    <View className="bg-[#111827] px-3.5 py-2 rounded-xl shadow-xs">
-                      <Text className="text-base font-black text-white font-mono tracking-widest">
-                        4821
-                      </Text>
+
+                    {/* Delivery Handshake PIN Card */}
+                    <View className="bg-[#EA5410]/5 p-4 rounded-2xl border border-[#EA5410]/20 mb-3.5 flex-row items-center justify-between">
+                      <View className="flex-1 pr-3">
+                        <View className="flex-row items-center gap-1.5 mb-0.5">
+                          <Ionicons name="shield-checkmark" size={13} color="#EA5410" />
+                          <Text className="text-[10px] font-black text-[#EA5410] uppercase tracking-wider">
+                            DELIVERY HANDSHAKE PIN
+                          </Text>
+                        </View>
+                        <Text className="text-[11px] text-gray-600 leading-snug">
+                          Tell this 4-digit code to the rider upon arrival for safe COD handoff
+                        </Text>
+                      </View>
+                      <View className="bg-[#111827] px-3.5 py-2 rounded-xl shadow-xs">
+                        <Text className="text-base font-black text-white font-mono tracking-widest">
+                          {order.handshakePin || "4821"}
+                        </Text>
+                      </View>
                     </View>
-                  </View>
 
                   {/* Rider Info Card */}
                   <View className="flex-row items-center justify-between bg-gray-50 p-3.5 rounded-2xl border border-gray-100">
@@ -366,8 +341,9 @@ export default function MobileOrdersScreen() {
                     </Pressable>
                   </View>
                 </View>
-              ))
-            )}
+              );
+            })
+          )}
 
             {/* Past Orders History */}
             <Text className="text-xs font-extrabold text-gray-400 uppercase tracking-wider mt-3 mb-3">
@@ -401,11 +377,11 @@ export default function MobileOrdersScreen() {
           <View>
             <View className="flex-row items-center justify-between mb-3">
               <Text className="text-xs font-extrabold text-gray-400 uppercase tracking-wider">
-                TABLE BOOKINGS ({reservations.length})
+                TABLE BOOKINGS ({displayReservations.length})
               </Text>
             </View>
 
-            {reservations.length === 0 ? (
+            {displayReservations.length === 0 ? (
               <View className="bg-white p-8 rounded-3xl border border-gray-200/80 items-center justify-center shadow-sm">
                 <View className="w-16 h-16 rounded-2xl bg-[#EA5410]/10 items-center justify-center mb-3">
                   <Ionicons name="calendar-outline" size={32} color="#EA5410" />
@@ -422,9 +398,18 @@ export default function MobileOrdersScreen() {
                 </Pressable>
               </View>
             ) : (
-              reservations.map((res) => {
+              displayReservations.map((res: any) => {
+                const restoName = res.storeName || res.restaurantName || "Restaurant";
+                const bookingRef = res.reservation_number || `#${(res.id || "").slice(0, 8).toUpperCase()}`;
+                const resDate = res.reservation_date || res.date;
+                const resTime = res.reservation_time || res.time;
+                const partySize = res.party_size || res.partySize;
+                const specialNotes = res.special_notes || res.specialNotes;
                 const isConfirmed = res.status === "confirmed";
                 const isPending = res.status === "pending";
+                const isDeclined = res.status === "declined";
+                const isCancelled = res.status === "cancelled";
+
                 return (
                   <View
                     key={res.id}
@@ -439,10 +424,10 @@ export default function MobileOrdersScreen() {
                     <View className="flex-row justify-between items-start mb-3">
                       <View className="flex-1 pr-2">
                         <Text className="text-base font-black text-gray-900">
-                          {res.restaurantName}
+                          {restoName}
                         </Text>
                         <Text className="text-xs text-gray-400 font-medium">
-                          Booking #{res.id.toUpperCase()}
+                          Booking {bookingRef}
                         </Text>
                       </View>
                       <View
@@ -451,7 +436,9 @@ export default function MobileOrdersScreen() {
                             ? "bg-emerald-100"
                             : isPending
                             ? "bg-amber-100"
-                            : "bg-gray-100"
+                            : isCancelled
+                            ? "bg-gray-100"
+                            : "bg-red-100"
                         }`}
                       >
                         <Text
@@ -460,10 +447,18 @@ export default function MobileOrdersScreen() {
                               ? "text-emerald-800"
                               : isPending
                               ? "text-amber-800"
-                              : "text-gray-600"
+                              : isCancelled
+                              ? "text-gray-600"
+                              : "text-red-700"
                           }`}
                         >
-                          {isConfirmed ? "Confirmed" : isPending ? "Pending Approval" : "Declined"}
+                          {isConfirmed
+                            ? "Confirmed"
+                            : isPending
+                            ? "Pending Approval"
+                            : isCancelled
+                            ? "Cancelled"
+                            : "Declined"}
                         </Text>
                       </View>
                     </View>
@@ -473,20 +468,20 @@ export default function MobileOrdersScreen() {
                       <View className="flex-row items-center gap-2.5">
                         <Ionicons name="calendar-outline" size={15} color="#EA5410" />
                         <Text className="text-xs font-bold text-gray-800">
-                          {res.date} at {res.time}
+                          {resDate} at {resTime}
                         </Text>
                       </View>
                       <View className="flex-row items-center gap-2.5">
                         <Ionicons name="people-outline" size={15} color="#EA5410" />
                         <Text className="text-xs text-gray-700">
-                          Party Size: {res.partySize} {res.partySize === 1 ? "Guest" : "Guests"}
+                          Party Size: {partySize} {partySize === 1 ? "Guest" : "Guests"}
                         </Text>
                       </View>
-                      {res.specialNotes ? (
+                      {specialNotes ? (
                         <View className="flex-row items-start gap-2 pt-1 border-t border-gray-200/60 mt-0.5">
                           <Ionicons name="chatbox-outline" size={13} color="#6b7280" />
                           <Text className="text-xs text-gray-500 italic flex-1">
-                            "{res.specialNotes}"
+                            "{specialNotes}"
                           </Text>
                         </View>
                       ) : null}
@@ -496,21 +491,51 @@ export default function MobileOrdersScreen() {
                     <View className="flex-row gap-2">
                       <Pressable
                         onPress={() => router.push("/(mobile)/(tabs)/map")}
-                        className="flex-1 py-2.5 bg-gray-100 rounded-xl items-center border border-gray-200/80"
+                        className="flex-1 py-2.5 bg-gray-100 rounded-xl items-center border border-gray-200/80 active:bg-gray-200"
                       >
                         <Text className="text-gray-700 font-bold text-xs">View Map</Text>
                       </Pressable>
-                      <Pressable
-                        onPress={() =>
-                          Alert.alert(
-                            "Contact Restaurant",
-                            `Calling ${res.restaurantName} (+63 917 234 5678)...`
-                          )
-                        }
-                        className="flex-1 py-2.5 bg-[#EA5410]/10 border border-[#EA5410]/20 rounded-xl items-center"
-                      >
-                        <Text className="text-[#EA5410] font-bold text-xs">Call Restaurant</Text>
-                      </Pressable>
+                      {(isPending || isConfirmed) ? (
+                        <Pressable
+                          onPress={() => {
+                            Alert.alert(
+                              "Cancel Reservation",
+                              "Are you sure you want to cancel this booking?",
+                              [
+                                { text: "Keep Booking", style: "cancel" },
+                                {
+                                  text: "Yes, Cancel",
+                                  style: "destructive",
+                                  onPress: async () => {
+                                    try {
+                                      await updateReservationStatus(res.id, "cancelled");
+                                      loadLiveReservations();
+                                      Alert.alert("Reservation Cancelled", "Your booking has been cancelled.");
+                                    } catch (err: any) {
+                                      Alert.alert("Cancellation Failed", err.message);
+                                    }
+                                  },
+                                },
+                              ]
+                            );
+                          }}
+                          className="px-4 py-2.5 bg-red-50 border border-red-200 rounded-xl items-center active:bg-red-100"
+                        >
+                          <Text className="text-red-700 font-bold text-xs">Cancel</Text>
+                        </Pressable>
+                      ) : (
+                        <Pressable
+                          onPress={() =>
+                            Alert.alert(
+                              "Contact Restaurant",
+                              `Calling ${restoName} (+63 917 234 5678)...`
+                            )
+                          }
+                          className="flex-1 py-2.5 bg-[#EA5410]/10 border border-[#EA5410]/20 rounded-xl items-center"
+                        >
+                          <Text className="text-[#EA5410] font-bold text-xs">Call Restaurant</Text>
+                        </Pressable>
+                      )}
                     </View>
                   </View>
                 );

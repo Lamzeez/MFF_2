@@ -13,6 +13,7 @@ export type MenuItemEdit = Partial<Pick<MenuItem, "name" | "description" | "pric
  */
 
 export interface RestaurantProfile {
+  id?: string;
   name: string;
   category: string;
   rating: string;
@@ -34,6 +35,8 @@ export interface FoodItem {
   id: number;
   name: string;
   store: string;
+  storeId?: string;
+  menuItemId?: string;
   price: number;
   available: boolean;
   category: string;

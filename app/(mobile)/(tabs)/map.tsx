@@ -18,6 +18,8 @@ import { MATI_RESTAURANTS_DATA } from "../../../mock/restaurants";
 import { FOOD_ITEMS } from "../../../mock/dishes";
 import { MATI_BARANGAYS } from "../../../mock/barangays";
 import { fetchLiveStores, fetchLiveMenuItems } from "../../../services/catalog";
+import { createOrder } from "../../../services/orders";
+import { createReservation } from "../../../services/reservations";
 import { RestaurantProfileSheet } from "../../../components/restaurant/RestaurantProfileSheet";
 import { CheckoutSheet } from "../../../components/checkout/CheckoutSheet";
 import { ReservationSheet } from "../../../components/reservation/ReservationSheet";
@@ -128,7 +130,7 @@ function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: num
 }
 
 export default function MobileMapScreen() {
-  const { isLoggedIn, placeActiveOrder, createReservation } = useAuth();
+  const { isLoggedIn } = useAuth();
   const router = useRouter();
 
   // Mati City Center default coordinates
@@ -287,7 +289,7 @@ export default function MobileMapScreen() {
   };
 
   // Handle Order Placement
-  const handlePlaceOrderFromSheet = (orderPayload: {
+  const handlePlaceOrderFromSheet = async (orderPayload: {
     dish: FoodItem;
     qty: number;
     barangay: string;
@@ -296,36 +298,48 @@ export default function MobileMapScreen() {
     fulfillment: "delivery" | "pickup";
     total: number;
   }) => {
-    const subtotal = orderPayload.dish.price * orderPayload.qty;
-    const deliveryFee = orderPayload.fulfillment === "delivery" ? 35 : 0;
+    // Resolve store ID from dish or store name
+    let storeId = orderPayload.dish.storeId;
+    if (!storeId) {
+      const match = Object.values(restaurants).find(
+        (r: any) =>
+          r.name === orderPayload.dish.store ||
+          (r.id && r.name.toLowerCase().includes((orderPayload.dish.store || "").toLowerCase()))
+      ) as any;
+      storeId = match?.id || "11111111-1111-1111-1111-111111111111";
+    }
 
-    const orderNum = placeActiveOrder({
-      restaurantName: orderPayload.dish.store || "Mama Letty's Karenderia",
-      items: [
-        {
-          name: orderPayload.dish.name,
-          quantity: orderPayload.qty,
-          price: orderPayload.dish.price,
-        },
-      ],
-      subtotal,
-      deliveryFee,
-      total: orderPayload.total,
-      deliveryAddress: orderPayload.address,
-      barangay: orderPayload.barangay,
-      notes: orderPayload.notes,
-    });
+    try {
+      const createdOrder = await createOrder({
+        storeId: storeId || "11111111-1111-1111-1111-111111111111",
+        items: [
+          {
+            menuItemId: orderPayload.dish.menuItemId,
+            name: orderPayload.dish.name,
+            price: orderPayload.dish.price,
+            quantity: orderPayload.qty,
+          },
+        ],
+        fulfillmentType: orderPayload.fulfillment,
+        paymentMethod: "cod",
+        deliveryAddress: orderPayload.address,
+        barangay: orderPayload.barangay,
+        notes: orderPayload.notes,
+      });
 
-    setShowCheckoutModal(false);
+      setShowCheckoutModal(false);
 
-    Alert.alert(
-      "Order Placed Successfully! 🛵",
-      `Order ${orderNum} has been received! The kitchen is preparing your meal. Track live updates in the Orders tab.`,
-      [
-        { text: "View Orders", onPress: () => router.push("/(mobile)/(tabs)/orders") },
-        { text: "Continue Browsing" },
-      ]
-    );
+      Alert.alert(
+        "Order Placed Successfully! 🛵",
+        `Order #${createdOrder.orderNumber} has been received! Handshake PIN: ${createdOrder.handshakePin}. The kitchen is preparing your meal. Track live updates in the Orders tab.`,
+        [
+          { text: "View Orders", onPress: () => router.push("/(mobile)/(tabs)/orders") },
+          { text: "Continue Browsing" },
+        ]
+      );
+    } catch (err: any) {
+      Alert.alert("Order Failed", err?.message || "Could not place order. Please try again.");
+    }
   };
 
   return (
@@ -781,18 +795,28 @@ export default function MobileMapScreen() {
         onClose={() => setShowReservationModal(false)}
         initialRestaurant={reservationResto}
         restaurants={restaurants}
-        onConfirmReservation={(data) => {
-          createReservation({
-            restaurantName: data.restaurantName,
-            date: data.date,
-            time: data.time,
-            partySize: data.partySize,
-            specialNotes: data.specialNotes,
-          });
-          Alert.alert(
-            "Booking Request Submitted! 🗓️",
-            `Your table reservation for ${data.partySize} guests at ${data.restaurantName} has been submitted for store confirmation.`
+        onConfirmReservation={async (data) => {
+          const storeEntry = Object.values(restaurants).find(
+            (s) => s.name.toLowerCase() === data.restaurantName.toLowerCase()
           );
+          const storeId = storeEntry?.id || "11111111-1111-1111-1111-111111111111";
+          try {
+            await createReservation({
+              storeId,
+              partySize: data.partySize,
+              reservationDate: data.date,
+              reservationTime: data.time,
+              seatingPreference: data.seatingPreference,
+              specialNotes: data.specialNotes,
+            });
+            setShowReservationModal(false);
+            Alert.alert(
+              "Table Reservation Submitted! 📅",
+              `Your reservation for ${data.partySize} guests at ${data.restaurantName} on ${data.date} (${data.time}) is waiting for store confirmation.`
+            );
+          } catch (err: any) {
+            Alert.alert("Reservation Error", err.message || "Failed to submit reservation");
+          }
         }}
       />
 

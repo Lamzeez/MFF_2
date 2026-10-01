@@ -128,6 +128,8 @@ export function mapMenuItemToFoodItem(
     id: numericId,
     name: item.name,
     store: storeName,
+    storeId: item.store_id,
+    menuItemId: item.id,
     price: Math.round(item.price_centavos / 100),
     available: item.is_available,
     category,
@@ -175,3 +177,99 @@ export async function fetchLiveMenuItems(): Promise<FoodItem[]> {
     return [];
   }
 }
+
+export async function fetchStoreMenuItems(storeId: string): Promise<FoodItem[]> {
+  try {
+    const client = getSupabaseClient();
+    const { data, error } = await client
+      .from("menu_items")
+      .select("*, stores(name)")
+      .eq("store_id", storeId)
+      .is("archived_at", null)
+      .order("name");
+
+    if (error || !data) return [];
+    return data.map((row: any) => {
+      const storeName = row.stores?.name || "Mati Kitchen";
+      return mapMenuItemToFoodItem(row, storeName);
+    });
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchStoreById(storeId: string): Promise<LiveStoreProfile | null> {
+  try {
+    const client = getSupabaseClient();
+    const { data, error } = await client
+      .from("stores")
+      .select("*")
+      .eq("id", storeId)
+      .single();
+
+    if (error || !data) return null;
+    return mapStoreToProfile(data);
+  } catch {
+    return null;
+  }
+}
+
+export async function updateMenuItemAvailability(
+  menuItemId: string,
+  isAvailable: boolean
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const client = getSupabaseClient();
+    const { error } = await client
+      .from("menu_items")
+      .update({ is_available: isAvailable })
+      .eq("id", menuItemId);
+
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function updateStoreProfile(
+  storeId: string,
+  updates: {
+    name?: string;
+    description?: string;
+    public_phone?: string;
+    address_text?: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const client = getSupabaseClient();
+    const { error } = await client
+      .from("stores")
+      .update(updates)
+      .eq("id", storeId);
+
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function fetchUserStoreId(userId?: string): Promise<string | null> {
+  if (!userId) return null;
+  try {
+    const client = getSupabaseClient();
+    const { data } = await client
+      .from("store_memberships")
+      .select("store_id")
+      .eq("user_id", userId)
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle();
+    return data?.store_id || null;
+  } catch {
+    return null;
+  }
+}
+
+

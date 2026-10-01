@@ -1,34 +1,52 @@
-import React, { useState } from "react";
-import { View, Text, Pressable, ScrollView, TextInput } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import {
+  fetchAdminStoreApplications,
+  setStoreApproval,
+  type StoreApplication,
+} from "../../../services/admin";
 
 export default function ApprovalsPage() {
   const [activeTab, setActiveTab] = useState<"pending" | "approved" | "rejected">("pending");
   const [search, setSearch] = useState("");
+  const [applications, setApplications] = useState<StoreApplication[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [applications, setApplications] = useState([
-    { id: "APP-001", store: "Mati Baywalk Seafood Grill", owner: "Ramon Cruz", location: "Baywalk Pavilion, Mati", status: "Pending", date: "Oct 24, 2026", type: "Seafood & Grill" },
-    { id: "APP-002", store: "Mati Burger Hub", owner: "James Santos", location: "Dahican, Mati City", status: "Pending", date: "Oct 24, 2026", type: "Fast Food" },
-    { id: "APP-003", store: "Seafoods Paradise", owner: "Maria Cruz", location: "Baywalk, Mati", status: "Under Review", date: "Oct 23, 2026", type: "Seafood" },
-    { id: "APP-004", store: "Tapsilog Express", owner: "Ramon Perez", location: "Matiao, Mati", status: "Pending", date: "Oct 22, 2026", type: "Karenderia" },
-  ]);
+  const loadData = async () => {
+    setLoading(true);
+    const data = await fetchAdminStoreApplications();
+    setApplications(data);
+    setLoading(false);
+  };
 
-  const handleAction = (id: string, action: "Approved" | "Rejected") => {
-    setApplications((prev) =>
-      prev.map((app) => (app.id === id ? { ...app, status: action } : app))
-    );
-    alert(`Store application ${id} marked as ${action}.`);
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleAction = async (id: string, action: "approved" | "rejected") => {
+    const res = await setStoreApproval(id, action);
+    if (res.success) {
+      setApplications((prev) =>
+        prev.map((app) => (app.id === id ? { ...app, approval_status: action } : app))
+      );
+      alert(`Store marked as ${action}.`);
+    } else {
+      alert(`Failed to update approval: ${res.error || "Unknown error"}`);
+    }
   };
 
   const filteredApps = applications.filter((app) => {
-    const matchesSearch = app.store.toLowerCase().includes(search.toLowerCase()) ||
-      app.owner.toLowerCase().includes(search.toLowerCase()) ||
-      app.location.toLowerCase().includes(search.toLowerCase());
-    if (activeTab === "pending") return matchesSearch && (app.status === "Pending" || app.status === "Under Review");
-    if (activeTab === "approved") return matchesSearch && app.status === "Approved";
-    if (activeTab === "rejected") return matchesSearch && app.status === "Rejected";
-    return matchesSearch;
+    const matchesSearch =
+      app.name.toLowerCase().includes(search.toLowerCase()) ||
+      app.address_text.toLowerCase().includes(search.toLowerCase()) ||
+      app.barangay.toLowerCase().includes(search.toLowerCase());
+    return matchesSearch && app.approval_status === activeTab;
   });
+
+  const pendingCount = applications.filter((a) => a.approval_status === "pending").length;
+  const approvedCount = applications.filter((a) => a.approval_status === "approved").length;
+  const rejectedCount = applications.filter((a) => a.approval_status === "rejected").length;
 
   return (
     <View className="flex-1 p-6 md:p-10 w-full max-w-7xl self-center">
@@ -38,6 +56,9 @@ export default function ApprovalsPage() {
           <Text className="text-[11px] font-black text-[#EA5410] uppercase tracking-wider">
             STORE VERIFICATION
           </Text>
+          <View className="bg-orange-100 px-2 py-0.5 rounded-full">
+            <Text className="text-[10px] font-black text-[#EA5410] uppercase">Live Supabase</Text>
+          </View>
         </View>
         <Text className="text-3xl font-black text-gray-900 tracking-tight">Merchant Approvals</Text>
         <Text className="text-gray-500 text-sm mt-1">
@@ -49,9 +70,9 @@ export default function ApprovalsPage() {
       <View className="flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <View className="flex-row gap-2 bg-gray-100 p-1.5 rounded-2xl">
           {[
-            { key: "pending", label: `Pending (${applications.filter(a => a.status === 'Pending' || a.status === 'Under Review').length})` },
-            { key: "approved", label: "Approved" },
-            { key: "rejected", label: "Rejected" },
+            { key: "pending", label: `Pending (${pendingCount})` },
+            { key: "approved", label: `Approved (${approvedCount})` },
+            { key: "rejected", label: `Rejected (${rejectedCount})` },
           ].map((tab) => (
             <Pressable
               key={tab.key}
@@ -74,7 +95,7 @@ export default function ApprovalsPage() {
         <View className="w-full md:w-72 bg-white border border-gray-200/90 rounded-2xl px-3.5 py-2 shadow-2xs flex-row items-center gap-2">
           <Ionicons name="search" size={16} color="#9CA3AF" />
           <TextInput
-            placeholder="Search store or owner..."
+            placeholder="Search store or location..."
             value={search}
             onChangeText={setSearch}
             className="flex-1 text-xs text-gray-900 outline-none"
@@ -87,20 +108,25 @@ export default function ApprovalsPage() {
       <View className="bg-white rounded-3xl shadow-sm border border-gray-200/80 overflow-hidden">
         {/* Table Header */}
         <View className="flex-row bg-gray-50/80 px-8 py-4 border-b border-gray-200 hidden md:flex">
-          <Text className="flex-[2] font-black text-xs text-gray-400 uppercase tracking-wider">Store & ID</Text>
-          <Text className="flex-1 font-black text-xs text-gray-400 uppercase tracking-wider">Owner</Text>
-          <Text className="flex-1 font-black text-xs text-gray-400 uppercase tracking-wider">Barangay Location</Text>
+          <Text className="flex-[2] font-black text-xs text-gray-400 uppercase tracking-wider">Store Name & Slug</Text>
+          <Text className="flex-1 font-black text-xs text-gray-400 uppercase tracking-wider">Barangay</Text>
+          <Text className="flex-1 font-black text-xs text-gray-400 uppercase tracking-wider">Address</Text>
           <Text className="flex-1 font-black text-xs text-gray-400 uppercase tracking-wider">Status</Text>
           <Text className="flex-1 font-black text-xs text-gray-400 uppercase tracking-wider">Date Applied</Text>
           <Text className="flex-1 font-black text-xs text-gray-400 uppercase tracking-wider text-right">Actions</Text>
         </View>
 
         {/* Table Rows */}
-        {filteredApps.length === 0 ? (
+        {loading ? (
+          <View className="py-20 items-center justify-center">
+            <ActivityIndicator size="large" color="#EA5410" />
+            <Text className="text-xs text-gray-400 mt-2">Loading store applications from Supabase...</Text>
+          </View>
+        ) : filteredApps.length === 0 ? (
           <View className="py-16 items-center justify-center">
             <Ionicons name="documents-outline" size={36} color="#CBD5E1" />
             <Text className="text-gray-700 font-bold text-sm mt-3">No applications found</Text>
-            <Text className="text-gray-400 text-xs mt-1">No applications matching current filters</Text>
+            <Text className="text-gray-400 text-xs mt-1">No store applications in this category</Text>
           </View>
         ) : (
           <ScrollView className="max-h-[600px]">
@@ -110,52 +136,54 @@ export default function ApprovalsPage() {
                 className="flex-col md:flex-row px-8 py-4 items-start md:items-center border-b border-gray-100 hover:bg-gray-50/70 transition-colors"
               >
                 <View className="flex-[2] mb-2 md:mb-0">
-                  <Text className="font-black text-gray-900 text-base">{app.store}</Text>
-                  <Text className="text-xs text-gray-400 font-mono">{app.id} • {app.type}</Text>
+                  <Text className="font-black text-gray-900 text-base">{app.name}</Text>
+                  <Text className="text-xs text-gray-400 font-mono">{app.slug}</Text>
                 </View>
-                <Text className="flex-1 text-gray-700 text-xs font-semibold mb-1 md:mb-0">{app.owner}</Text>
-                <Text className="flex-1 text-gray-500 text-xs mb-2 md:mb-0">{app.location}</Text>
+                <Text className="flex-1 text-gray-700 text-xs font-semibold mb-1 md:mb-0">
+                  {app.barangay || "Mati City"}
+                </Text>
+                <Text className="flex-1 text-gray-500 text-xs mb-2 md:mb-0" numberOfLines={1}>
+                  {app.address_text}
+                </Text>
                 <View className="flex-1 mb-2 md:mb-0">
                   <View
                     className={`self-start px-3 py-1 rounded-full ${
-                      app.status === "Pending"
+                      app.approval_status === "pending"
                         ? "bg-amber-100"
-                        : app.status === "Under Review"
-                        ? "bg-blue-100"
-                        : app.status === "Approved"
+                        : app.approval_status === "approved"
                         ? "bg-emerald-100"
                         : "bg-red-100"
                     }`}
                   >
                     <Text
                       className={`text-[10px] font-black uppercase tracking-wider ${
-                        app.status === "Pending"
+                        app.approval_status === "pending"
                           ? "text-amber-800"
-                          : app.status === "Under Review"
-                          ? "text-blue-800"
-                          : app.status === "Approved"
+                          : app.approval_status === "approved"
                           ? "text-emerald-800"
                           : "text-red-800"
                       }`}
                     >
-                      {app.status}
+                      {app.approval_status}
                     </Text>
                   </View>
                 </View>
-                <Text className="flex-1 text-gray-400 text-xs mb-3 md:mb-0">{app.date}</Text>
+                <Text className="flex-1 text-gray-400 text-xs mb-3 md:mb-0">
+                  {new Date(app.created_at).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
+                </Text>
 
                 <View className="flex-1 flex-row gap-2 md:justify-end w-full md:w-auto">
-                  {app.status !== "Approved" && (
+                  {app.approval_status !== "approved" && (
                     <Pressable
-                      onPress={() => handleAction(app.id, "Approved")}
+                      onPress={() => handleAction(app.id, "approved")}
                       className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors flex-1 md:flex-none items-center shadow-2xs"
                     >
                       <Text className="text-white font-extrabold text-xs">Approve</Text>
                     </Pressable>
                   )}
-                  {app.status !== "Rejected" && (
+                  {app.approval_status !== "rejected" && (
                     <Pressable
-                      onPress={() => handleAction(app.id, "Rejected")}
+                      onPress={() => handleAction(app.id, "rejected")}
                       className="px-3.5 py-1.5 bg-red-50 border border-red-200 hover:bg-red-100 rounded-xl transition-colors flex-1 md:flex-none items-center"
                     >
                       <Text className="text-red-700 font-bold text-xs">Reject</Text>

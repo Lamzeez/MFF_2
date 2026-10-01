@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator, TextInput, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { fetchLiveMenuItems } from "../../../services/catalog";
+import { fetchLiveMenuItems, updateMenuItemAvailability } from "../../../services/catalog";
 import type { FoodItem } from "../../../types/restaurant";
 
 export default function MenuManager() {
@@ -18,12 +18,29 @@ export default function MenuManager() {
       .finally(() => setLoading(false));
   }, []);
 
-  const toggleAvailability = (id: number) => {
+  const toggleAvailability = async (id: number) => {
+    const target = menuItems.find((m) => m.id === id);
+    if (!target) return;
+    const newStatus = !target.available;
+
+    // Optimistic update
     setMenuItems((prev) =>
       prev.map((item) =>
-        item.id === id ? { ...item, available: !item.available } : item
+        item.id === id ? { ...item, available: newStatus } : item
       )
     );
+
+    if (target.menuItemId) {
+      const res = await updateMenuItemAvailability(target.menuItemId, newStatus);
+      if (!res.success) {
+        console.warn("Failed to persist availability to Supabase:", res.error);
+        setMenuItems((prev) =>
+          prev.map((item) =>
+            item.id === id ? { ...item, available: !newStatus } : item
+          )
+        );
+      }
+    }
   };
 
   const filteredItems = menuItems.filter((item) => {

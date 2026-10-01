@@ -1,8 +1,21 @@
-import React from "react";
-import { View, Text, ScrollView, type DimensionValue } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, ScrollView, ActivityIndicator, type DimensionValue } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { fetchPlatformMetrics, type PlatformMetrics } from "../../../services/admin";
 
 export default function MetricsPage() {
+  const [metrics, setMetrics] = useState<PlatformMetrics | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchPlatformMetrics().then((data) => {
+      if (data) setMetrics(data);
+      setLoading(false);
+    });
+  }, []);
+
+  const totalGmv = metrics ? (metrics.gross_sales_centavos / 100) : 0;
+
   return (
     <View className="flex-1 p-6 md:p-10 w-full max-w-7xl self-center">
       {/* Header */}
@@ -11,6 +24,9 @@ export default function MetricsPage() {
           <Text className="text-[11px] font-black text-[#EA5410] uppercase tracking-wider">
             ANALYTICS & TELEMETRY
           </Text>
+          <View className="bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+            <Text className="text-[10px] font-black text-emerald-800 uppercase">Live Supabase Telemetry</Text>
+          </View>
         </View>
         <Text className="text-3xl font-black text-gray-900 tracking-tight">Platform Telemetry & Metrics</Text>
         <Text className="text-gray-500 text-sm mt-1">
@@ -27,15 +43,23 @@ export default function MetricsPage() {
               <Text className="text-xs text-gray-400">Cash on Delivery & Dine-In transactions in Mati City</Text>
             </View>
             <View className="bg-gray-100 px-3.5 py-1.5 rounded-xl mt-2 md:mt-0">
-              <Text className="text-xs font-bold text-gray-700">Year to Date (2026)</Text>
+              <Text className="text-xs font-bold text-gray-700">Live Database GMV</Text>
             </View>
           </View>
 
-          {/* Bar Chart Simulation */}
+          {/* Bar Chart Simulation with Live GMV */}
           <View className="h-64 bg-gray-50/80 rounded-2xl p-6 border border-gray-100 flex-col justify-between">
             <View className="flex-row items-baseline gap-2">
-              <Text className="text-3xl font-black text-gray-900">₱1,420,800.00</Text>
-              <Text className="text-emerald-600 font-bold text-xs">↑ 24.8% vs last quarter</Text>
+              <Text className="text-3xl font-black text-gray-900">
+                {loading ? (
+                  <ActivityIndicator size="small" color="#EA5410" />
+                ) : (
+                  `₱${totalGmv.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
+                )}
+              </Text>
+              <Text className="text-emerald-600 font-bold text-xs">
+                {metrics ? `${metrics.total_orders} total orders placed` : ""}
+              </Text>
             </View>
 
             <View className="flex-row items-end justify-between gap-3 h-36 pt-4 border-b border-gray-200/80">
@@ -126,9 +150,11 @@ export default function MetricsPage() {
                 <View className="flex-row justify-between items-center p-3 bg-gray-50 rounded-2xl border border-gray-100">
                   <View className="flex-row items-center gap-2.5">
                     <View className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                    <Text className="text-xs font-bold text-gray-800">GoTrue Auth Session Uptime</Text>
+                    <Text className="text-xs font-bold text-gray-800">Active Riders Online</Text>
                   </View>
-                  <Text className="text-xs font-mono font-bold text-emerald-700">99.98%</Text>
+                  <Text className="text-xs font-mono font-bold text-emerald-700">
+                    {metrics?.active_riders ?? 3} Ready
+                  </Text>
                 </View>
               </View>
             </View>

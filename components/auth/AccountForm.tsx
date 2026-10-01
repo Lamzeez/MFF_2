@@ -8,6 +8,7 @@ type Mode = "login" | "register" | "confirm" | "recover" | "recover-code" | "pas
 
 interface AccountFormProps {
   initialMode?: "login" | "register";
+  onSuccess?: () => void;
 }
 
 function cleanPhilippineNumber(raw: string): string {
@@ -28,7 +29,7 @@ function formatPhilippineDisplay(digits: string): string {
  * Supports password visibility toggling, Philippine phone auto-formatting, 12+ character live password validation,
  * a clean 6-digit OTP entry system with resend countdown timers, and Terms/Privacy disclosures.
  */
-export function AccountForm({ initialMode = "login" }: AccountFormProps) {
+export function AccountForm({ initialMode = "login", onSuccess }: AccountFormProps) {
   const auth = useSession();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [name, setName] = useState("");
@@ -101,6 +102,9 @@ export function AccountForm({ initialMode = "login" }: AccountFormProps) {
       switch (mode) {
         case "login":
           await auth.signIn(email, password);
+          if (onSuccess) {
+            onSuccess();
+          }
           break;
         case "register": {
           const formattedPhone = phoneDigits ? `+63${phoneDigits}` : "";

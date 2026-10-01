@@ -19,6 +19,16 @@ import { CATEGORIES, MATI_RESTAURANTS_DATA } from "../../../mock/restaurants";
 import { MATI_BARANGAYS } from "../../../mock/barangays";
 import { FOOD_ITEMS } from "../../../mock/dishes";
 import { fetchLiveStores, fetchLiveMenuItems } from "../../../services/catalog";
+import { createOrder, fetchCustomerOrders, subscribeToOrders, LiveOrder } from "../../../services/orders";
+import { createReservation as createBackendReservation } from "../../../services/reservations";
+import {
+  fetchNotifications,
+  markAllNotificationsRead as markAllBackendNotificationsRead,
+  subscribeToNotifications,
+  NotificationRow,
+  AppNotification,
+} from "../../../services/notifications";
+import { recordStoreVisit } from "../../../services/visits";
 import { NotificationsSheet } from "../../../components/notifications/NotificationsSheet";
 import { CheckoutSheet } from "../../../components/checkout/CheckoutSheet";
 import { ReservationSheet } from "../../../components/reservation/ReservationSheet";
@@ -27,19 +37,7 @@ import { GuestGateModal } from "../../../components/auth/GuestGateModal";
 import { StoreQrScannerModal } from "../../../components/qr/StoreQrScannerModal";
 
 export default function MobileHomeScreen() {
-  const {
-    isLoggedIn,
-    user,
-    notifications,
-    unreadCount,
-    markAllNotificationsRead,
-    createReservation,
-    placeActiveOrder,
-    personalizationEnabled,
-    checkInToStore,
-    mostVisitedStore,
-    orders,
-  } = useAuth();
+  const { isLoggedIn, user } = useAuth();
   const router = useRouter();
   const { category } = useLocalSearchParams<{ category?: string }>();
 
@@ -90,13 +88,72 @@ export default function MobileHomeScreen() {
     }
   };
 
+  const [liveNotifications, setLiveNotifications] = useState<NotificationRow[]>([]);
+  const [liveOrders, setLiveOrders] = useState<LiveOrder[]>([]);
+
+  const loadNotificationsData = async () => {
+    try {
+      const data = await fetchNotifications();
+      setLiveNotifications(data);
+    } catch (err) {
+      console.warn("Could not load notifications:", err);
+    }
+  };
+
+  const loadOrdersData = async () => {
+    try {
+      const data = await fetchCustomerOrders();
+      setLiveOrders(data);
+    } catch (err) {
+      console.warn("Could not load customer orders:", err);
+    }
+  };
+
   useEffect(() => {
     loadLiveCatalog();
   }, []);
 
+  useEffect(() => {
+    if (isLoggedIn && user?.id) {
+      loadNotificationsData();
+      const unsub = subscribeToNotifications(user.id, loadNotificationsData);
+      return () => unsub();
+    }
+  }, [isLoggedIn, user?.id]);
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      loadOrdersData();
+      const unsub = subscribeToOrders(null, loadOrdersData);
+      return () => unsub();
+    } else {
+      setLiveOrders([]);
+    }
+  }, [isLoggedIn]);
+
+  const displayNotifications: AppNotification[] = liveNotifications.map((n) => ({
+    id: n.id,
+    title: n.title,
+    message: n.message,
+    timestamp: new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    isRead: n.is_read,
+    type: (n.type as any) || "system",
+  }));
+
+  const displayUnreadCount = liveNotifications.filter((n) => !n.is_read).length;
+
+  const handleMarkAllNotificationsRead = async () => {
+    try {
+      await markAllBackendNotificationsRead();
+      setLiveNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    } catch (err) {
+      console.warn("Failed to mark all notifications read:", err);
+    }
+  };
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await loadLiveCatalog();
+    await Promise.all([loadLiveCatalog(), loadNotificationsData(), loadOrdersData()]);
     setIsRefreshing(false);
   };
 
@@ -145,7 +202,7 @@ export default function MobileHomeScreen() {
   };
 
   // Submit Table Reservation from Sheet
-  const handleConfirmReservationFromSheet = (data: {
+  const handleConfirmReservationFromSheet = async (data: {
     restaurantName: string;
     partySize: number;
     date: string;
@@ -153,20 +210,34 @@ export default function MobileHomeScreen() {
     seatingPreference: string;
     specialNotes?: string;
   }) => {
-    createReservation({
-      restaurantName: data.restaurantName,
-      date: data.date,
-      time: data.time,
-      partySize: data.partySize,
-      specialNotes: data.specialNotes,
-    });
-    setShowReservationModal(false);
+    // Resolve store ID from restaurants
+    const match = Object.values(restaurants).find(
+      (r: any) =>
+        r.name === data.restaurantName ||
+        (r.id && r.name.toLowerCase().includes((data.restaurantName || "").toLowerCase()))
+    ) as any;
+    const storeId = match?.id || "11111111-1111-1111-1111-111111111111";
 
-    Alert.alert(
-      "Table Reservation Submitted! 📅",
-      `Your reservation for ${data.partySize} at ${data.restaurantName} on ${data.date} (${data.time}) is waiting for store confirmation. You will be notified in the Orders tab.`,
-      [{ text: "Great!" }]
-    );
+    try {
+      await createBackendReservation({
+        storeId,
+        partySize: data.partySize,
+        reservationDate: data.date,
+        reservationTime: data.time,
+        seatingPreference: data.seatingPreference,
+        specialNotes: data.specialNotes,
+      });
+
+      setShowReservationModal(false);
+
+      Alert.alert(
+        "Table Reservation Submitted! 📅",
+        `Your reservation for ${data.partySize} at ${data.restaurantName} on ${data.date} (${data.time}) is waiting for store confirmation. You will be notified in the Orders tab.`,
+        [{ text: "Great!" }]
+      );
+    } catch (err: any) {
+      Alert.alert("Reservation Error", err.message || "Failed to submit reservation");
+    }
   };
 
   // Open Checkout Modal for a Dish
@@ -177,7 +248,7 @@ export default function MobileHomeScreen() {
   };
 
   // Submit Order from Checkout Sheet
-  const handlePlaceOrderFromSheet = (orderPayload: {
+  const handlePlaceOrderFromSheet = async (orderPayload: {
     dish: FoodItem;
     qty: number;
     barangay: string;
@@ -186,35 +257,48 @@ export default function MobileHomeScreen() {
     fulfillment: "delivery" | "pickup";
     total: number;
   }) => {
-    const subtotal = orderPayload.dish.price * orderPayload.qty;
-    const deliveryFee = orderPayload.fulfillment === "delivery" ? 35 : 0;
-    const orderNum = placeActiveOrder({
-      restaurantName: orderPayload.dish.store || "Mama Letty's Karenderia",
-      items: [
-        {
-          name: orderPayload.dish.name,
-          quantity: orderPayload.qty,
-          price: orderPayload.dish.price,
-        },
-      ],
-      subtotal,
-      deliveryFee,
-      total: orderPayload.total,
-      deliveryAddress: orderPayload.address,
-      barangay: orderPayload.barangay,
-      notes: orderPayload.notes,
-    });
+    // Resolve store ID from dish or store name
+    let storeId = orderPayload.dish.storeId;
+    if (!storeId) {
+      const match = Object.values(restaurants).find(
+        (r: any) =>
+          r.name === orderPayload.dish.store ||
+          (r.id && r.name.toLowerCase().includes((orderPayload.dish.store || "").toLowerCase()))
+      ) as any;
+      storeId = match?.id || "11111111-1111-1111-1111-111111111111"; // Fallback to Mama Letty's Karenderia
+    }
 
-    setShowCheckoutModal(false);
+    try {
+      const createdOrder = await createOrder({
+        storeId: storeId || "11111111-1111-1111-1111-111111111111",
+        items: [
+          {
+            menuItemId: orderPayload.dish.menuItemId,
+            name: orderPayload.dish.name,
+            price: orderPayload.dish.price,
+            quantity: orderPayload.qty,
+          },
+        ],
+        fulfillmentType: orderPayload.fulfillment,
+        paymentMethod: "cod",
+        deliveryAddress: orderPayload.address || "Mati City",
+        barangay: orderPayload.barangay,
+        notes: orderPayload.notes,
+      });
 
-    Alert.alert(
-      "Order Placed Successfully! 🛵",
-      `Order ${orderNum} has been received! The kitchen is preparing your meal. Track live rider updates in the Orders tab.`,
-      [
-        { text: "View Orders", onPress: () => router.push("/(mobile)/(tabs)/orders") },
-        { text: "Continue Browsing" },
-      ]
-    );
+      setShowCheckoutModal(false);
+
+      Alert.alert(
+        "Order Placed Successfully! 🛵",
+        `Order #${createdOrder.orderNumber} has been received! The kitchen is preparing your meal. Handshake PIN: ${createdOrder.handshakePin}.`,
+        [
+          { text: "View Orders", onPress: () => router.push("/(mobile)/(tabs)/orders") },
+          { text: "Continue Browsing" },
+        ]
+      );
+    } catch (err: any) {
+      Alert.alert("Order Failed", err?.message || "Could not place order. Please try again.");
+    }
   };
 
   // Open QR Scanner
@@ -224,15 +308,27 @@ export default function MobileHomeScreen() {
   };
 
   // QR Check-in completed
-  const handlePerformCheckIn = (storeName: string) => {
-    const visitCount = checkInToStore(storeName);
-    setShowScanQrModal(false);
+  const handlePerformCheckIn = async (storeName: string) => {
+    const match = Object.values(restaurants).find(
+      (r: any) =>
+        r.name === storeName ||
+        (r.id && r.name.toLowerCase().includes((storeName || "").toLowerCase()))
+    ) as any;
+    const storeId = match?.id || "11111111-1111-1111-1111-111111111111";
 
-    Alert.alert(
-      "In-Store Check-in Confirmed! 📍",
-      `You checked in at ${storeName}! Total in-store visits: ${visitCount}. Ranked in your Most Visited Places!`,
-      [{ text: "Awesome!" }]
-    );
+    try {
+      await recordStoreVisit(storeId, "qr_scan");
+      loadNotificationsData();
+      setShowScanQrModal(false);
+
+      Alert.alert(
+        "In-Store Check-in Confirmed! 📍",
+        `You checked in at ${storeName}! In-store visit recorded to your profile. Ranked in your Most Visited Places!`,
+        [{ text: "Awesome!" }]
+      );
+    } catch (err: any) {
+      Alert.alert("Check-in Error", err?.message || "Could not record check-in.");
+    }
   };
 
   // Filtered restaurants for display
@@ -289,9 +385,9 @@ export default function MobileHomeScreen() {
               className="w-9 h-9 rounded-full bg-gray-50 border border-gray-200 items-center justify-center relative active:bg-gray-100"
             >
               <Ionicons name="notifications-outline" size={17} color="#374151" />
-              {unreadCount > 0 && (
+              {displayUnreadCount > 0 && (
                 <View className="absolute -top-1 -right-1 bg-red-600 rounded-full min-w-[17px] h-[17px] items-center justify-center px-1 border-2 border-white">
-                  <Text className="text-white text-[9px] font-black">{unreadCount}</Text>
+                  <Text className="text-white text-[9px] font-black">{displayUnreadCount}</Text>
                 </View>
               )}
             </Pressable>
@@ -368,7 +464,7 @@ export default function MobileHomeScreen() {
         )}
 
         {/* 3. ACTIVE ORDER BANNER (Only when registered and order exists - clean in-line, no overlapping floating pill!) */}
-        {isLoggedIn && orders && orders.length > 0 && (
+        {isLoggedIn && liveOrders && liveOrders.length > 0 && (
           <Pressable
             onPress={() => router.push("/(mobile)/(tabs)/orders")}
             className="mx-4 mt-3 bg-gray-900 rounded-2xl p-3.5 flex-row items-center justify-between shadow-md active:opacity-95"
@@ -382,10 +478,10 @@ export default function MobileHomeScreen() {
                   <Text className="text-[11px] font-black text-[#EA5410] uppercase tracking-wider">
                     Order In Progress
                   </Text>
-                  <Text className="text-[11px] text-gray-400">· {orders[0].orderNumber}</Text>
+                  <Text className="text-[11px] text-gray-400">· {liveOrders[0].orderNumber}</Text>
                 </View>
                 <Text className="text-xs font-bold text-white mt-0.5" numberOfLines={1}>
-                  {orders[0].restaurantName}
+                  {liveOrders[0].storeName}
                 </Text>
               </View>
             </View>
@@ -621,8 +717,15 @@ export default function MobileHomeScreen() {
       <NotificationsSheet
         visible={showNotificationsModal}
         onClose={() => setShowNotificationsModal(false)}
-        notifications={notifications}
-        onMarkAllRead={markAllNotificationsRead}
+        notifications={displayNotifications}
+        onMarkAllRead={async () => {
+          try {
+            await markAllBackendNotificationsRead();
+            await loadNotificationsData();
+          } catch (e) {
+            console.warn("Could not mark all notifications read:", e);
+          }
+        }}
         onSelectNotification={(notif) => {
           setShowNotificationsModal(false);
           if (notif.type === "order" || notif.type === "reservation") {

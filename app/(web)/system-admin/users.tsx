@@ -1,37 +1,52 @@
-import React, { useState } from "react";
-import { View, Text, Pressable, ScrollView, TextInput } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import {
+  fetchAdminUsers,
+  setAdminUserAccountStatus,
+  type AdminUserItem,
+} from "../../../services/admin";
 
 export default function UsersPage() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
+  const [users, setUsers] = useState<AdminUserItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [users, setUsers] = useState([
-    { id: "USR-001", name: "Platform Admin", email: "admin@mati-foodfinder.com", role: "Superadmin", status: "Active", phone: "+63 917 000 0001", created: "Sep 2026" },
-    { id: "USR-002", name: "Mama Letty Mendoza", email: "merchant.letty@mati-foodfinder.com", role: "Store Admin", status: "Active", phone: "+63 917 111 0001", created: "Sep 2026" },
-    { id: "USR-003", name: "Juan Dela Cruz", email: "rider.juan@mati-foodfinder.com", role: "Rider", status: "Active", phone: "+63 917 222 0001", created: "Sep 2026" },
-    { id: "USR-004", name: "Pedro Penduko", email: "rider.pedro@mati-foodfinder.com", role: "Rider", status: "Active", phone: "+63 917 222 0002", created: "Sep 2026" },
-    { id: "USR-005", name: "Carlos Dalisay", email: "customer.carlos@mati-foodfinder.com", role: "Customer", status: "Active", phone: "+63 917 333 0001", created: "Sep 2026" },
-    { id: "USR-006", name: "Bea Alonzo", email: "customer.bea@mati-foodfinder.com", role: "Customer", status: "Active", phone: "+63 917 333 0002", created: "Sep 2026" },
-    { id: "USR-007", name: "Crisostomo Ibarra", email: "crisostomo@example.com", role: "Customer", status: "Suspended", phone: "+63 917 999 8888", created: "Aug 2026" },
-  ]);
+  const loadUsers = async () => {
+    setLoading(true);
+    const data = await fetchAdminUsers();
+    setUsers(data);
+    setLoading(false);
+  };
 
-  const toggleStatus = (id: string) => {
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const toggleStatus = async (id: string, currentStatus: "active" | "suspended") => {
+    const nextStatus = currentStatus === "active" ? "suspended" : "active";
+
+    // Optimistic update
     setUsers((prev) =>
-      prev.map((u) => {
-        if (u.id === id) {
-          const next = u.status === "Active" ? "Suspended" : "Active";
-          return { ...u, status: next };
-        }
-        return u;
-      })
+      prev.map((u) => (u.id === id ? { ...u, account_status: nextStatus } : u))
     );
+
+    const res = await setAdminUserAccountStatus(id, nextStatus);
+    if (!res.success) {
+      alert(`Failed to update user status: ${res.error || "Unknown error"}`);
+      // Revert on error
+      setUsers((prev) =>
+        prev.map((u) => (u.id === id ? { ...u, account_status: currentStatus } : u))
+      );
+    }
   };
 
   const filteredUsers = users.filter((user) => {
-    const matchesSearch = user.name.toLowerCase().includes(search.toLowerCase()) ||
+    const matchesSearch =
+      user.display_name.toLowerCase().includes(search.toLowerCase()) ||
       user.email.toLowerCase().includes(search.toLowerCase()) ||
-      user.id.toLowerCase().includes(search.toLowerCase());
+      user.phone_number.includes(search);
     if (roleFilter === "All") return matchesSearch;
     return matchesSearch && user.role === roleFilter;
   });
@@ -44,6 +59,9 @@ export default function UsersPage() {
           <Text className="text-[11px] font-black text-[#EA5410] uppercase tracking-wider">
             IDENTITY & ACCESS
           </Text>
+          <View className="bg-orange-100 px-2 py-0.5 rounded-full">
+            <Text className="text-[10px] font-black text-[#EA5410] uppercase">Live Supabase Auth</Text>
+          </View>
         </View>
         <Text className="text-3xl font-black text-gray-900 tracking-tight">User Account Management</Text>
         <Text className="text-gray-500 text-sm mt-1">
@@ -56,7 +74,7 @@ export default function UsersPage() {
         <View className="w-full md:w-96 bg-white border border-gray-200/90 rounded-2xl px-4 py-2.5 shadow-2xs flex-row items-center gap-2">
           <Ionicons name="search" size={16} color="#9CA3AF" />
           <TextInput
-            placeholder="Search name, email, or user ID..."
+            placeholder="Search name, email, or phone..."
             value={search}
             onChangeText={setSearch}
             className="flex-1 text-xs text-gray-900 outline-none"
@@ -101,7 +119,12 @@ export default function UsersPage() {
           <Text className="flex-1 font-black text-xs text-gray-400 uppercase tracking-wider text-right">Actions</Text>
         </View>
 
-        {filteredUsers.length === 0 ? (
+        {loading ? (
+          <View className="py-20 items-center justify-center">
+            <ActivityIndicator size="large" color="#EA5410" />
+            <Text className="text-xs text-gray-400 mt-2">Loading user accounts from Supabase...</Text>
+          </View>
+        ) : filteredUsers.length === 0 ? (
           <View className="py-16 items-center justify-center">
             <Ionicons name="people-outline" size={36} color="#CBD5E1" />
             <Text className="text-gray-700 font-bold text-sm mt-3">No users match your criteria</Text>
@@ -140,7 +163,7 @@ export default function UsersPage() {
                     />
                   </View>
                   <View className="flex-1 pr-2">
-                    <Text className="font-black text-gray-900 text-sm">{user.name}</Text>
+                    <Text className="font-black text-gray-900 text-sm">{user.display_name}</Text>
                     <Text className="text-xs text-gray-400 font-mono">{user.email}</Text>
                   </View>
                 </View>
@@ -176,7 +199,7 @@ export default function UsersPage() {
 
                 {/* Contact */}
                 <Text className="flex-1 text-gray-600 text-xs font-medium mb-2 md:mb-0">
-                  {user.phone}
+                  {user.phone_number || "No phone added"}
                 </Text>
 
                 {/* Status Indicator */}
@@ -184,15 +207,15 @@ export default function UsersPage() {
                   <View className="flex-row items-center gap-1.5">
                     <View
                       className={`w-2 h-2 rounded-full ${
-                        user.status === "Active" ? "bg-emerald-500" : "bg-red-500"
+                        user.account_status === "active" ? "bg-emerald-500" : "bg-red-500"
                       }`}
                     />
                     <Text
                       className={`font-bold text-xs ${
-                        user.status === "Active" ? "text-emerald-700" : "text-red-700"
+                        user.account_status === "active" ? "text-emerald-700" : "text-red-700"
                       }`}
                     >
-                      {user.status}
+                      {user.account_status === "active" ? "Active" : "Suspended"}
                     </Text>
                   </View>
                 </View>
@@ -201,19 +224,19 @@ export default function UsersPage() {
                 <View className="flex-1 flex-row gap-2 md:justify-end w-full md:w-auto">
                   {user.role !== "Superadmin" && (
                     <Pressable
-                      onPress={() => toggleStatus(user.id)}
+                      onPress={() => toggleStatus(user.id, user.account_status)}
                       className={`px-3.5 py-1.5 rounded-xl border transition-colors flex-1 md:flex-none items-center ${
-                        user.status === "Active"
+                        user.account_status === "active"
                           ? "bg-red-50 border-red-200 hover:bg-red-100"
                           : "bg-emerald-50 border-emerald-200 hover:bg-emerald-100"
                       }`}
                     >
                       <Text
                         className={`font-bold text-xs ${
-                          user.status === "Active" ? "text-red-700" : "text-emerald-700"
+                          user.account_status === "active" ? "text-red-700" : "text-emerald-700"
                         }`}
                       >
-                        {user.status === "Active" ? "Suspend" : "Restore"}
+                        {user.account_status === "active" ? "Suspend" : "Restore"}
                       </Text>
                     </Pressable>
                   )}

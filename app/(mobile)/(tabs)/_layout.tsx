@@ -122,6 +122,7 @@ export default function MobileTabsLayout() {
       <Tabs.Screen
         name="orders"
         options={{
+          href: isLoggedIn ? undefined : null,
           title: "Orders",
           tabBarIcon: ({ focused }) => (
             <View 

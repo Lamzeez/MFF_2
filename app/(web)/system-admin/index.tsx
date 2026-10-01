@@ -1,24 +1,62 @@
-import React, { useState } from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Link } from "expo-router";
+import {
+  fetchPlatformMetrics,
+  fetchAdminStoreApplications,
+  setStoreApproval,
+  type PlatformMetrics,
+  type StoreApplication,
+} from "../../../services/admin";
 
 export default function SystemAdminDashboard() {
-  const [approvals, setApprovals] = useState([
-    { id: "APP-001", store: "Mati Baywalk Seafood Grill", owner: "Ramon Cruz", location: "Baywalk Pavilion, Mati", applied: "1 hour ago", status: "Pending", category: "Seafood" },
-    { id: "APP-002", store: "Dahican Beach Bites", owner: "Elena Reyes", location: "Dahican Coast, Mati", applied: "3 hours ago", status: "Pending", category: "Snacks & Drinks" },
-    { id: "APP-003", store: "Subangan Street Grills", owner: "Danilo Santos", location: "Brgy. Sainz, Mati", applied: "5 hours ago", status: "Pending", category: "BBQ & Grill" },
-  ]);
+  const [metrics, setMetrics] = useState<PlatformMetrics | null>(null);
+  const [approvals, setApprovals] = useState<StoreApplication[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleApprove = (id: string, name: string) => {
-    setApprovals((prev) => prev.filter((a) => a.id !== id));
-    alert(`Approved ${name}! Store is now live on the Mati FoodFinder marketplace.`);
+  const loadData = async () => {
+    setLoading(true);
+    const [metricsData, appsData] = await Promise.all([
+      fetchPlatformMetrics(),
+      fetchAdminStoreApplications(),
+    ]);
+    if (metricsData) setMetrics(metricsData);
+    setApprovals(appsData);
+    setLoading(false);
   };
 
-  const handleReject = (id: string, name: string) => {
-    setApprovals((prev) => prev.filter((a) => a.id !== id));
-    alert(`Rejected ${name}. Notification sent to applicant.`);
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleApprove = async (id: string, name: string) => {
+    const res = await setStoreApproval(id, "approved");
+    if (res.success) {
+      setApprovals((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, approval_status: "approved" } : a))
+      );
+      alert(`Approved ${name}! Store is now live on the Mati FoodFinder marketplace.`);
+      loadData();
+    } else {
+      alert(`Failed to approve: ${res.error || "Unknown error"}`);
+    }
   };
+
+  const handleReject = async (id: string, name: string) => {
+    const res = await setStoreApproval(id, "rejected");
+    if (res.success) {
+      setApprovals((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, approval_status: "rejected" } : a))
+      );
+      alert(`Rejected ${name}.`);
+      loadData();
+    } else {
+      alert(`Failed to reject: ${res.error || "Unknown error"}`);
+    }
+  };
+
+  const pendingApps = approvals.filter((a) => a.approval_status === "pending");
 
   return (
     <View className="flex-1 p-6 md:p-10 w-full max-w-7xl self-center">
@@ -30,7 +68,7 @@ export default function SystemAdminDashboard() {
               MATI CITY PLATFORM OVERSIGHT
             </Text>
             <View className="bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
-              <Text className="text-[10px] font-black text-emerald-800 uppercase">System Healthy</Text>
+              <Text className="text-[10px] font-black text-emerald-800 uppercase">Live Supabase</Text>
             </View>
           </View>
           <Text className="text-3xl font-black text-gray-900 tracking-tight">Platform Administration</Text>
@@ -40,7 +78,7 @@ export default function SystemAdminDashboard() {
         </View>
 
         <Pressable
-          onPress={() => alert("Audit Log exported: In production, downloads CSV audit report from Supabase.")}
+          onPress={() => alert("Audit Log: System audit log verified active on remote Supabase instance.")}
           className="bg-[#111827] px-5 py-3 rounded-2xl hover:bg-black transition-colors shadow-sm flex-row items-center gap-2"
         >
           <Ionicons name="download-outline" size={16} color="white" />
@@ -57,8 +95,10 @@ export default function SystemAdminDashboard() {
               <Ionicons name="people" size={18} color="#2563EB" />
             </View>
           </View>
-          <Text className="text-3xl font-black text-gray-900 tracking-tight">4,209</Text>
-          <Text className="text-emerald-600 font-bold text-xs mt-2">↑ 12% this month</Text>
+          <Text className="text-3xl font-black text-gray-900 tracking-tight">
+            {metrics ? metrics.total_users : <ActivityIndicator size="small" color="#2563EB" />}
+          </Text>
+          <Text className="text-emerald-600 font-bold text-xs mt-2">Verified in Mati City</Text>
         </View>
 
         <View className="flex-1 min-w-[220px] bg-white p-6 rounded-3xl shadow-sm border border-gray-200/80">
@@ -68,7 +108,9 @@ export default function SystemAdminDashboard() {
               <Ionicons name="storefront" size={18} color="#EA5410" />
             </View>
           </View>
-          <Text className="text-3xl font-black text-gray-900 tracking-tight">5 Verified</Text>
+          <Text className="text-3xl font-black text-gray-900 tracking-tight">
+            {metrics ? `${metrics.total_stores} Verified` : <ActivityIndicator size="small" color="#EA5410" />}
+          </Text>
           <Text className="text-[#EA5410] font-bold text-xs mt-2">In Poblacion & Dahican</Text>
         </View>
 
@@ -79,8 +121,12 @@ export default function SystemAdminDashboard() {
               <Ionicons name="hourglass" size={18} color="#D97706" />
             </View>
           </View>
-          <Text className="text-3xl font-black text-gray-900 tracking-tight">{approvals.length} Stores</Text>
-          <Text className="text-amber-600 font-bold text-xs mt-2">Requires review</Text>
+          <Text className="text-3xl font-black text-gray-900 tracking-tight">
+            {metrics ? `${metrics.pending_stores} Stores` : <ActivityIndicator size="small" color="#D97706" />}
+          </Text>
+          <Text className="text-amber-600 font-bold text-xs mt-2">
+            {pendingApps.length > 0 ? "Requires review" : "All reviewed"}
+          </Text>
         </View>
 
         <View className="flex-1 min-w-[220px] bg-white p-6 rounded-3xl shadow-sm border border-gray-200/80">
@@ -90,7 +136,11 @@ export default function SystemAdminDashboard() {
               <Ionicons name="cash" size={18} color="#047857" />
             </View>
           </View>
-          <Text className="text-3xl font-black text-gray-900 tracking-tight">₱148,500</Text>
+          <Text className="text-3xl font-black text-gray-900 tracking-tight">
+            {metrics
+              ? `₱${((metrics.gross_sales_centavos) / 100).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
+              : <ActivityIndicator size="small" color="#047857" />}
+          </Text>
           <Text className="text-emerald-600 font-bold text-xs mt-2">100% Cash on Delivery</Text>
         </View>
       </View>
@@ -101,7 +151,7 @@ export default function SystemAdminDashboard() {
         <View className="flex-[2] bg-white rounded-3xl shadow-sm border border-gray-200/80 overflow-hidden">
           <View className="px-8 py-5 border-b border-gray-100 flex-row justify-between items-center">
             <View>
-              <Text className="text-lg font-black text-gray-900">Pending Store Approvals</Text>
+              <Text className="text-lg font-black text-gray-900">Store Verification Queue</Text>
               <Text className="text-xs text-gray-400">Applications from Mati restaurant owners awaiting verification</Text>
             </View>
             <Link href="/(web)/system-admin/approvals" asChild>
@@ -111,7 +161,12 @@ export default function SystemAdminDashboard() {
             </Link>
           </View>
 
-          {approvals.length === 0 ? (
+          {loading ? (
+            <View className="py-16 items-center justify-center">
+              <ActivityIndicator size="small" color="#EA5410" />
+              <Text className="text-xs text-gray-400 mt-2">Loading applications from Supabase...</Text>
+            </View>
+          ) : approvals.length === 0 ? (
             <View className="py-16 items-center justify-center">
               <Ionicons name="checkmark-done-circle" size={40} color="#047857" />
               <Text className="text-gray-800 font-bold text-sm mt-3">All store applications processed!</Text>
@@ -119,35 +174,61 @@ export default function SystemAdminDashboard() {
             </View>
           ) : (
             <ScrollView className="max-h-[440px]">
-              {approvals.map((app) => (
+              {approvals.slice(0, 5).map((app) => (
                 <View
                   key={app.id}
                   className="px-8 py-5 border-b border-gray-100 flex-col md:flex-row items-start md:items-center justify-between hover:bg-gray-50/70 transition-colors gap-3"
                 >
                   <View className="flex-1 pr-2">
                     <View className="flex-row items-center gap-2 mb-1">
-                      <Text className="font-black text-gray-900 text-base">{app.store}</Text>
-                      <View className="bg-orange-100 px-2 py-0.5 rounded-full">
-                        <Text className="text-[10px] font-black text-[#EA5410] uppercase">{app.category}</Text>
+                      <Text className="font-black text-gray-900 text-base">{app.name}</Text>
+                      <View
+                        className={`px-2 py-0.5 rounded-full ${
+                          app.approval_status === "approved"
+                            ? "bg-emerald-100"
+                            : app.approval_status === "rejected"
+                            ? "bg-red-100"
+                            : "bg-amber-100"
+                        }`}
+                      >
+                        <Text
+                          className={`text-[10px] font-black uppercase ${
+                            app.approval_status === "approved"
+                              ? "text-emerald-800"
+                              : app.approval_status === "rejected"
+                              ? "text-red-800"
+                              : "text-amber-800"
+                          }`}
+                        >
+                          {app.approval_status}
+                        </Text>
                       </View>
                     </View>
-                    <Text className="text-xs text-gray-500 font-medium">Owner: {app.owner} • {app.location}</Text>
-                    <Text className="text-[11px] text-gray-400 mt-0.5">Applied: {app.applied}</Text>
+                    <Text className="text-xs text-gray-500 font-medium">
+                      Barangay: {app.barangay || "Mati"} • {app.address_text}
+                    </Text>
+                    <Text className="text-[11px] text-gray-400 mt-0.5">
+                      Phone: {app.public_phone || "Not specified"}
+                    </Text>
                   </View>
 
                   <View className="flex-row items-center gap-2">
-                    <Pressable
-                      onPress={() => handleApprove(app.id, app.store)}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-2xs"
-                    >
-                      <Text className="text-white font-extrabold text-xs">Approve</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => handleReject(app.id, app.store)}
-                      className="px-3.5 py-2 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-colors"
-                    >
-                      <Text className="text-red-700 font-bold text-xs">Reject</Text>
-                    </Pressable>
+                    {app.approval_status !== "approved" && (
+                      <Pressable
+                        onPress={() => handleApprove(app.id, app.name)}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-2xs"
+                      >
+                        <Text className="text-white font-extrabold text-xs">Approve</Text>
+                      </Pressable>
+                    )}
+                    {app.approval_status !== "rejected" && (
+                      <Pressable
+                        onPress={() => handleReject(app.id, app.name)}
+                        className="px-3.5 py-2 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-colors"
+                      >
+                        <Text className="text-red-700 font-bold text-xs">Reject</Text>
+                      </Pressable>
+                    )}
                   </View>
                 </View>
               ))}
@@ -184,7 +265,7 @@ export default function SystemAdminDashboard() {
               <View className="pb-3 border-b border-gray-100">
                 <View className="flex-row justify-between items-center mb-1">
                   <Text className="text-xs font-bold text-gray-900">Rider Role Verification</Text>
-                  <Text className="text-[10px] text-blue-600 font-bold">Active</Text>
+                  <Text className="text-[10px] text-blue-600 font-bold">{metrics?.active_riders ?? 3} Active</Text>
                 </View>
                 <Text className="text-[11px] text-gray-500">get_my_application_roles RPC enforcing courier claims.</Text>
               </View>

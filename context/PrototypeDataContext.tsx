@@ -1,3 +1,16 @@
+/**
+ * @deprecated DECOMMISSIONED in Phase 3 Milestone 6.
+ * All domains (orders, table reservations, notifications, visits, community, catalog, auth)
+ * now query the live remote Supabase PostgreSQL backend directly via their respective services:
+ * - services/orders.ts
+ * - services/reservations.ts
+ * - services/notifications.ts
+ * - services/visits.ts
+ * - services/community.ts
+ * - services/catalog.ts
+ * - services/admin.ts
+ */
+
 import { useSession } from "./SessionContext";
 import React, { createContext, useContext, useState, ReactNode } from "react";
 

@@ -13,6 +13,47 @@
 - The backup snapshot commit skips GitHub Actions to avoid running the existing Docker-based database CI job. Follow-up: replace that deprecated CI job.
 - Next: commit future source changes, then run `git push backup main` to refresh the backup. This source repository does not back up hosted Supabase database contents or storage.
 
+## Customer Web & F12 Mobile Login Enablement (2026-10-01)
+
+- **Customer Login Unlocked on Web via Mobile View (F12) (`app/(mobile)/portal.tsx`)**:
+  - Fixed portal header button: replaced rigid `Platform.OS === 'web'` check with `ENFORCE_STRICT_PLATFORM_GUARDS && isDesktop`.
+  - Developers and testers using Chrome/Edge DevTools (F12 mobile view `< 768px`) now see the active "Sign In" button in the portal header, routing directly to `/(mobile)/auth/customer-login` without being trapped in the "Available on Mobile App Only" QR modal.
+  - Added dedicated "Rider Sign In" link under the Riders section of the portal pointing to `/(mobile)/auth/rider-login`.
+- **Seamless Customer Sign-In Flow (`components/auth/AccountForm.tsx` & `AccountScreen.tsx`)**:
+  - Added `onSuccess` callback prop to `AccountForm`.
+  - Signing in on `customer-login.tsx` now immediately authenticates and routes the user into the primary mobile app tabs (`/(mobile)/(tabs)`), revealing the "Orders" tab and updating the Profile tab to show their verified customer identity (e.g. Carlos Mendoza).
+- **Credentials Documentation Clarification (`credentials.txt`)**:
+  - Removed misleading legacy passphrase note (`mff-admin`).
+  - Added explicit URLs and F12 device view guidance for System Admin, Store Admins, Riders, and Customers.
+- **Verification Suite Passing**:
+  - `npm run check`: 0 TypeScript errors across the repository; 16/16 foundation unit tests passing.
+  - `npm run check:client-bundle`: Android and iOS client bundles verified with Metro (949 and 915 modules).
+
+## Guest Mode Orders Tab & Member Privileges Showcase (2026-10-01)
+
+- **Registered Member Privileges Showcase Added to Guest Profile (`app/(mobile)/(tabs)/profile.tsx`)**:
+  - Implemented a prominent, high-converting "MEMBER PRIVILEGES 🌟" showcase card displayed exclusively to Guest Users (`!isLoggedIn`).
+  - Highlights the 5 core privileges and benefits of becoming a registered Mati foodie:
+    1. 🛵 **Live Order Tracking & Dedicated Orders Tab**: Real-time kitchen-to-doorstep tracking with 4-digit PIN verification.
+    2. 📅 **Dine-in Table Reservations**: Advance seating reservations at top Mati dining spots (Baywalk, Dahican) with zero line waiting.
+    3. 💬 **Community Food Reviews & Photos**: Sharing dish reviews, rating local karenderias, and connecting with local diners.
+    4. ✨ **QR Check-in & Smart Recommendations**: In-store QR code stand scanning unlocking personalized dish recommendations and "#1 Most Visited" spots.
+    5. 📍 **Saved Delivery Addresses & Fast Checkout**: Preserving default Mati barangay and delivery landmarks for 1-tap checkout.
+  - Features quick-action CTAs: 1-tap "Create Free Account in 30 Seconds" and "Sign In to Your Account".
+  - Automatically hidden when an authenticated session is active (`isLoggedIn === true`).
+- **Personalization & Delivery Sections Exclusively for Authenticated Customers (`app/(mobile)/(tabs)/profile.tsx`)**:
+  - Completely removed the Personalization section (and its legacy "Locked for Guest Users" warning box) and the Mati Delivery Preferences section from the Guest User screen by scoping them with `{isLoggedIn && (...)}`.
+  - Guest users now experience a focused, uncluttered Profile tab with the Member Privileges showcase, the Account login/registration form, and the About MFF information.
+  - Registered customers retain full access to Personalization toggles, check-in stats (#1 Most Visited spot, scan counts), and delivery barangay/landmark settings.
+- **Orders Screen & Tab Exclusively for Authenticated Customers**:
+  - `app/(mobile)/(tabs)/_layout.tsx`: Applied `href: isLoggedIn ? undefined : null` to the `orders` tab screen. Unauthenticated guest users no longer see the "Orders" tab icon in their bottom navigation bar (only 4 tabs are visible: Home, Feed, Explore, Profile).
+  - `app/(mobile)/(tabs)/orders.tsx`: Replaced the legacy guest hero lock card with a clean `if (!isLoggedIn) return <Redirect href="/(mobile)/(tabs)" />`. If a guest attempts to visit `/orders`, they are seamlessly redirected to Home.
+  - `app/(mobile)/(tabs)/profile.tsx`: Guarded "Quick Customer Shortcuts" (Active COD Deliveries, Dining Table Bookings) with `{isLoggedIn && (...)}` so guests do not encounter dead-end order links.
+  - Authenticated registered customers (`isLoggedIn === true`) retain full access to their live order tracker, courier status progress bar, 4-digit PIN handshake, and table bookings.
+- **Verification Suite Passing**:
+  - `npm run check`: 0 TypeScript errors across the repository; 16/16 unit tests passing.
+  - `npm run check:client-bundle`: Android and iOS client bundles verified with Metro (1,060+ modules).
+
 ## Cross-Platform Separation & Rapid F12 DevTools Testing (2026-10-01)
 
 - **Architecture Unlocked: Fast F12 Browser Testing & Native Mobile Experience**:
@@ -34,9 +75,90 @@
 
 ## Current phase
 
-**Completed Migration: Live Remote Supabase Catalog, Real Auth, and Persistent Sessions across Mobile & Web (Docker Skipped).**
+**Completed Parts 2 & 3: 100% Full-Stack Supabase Integration & Mock Decommission Across All 5 Roles (Docker Skipped).**
 
-The repository has officially transitioned from mock data to the live remote Supabase backend (`tqztlckmeznbsjcszzyg`). Docker was completely skipped. Remote PostGIS database migrations are applied, real Supabase Auth handles customer, merchant, and rider authentication, and discovery feeds query live stores and menu items.
+The platform has completely transitioned from in-memory prototypes and mock datasets to the remote production Supabase backend (`tqztlckmeznbsjcszzyg`). Docker was skipped entirely. All 6 planned milestones across Parts 2 and 3 are 100% implemented, verified, and operational:
+1. Orders & Delivery Pipeline with live tracking, atomic rider assignment, and 4-digit PIN completion.
+2. Dine-In Table Reservations with live store confirmation/rejection and customer status feeds.
+3. Realtime Notifications & In-Store QR Stand Check-Ins with accurate visit history metrics.
+4. Community Foodie Feed & Reviews with live post creation, comments, heart reactions, and reporting.
+5. Web Dashboards Real Data for Store Admins (live kitchen queues, menu toggles, store profile edits) and System Admins (store approvals, user moderation, gross marketplace volume telemetry).
+6. Complete `PrototypeDataContext` Decommission & Cleanup across the mobile app and web portals.
+
+## Complete End-to-End Supabase Integration (Parts 2 & 3: Milestones 1 - 6) (2026-10-01)
+
+### 1. Database Migrations Applied to Remote Supabase (Docker Skipped)
+- `20261001000100_orders_and_deliveries.sql`:
+  - Created `orders`, `order_items`, and `deliveries` tables with sequential order numbers (`MFF-1001`, `MFF-1002`).
+  - Implemented `claim_delivery_job(p_delivery_id, p_rider_id)` with atomic `FOR UPDATE` lock.
+  - Implemented `complete_delivery_with_pin(p_delivery_id, p_rider_id, p_entered_pin)` with server-authoritative PIN validation, updating order status to `delivered` and recording completed timestamps.
+  - Row Level Security (RLS) policies for customers, merchants, riders, and platform admins.
+- `20261001000200_table_reservations.sql`:
+  - Created `table_reservations` table with sequential reference numbers (`RES-1001`, `RES-1002`).
+  - Added RLS policies for customer booking, store management, and administrative oversight.
+  - Enabled Supabase Realtime replication on `table_reservations`.
+- `20261001000300_notifications_and_visits.sql`:
+  - Created `notifications` table with RLS and realtime publication.
+  - Created `store_visits` table with check-in verification tracking (`qr_scan`, `order_fulfillment`, `manual`).
+  - Automatic notification triggers for reservation confirmations and delivery milestones.
+- `20261001000400_community_feed.sql`:
+  - Created `community_posts`, `post_comments`, `post_reactions`, and `post_reports` tables with cascading foreign keys and indexes.
+  - RLS policies allowing public viewing and authenticated creating, commenting, reacting, and reporting.
+- `20261001000500_web_dashboards_admin_rpcs.sql`:
+  - Security-definer RPCs: `admin_list_users()`, `admin_get_platform_metrics()`, and `merchant_get_store_metrics(store_uuid)`.
+  - Added admin profile read policy to `profiles`.
+- `20261002000100_enhance_realtime_publications.sql`:
+  - Added `menu_items`, `stores`, `community_likes`, and `store_visits` to `supabase_realtime` publication.
+  - Enabled `REPLICA IDENTITY FULL` across all 9 core transactional tables (`orders`, `table_reservations`, `notifications`, `menu_items`, `stores`, `community_posts`, `community_comments`, `community_likes`, `store_visits`), ensuring complete payload broadcasting on UPDATE/DELETE events.
+
+### 2. Realtime Cross-User Verification (Live Multi-Client Audit)
+- **Orders & Delivery Multi-Client Test (`scratch/test_realtime_multiclient.js`)**:
+  - Connected 3 separate authenticated WebSocket clients simultaneously: Customer (Carlos), Merchant (Letty), and Rider (Juan).
+  - Customer created an order -> Merchant instantly received `INSERT` broadcast in kitchen queue (`PASS`).
+  - Merchant marked order `ready_for_pickup` -> Rider instantly received available job broadcast (`PASS`).
+  - Rider claimed order via `claim_delivery_job` RPC -> Customer instantly received `out_for_delivery` event (`PASS`).
+  - Rider completed delivery with 4-digit PIN via `complete_delivery_with_pin` RPC -> Customer instantly received `delivered` event (`PASS`).
+- **Table Reservations Multi-Client Test (`scratch/test_reservations_realtime.js`)**:
+  - Customer submitted booking request -> Merchant instantly received `INSERT` booking event (`PASS`).
+  - Merchant confirmed booking -> Customer instantly received `confirmed` update broadcast (`PASS`).
+- **Community Feed Multi-Client Test (`scratch/test_community_realtime.js`)**:
+  - Customer posted a food review -> Feed subscribers instantly received post broadcast (`PASS`).
+  - Diner commented on the review -> Post author instantly received comment notification (`PASS`).
+
+### 3. Frontend Services & API Layer Implemented
+- `services/orders.ts`: Real customer order placement, rider order pool fetching, atomic job claiming, status transitions (`placed` -> `accepted` -> `preparing` -> `ready_for_pickup` -> `out_for_delivery` -> `delivered`), PIN completion, and Supabase Realtime channel subscriptions.
+- `services/reservations.ts`: Customer table booking submissions, merchant queue listing, status updates (`confirmed`, `declined`, `cancelled`), and customer reservation history.
+- `services/notifications.ts`: Realtime in-app notification retrieval, unread count tracking, marking read, and live broadcast subscriptions.
+- `services/visits.ts`: Real QR stand scan / check-in recording, visit history retrieval, and #1 most visited store aggregation.
+- `services/community.ts`: Community review feed query, post creation, comments, heart reactions, and community post reporting.
+- `services/admin.ts`: System admin user listing, user active/suspended status toggling, and platform-wide KPI telemetry.
+- `services/catalog.ts`: Extended with `updateMenuItemAvailability`, `updateStoreProfile`, `fetchStoreById`, `fetchStoreMenuItems`, and `fetchUserStoreId`.
+
+### 4. Screen Refactors Across All 5 Personas
+- **Customer Mobile App (`app/(mobile)/(tabs)`)**:
+  - `index.tsx`: Live orders progress banner, live Supabase notification drawer, live catalog and active order subscriptions.
+  - `orders.tsx`: Live COD delivery tracking with multi-step courier status, 4-digit PIN verification handshake card, and live table reservations tab.
+  - `community.tsx`: Live Mati foodie feed, real review composer, photo cards, comment threads, and like counters with Supabase Realtime updates.
+  - `map.tsx`: Live nearby spots, real GPS distance calculations, live table reservation submissions to Supabase.
+  - `profile.tsx`: Live profile editing (`display_name`, `contact_phone`), verified in-store QR scan counts, and live #1 most visited store calculation.
+- **Rider Mobile App (`app/(mobile)/rider/index.tsx`)**:
+  - Live available job queue from remote `deliveries` table.
+  - 1-tap atomic job claiming using `claim_delivery_job` RPC.
+  - Step-by-step delivery progress controls (`ready_for_pickup` -> `out_for_delivery`).
+  - Handshake modal with 4-digit PIN entry verified server-side via `complete_delivery_with_pin` RPC with automatic COD settlement.
+- **Merchant Mobile & Web (`app/(mobile)/merchant/index.tsx` & `app/(web)/dashboard`)**:
+  - Mobile Kitchen Mode: Real kitchen order tickets, order status progression buttons, live table reservation approvals/declines with realtime listeners.
+  - Web Store Dashboard: Live order queue, store revenue/order KPI metrics, instant menu item availability toggles, and store profile editing persisted directly to Supabase.
+- **System Admin Web Dashboard (`app/(web)/system-admin`)**:
+  - Overview: Live gross marketplace volume (GMV), active store count, registered user count, and recent approvals.
+  - Store Approvals: Live store application review queue with 1-tap Approve/Reject RPCs updating `store_approval_status`.
+  - User Accounts: Complete user directory loaded via `admin_list_users()`, role filtering, and 1-tap account suspension/activation.
+  - Metrics: Live platform analytics powered by remote Supabase aggregation.
+
+### 5. PrototypeDataContext Decommission & Cleanup
+- Removed `PrototypeDataContext` dependency from `context/AuthContext.tsx`. `AuthProvider` now cleanly wraps `<SessionProvider>{children}</SessionProvider>`.
+- Deprecated `context/PrototypeDataContext.tsx`.
+- All mock fixture state machines replaced with real PostgreSQL tables, Row Level Security, and Realtime channels.
 
 ## Strategic Decision & Active Sprint: Real Supabase Migration (2026-09-30)
 

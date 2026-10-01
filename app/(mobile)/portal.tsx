@@ -246,7 +246,7 @@ export default function MobileWelcomePortal() {
                 <Text style={s.merchantPortalText}>System Admin</Text>
               </TouchableOpacity>
 
-              {Platform.OS === "web" ? (
+              {ENFORCE_STRICT_PLATFORM_GUARDS && isDesktop ? (
                 <TouchableOpacity
                   accessibilityRole="button"
                   accessibilityLabel="Get the Mobile App"
@@ -454,6 +454,15 @@ export default function MobileWelcomePortal() {
                     <Text style={s.partnerPrimaryText}>
                       {ENFORCE_STRICT_PLATFORM_GUARDS && isDesktop ? "Get Rider App" : "Rider Mode"}
                     </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Rider Sign In"
+                    onPress={() => router.push("/(mobile)/auth/rider-login")}
+                    style={s.partnerSecondary}
+                  >
+                    <Ionicons name="log-in-outline" size={16} color="#9CA3AF" />
+                    <Text style={s.partnerSecondaryText}>Rider Sign In</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     accessibilityRole="button"

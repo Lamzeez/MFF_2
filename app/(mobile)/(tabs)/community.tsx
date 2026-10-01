@@ -15,29 +15,57 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../../context/AuthContext";
 import { SocialPost } from "../../../types/post";
-import { SEED_SOCIAL_POSTS } from "../../../mock/posts";
-import { MATI_RESTAURANTS_DATA } from "../../../mock/restaurants";
 import { fetchLiveStores } from "../../../services/catalog";
+import {
+  fetchCommunityPosts,
+  createCommunityPost,
+  togglePostLike,
+  addCommunityComment,
+  subscribeToCommunityFeed,
+} from "../../../services/community";
 import { BottomSheetModal } from "../../../components/ui/BottomSheetModal";
 import { GuestGateModal } from "../../../components/auth/GuestGateModal";
+
+const DEFAULT_MATI_STORES = [
+  "Mama Letty's Karenderia",
+  "Mati Baywalk Seafood Grill",
+  "Subangan Street Grills",
+  "Dahican Beach Bites",
+  "Aling Nena's Kitchen",
+];
 
 export default function MobileCommunityScreen() {
   const { isLoggedIn, user } = useAuth();
   const router = useRouter();
 
   // Social Posts State
-  const [socialPosts, setSocialPosts] = useState<SocialPost[]>(SEED_SOCIAL_POSTS);
-  const [availableStores, setAvailableStores] = useState<string[]>(
-    Object.keys(MATI_RESTAURANTS_DATA)
-  );
+  const [socialPosts, setSocialPosts] = useState<SocialPost[]>([]);
+  const [availableStores, setAvailableStores] = useState<string[]>(DEFAULT_MATI_STORES);
+
+  const loadPosts = async () => {
+    try {
+      const data = await fetchCommunityPosts();
+      if (data && data.length > 0) {
+        setSocialPosts(data);
+      }
+    } catch (err) {
+      console.warn("Could not fetch community posts:", err);
+    }
+  };
+
+  React.useEffect(() => {
+    loadPosts();
+    const unsub = subscribeToCommunityFeed(() => {
+      loadPosts();
+    });
+    return () => unsub();
+  }, [isLoggedIn]);
 
   React.useEffect(() => {
     fetchLiveStores()
       .then((stores) => {
         if (stores.length > 0) {
-          const storeNames = Array.from(
-            new Set([...stores.map((s) => s.name), ...Object.keys(MATI_RESTAURANTS_DATA)])
-          );
+          const storeNames = Array.from(new Set(stores.map((s) => s.name)));
           setAvailableStores(storeNames);
         }
       })
@@ -73,9 +101,10 @@ export default function MobileCommunityScreen() {
   };
 
   // Toggle Like on Post
-  const handleToggleLike = (postId: string) => {
+  const handleToggleLike = async (postId: string) => {
     if (!verifyRegisteredUser("like posts in the foodie community")) return;
 
+    // Optimistic UI update
     setSocialPosts((prevPosts) =>
       prevPosts.map((post) => {
         if (post.id === postId) {
@@ -83,12 +112,19 @@ export default function MobileCommunityScreen() {
           return {
             ...post,
             hasLiked: newHasLiked,
-            likes: newHasLiked ? post.likes + 1 : post.likes - 1,
+            likes: newHasLiked ? post.likes + 1 : Math.max(0, post.likes - 1),
           };
         }
         return post;
       })
     );
+
+    try {
+      await togglePostLike(postId);
+    } catch (err) {
+      console.error("togglePostLike error:", err);
+      loadPosts();
+    }
   };
 
   // Open Comments
@@ -98,60 +134,54 @@ export default function MobileCommunityScreen() {
   };
 
   // Add Comment
-  const handleAddComment = () => {
+  const handleAddComment = async () => {
     if (!newCommentText.trim()) return;
     if (!activePostForComments) return;
+    if (!verifyRegisteredUser("comment on foodie community posts")) return;
 
-    const newComment = {
-      id: `c-${Date.now()}`,
-      author: user?.name || "Juan dela Cruz",
-      avatarColor: "bg-[#EA5410]",
-      text: newCommentText.trim(),
-      timestamp: "Just now",
-    };
-
-    const updatedComments = [...activePostForComments.comments, newComment];
-    const updatedPost = { ...activePostForComments, comments: updatedComments };
-
-    setActivePostForComments(updatedPost);
-    setSocialPosts((prev) =>
-      prev.map((p) => (p.id === activePostForComments.id ? updatedPost : p))
-    );
+    const commentText = newCommentText.trim();
     setNewCommentText("");
+
+    try {
+      const createdComment = await addCommunityComment(activePostForComments.id, commentText);
+      const updatedComments = [...activePostForComments.comments, createdComment];
+      const updatedPost = { ...activePostForComments, comments: updatedComments };
+
+      setActivePostForComments(updatedPost);
+      setSocialPosts((prev) =>
+        prev.map((p) => (p.id === activePostForComments.id ? updatedPost : p))
+      );
+    } catch (err: any) {
+      Alert.alert("Comment Failed", err.message || "Could not add comment.");
+    }
   };
 
   // Create Post
-  const handleCreatePost = (handleDismiss: () => void) => {
+  const handleCreatePost = async (handleDismiss: () => void) => {
     if (!newPostText.trim()) {
       Alert.alert("Missing Content", "Please share something about your food trip in Mati City.");
       return;
     }
 
-    const newPost: SocialPost = {
-      id: `post-${Date.now()}`,
-      author: user?.name || "Foodie Explorer",
-      authorInitial: (user?.name || "F")[0].toUpperCase(),
-      avatarBg: "bg-[#EA5410]",
-      roleBadge: "Verified Foodie",
-      timestamp: "Just now",
-      content: newPostText.trim(),
-      rating: newPostRestaurant !== "None" ? newPostRating : undefined,
-      taggedRestaurant: newPostRestaurant !== "None" ? newPostRestaurant : undefined,
-      taggedDish: newPostDish.trim() ? newPostDish.trim() : undefined,
-      imageUrl: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop&q=80",
-      photoCaption: `Delicious meal at ${newPostRestaurant !== "None" ? newPostRestaurant : "Mati City"}`,
-      likes: 0,
-      hasLiked: false,
-      comments: [],
-    };
+    try {
+      await createCommunityPost({
+        content: newPostText.trim(),
+        taggedRestaurant: newPostRestaurant !== "None" ? newPostRestaurant : undefined,
+        taggedDish: newPostDish.trim() ? newPostDish.trim() : undefined,
+        rating: newPostRestaurant !== "None" ? newPostRating : 5,
+        imageUrl: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop&q=80",
+      });
 
-    setSocialPosts([newPost, ...socialPosts]);
-    handleDismiss();
-    setNewPostText("");
-    setNewPostRestaurant("None");
-    setNewPostDish("");
-    setNewPostRating(5);
-    Alert.alert("Review Published! 🎉", "Your food review is now live in the Mati Foodie Community.");
+      await loadPosts();
+      handleDismiss();
+      setNewPostText("");
+      setNewPostRestaurant("None");
+      setNewPostDish("");
+      setNewPostRating(5);
+      Alert.alert("Review Published! 🎉", "Your food review is now live in the Mati Foodie Community.");
+    } catch (err: any) {
+      Alert.alert("Publish Failed", err.message || "Could not publish your review.");
+    }
   };
 
   return (

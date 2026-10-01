@@ -1,8 +1,15 @@
-import React, { useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSession } from "../../../context/SessionContext";
+import { fetchStoreById, updateStoreProfile, fetchUserStoreId } from "../../../services/catalog";
+
+const DEFAULT_STORE_ID = "11111111-1111-1111-1111-111111111111";
 
 export default function StoreProfile() {
+  const { identity } = useSession();
+  const [storeId, setStoreId] = useState<string>(DEFAULT_STORE_ID);
+
   const [storeName, setStoreName] = useState("Mama Letty's Karenderia");
   const [description, setDescription] = useState(
     "Serving authentic home-cooked Filipino meals, seafood, and Mati specialties in the heart of Poblacion."
@@ -11,10 +18,42 @@ export default function StoreProfile() {
   const [closeTime, setCloseTime] = useState("08:00 PM");
   const [phone, setPhone] = useState("+63 917 234 5678");
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+  useEffect(() => {
+    if (identity?.id) {
+      fetchUserStoreId(identity.id).then((id) => {
+        if (id) setStoreId(id);
+      });
+    }
+  }, [identity?.id]);
+
+  useEffect(() => {
+    fetchStoreById(storeId).then((store) => {
+      if (store) {
+        setStoreName(store.name);
+        setDescription(store.description);
+        if (store.phone) setPhone(store.phone);
+      }
+      setLoading(false);
+    });
+  }, [storeId]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    const res = await updateStoreProfile(storeId, {
+      name: storeName,
+      description,
+      public_phone: phone,
+    });
+    setSaving(false);
+    if (res.success) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } else {
+      alert(`Failed to save: ${res.error || "Unknown error"}`);
+    }
   };
 
   return (
@@ -53,71 +92,82 @@ export default function StoreProfile() {
           </View>
         </View>
 
-        {/* Form Fields */}
-        <View className="gap-5">
-          <View>
-            <Text className="font-extrabold text-xs text-gray-700 uppercase tracking-wider mb-2">Store Name</Text>
-            <TextInput
-              value={storeName}
-              onChangeText={setStoreName}
-              className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-900 focus:border-[#EA5410] focus:bg-white"
-            />
+        {loading ? (
+          <View className="py-12 items-center justify-center">
+            <ActivityIndicator size="small" color="#EA5410" />
+            <Text className="text-xs text-gray-400 mt-2">Loading store profile from Supabase...</Text>
           </View>
-
-          <View>
-            <Text className="font-extrabold text-xs text-gray-700 uppercase tracking-wider mb-2">Short Description</Text>
-            <TextInput
-              value={description}
-              onChangeText={setDescription}
-              multiline
-              numberOfLines={3}
-              className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-900 focus:border-[#EA5410] focus:bg-white h-24"
-              textAlignVertical="top"
-            />
-          </View>
-
-          <View className="flex-col md:flex-row gap-5">
-            <View className="flex-1">
-              <Text className="font-extrabold text-xs text-gray-700 uppercase tracking-wider mb-2">Opening Time</Text>
+        ) : (
+          /* Form Fields */
+          <View className="gap-5">
+            <View>
+              <Text className="font-extrabold text-xs text-gray-700 uppercase tracking-wider mb-2">Store Name</Text>
               <TextInput
-                value={openTime}
-                onChangeText={setOpenTime}
+                value={storeName}
+                onChangeText={setStoreName}
                 className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-900 focus:border-[#EA5410] focus:bg-white"
               />
             </View>
-            <View className="flex-1">
-              <Text className="font-extrabold text-xs text-gray-700 uppercase tracking-wider mb-2">Closing Time</Text>
+
+            <View>
+              <Text className="font-extrabold text-xs text-gray-700 uppercase tracking-wider mb-2">Short Description</Text>
               <TextInput
-                value={closeTime}
-                onChangeText={setCloseTime}
+                value={description}
+                onChangeText={setDescription}
+                multiline
+                numberOfLines={3}
+                className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-900 focus:border-[#EA5410] focus:bg-white h-24"
+                textAlignVertical="top"
+              />
+            </View>
+
+            <View className="flex-col md:flex-row gap-5">
+              <View className="flex-1">
+                <Text className="font-extrabold text-xs text-gray-700 uppercase tracking-wider mb-2">Opening Time</Text>
+                <TextInput
+                  value={openTime}
+                  onChangeText={setOpenTime}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-900 focus:border-[#EA5410] focus:bg-white"
+                />
+              </View>
+              <View className="flex-1">
+                <Text className="font-extrabold text-xs text-gray-700 uppercase tracking-wider mb-2">Closing Time</Text>
+                <TextInput
+                  value={closeTime}
+                  onChangeText={setCloseTime}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-900 focus:border-[#EA5410] focus:bg-white"
+                />
+              </View>
+            </View>
+
+            <View>
+              <Text className="font-extrabold text-xs text-gray-700 uppercase tracking-wider mb-2">Official Contact Phone</Text>
+              <TextInput
+                value={phone}
+                onChangeText={setPhone}
                 className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-900 focus:border-[#EA5410] focus:bg-white"
               />
             </View>
           </View>
-
-          <View>
-            <Text className="font-extrabold text-xs text-gray-700 uppercase tracking-wider mb-2">Official Contact Phone</Text>
-            <TextInput
-              value={phone}
-              onChangeText={setPhone}
-              className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-900 focus:border-[#EA5410] focus:bg-white"
-            />
-          </View>
-        </View>
+        )}
 
         {saved && (
           <View className="mt-6 bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex-row items-center gap-2">
             <Ionicons name="checkmark-circle" size={18} color="#047857" />
-            <Text className="text-emerald-800 text-xs font-bold">Store profile updated successfully!</Text>
+            <Text className="text-emerald-800 text-xs font-bold">Store profile updated successfully on Supabase!</Text>
           </View>
         )}
 
         <View className="mt-8 pt-6 border-t border-gray-100 flex-row justify-end">
           <Pressable
+            disabled={saving || loading}
             onPress={handleSave}
-            className="px-8 py-3.5 bg-[#EA5410] rounded-2xl hover:bg-[#D04508] transition-colors shadow-sm"
+            className="px-8 py-3.5 bg-[#EA5410] rounded-2xl hover:bg-[#D04508] transition-colors shadow-sm flex-row items-center gap-2"
           >
-            <Text className="text-white font-extrabold text-sm">Save Store Changes</Text>
+            {saving && <ActivityIndicator size="small" color="white" />}
+            <Text className="text-white font-extrabold text-sm">
+              {saving ? "Saving..." : "Save Store Changes"}
+            </Text>
           </Pressable>
         </View>
       </ScrollView>

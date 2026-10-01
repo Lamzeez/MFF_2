@@ -75,6 +75,410 @@ isOneToOne: false
                   Relationships: [
 
                   ]
+                },
+            "orders": {
+                  Row: {
+                    "barangay": string,
+                    "created_at": string,
+                    "customer_id": string,
+                    "customer_phone": string | null,
+                    "delivery_address": string,
+                    "delivery_fee_centavos": number,
+                    "fulfillment_type": "delivery" | "pickup",
+                    "handshake_pin": string,
+                    "id": string,
+                    "notes": string,
+                    "order_number": string,
+                    "payment_method": "cod" | "gcash",
+                    "rider_id": string | null,
+                    "status": Database["public"]['Enums']["order_status"],
+                    "store_id": string,
+                    "subtotal_centavos": number,
+                    "total_centavos": number,
+                    "updated_at": string
+                  },
+                  Insert: {
+                    "barangay": string,
+                    "created_at"?: string,
+                    "customer_id": string,
+                    "customer_phone"?: string | null,
+                    "delivery_address": string,
+                    "delivery_fee_centavos"?: number,
+                    "fulfillment_type"?: "delivery" | "pickup",
+                    "handshake_pin": string,
+                    "id"?: string,
+                    "notes"?: string,
+                    "order_number"?: string,
+                    "payment_method"?: "cod" | "gcash",
+                    "rider_id"?: string | null,
+                    "status"?: Database["public"]['Enums']["order_status"],
+                    "store_id": string,
+                    "subtotal_centavos": number,
+                    "total_centavos": number,
+                    "updated_at"?: string
+                  },
+                  Update: {
+                    "barangay"?: string,
+                    "created_at"?: string,
+                    "customer_id"?: string,
+                    "customer_phone"?: string | null,
+                    "delivery_address"?: string,
+                    "delivery_fee_centavos"?: number,
+                    "fulfillment_type"?: "delivery" | "pickup",
+                    "handshake_pin"?: string,
+                    "id"?: string,
+                    "notes"?: string,
+                    "order_number"?: string,
+                    "payment_method"?: "cod" | "gcash",
+                    "rider_id"?: string | null,
+                    "status"?: Database["public"]['Enums']["order_status"],
+                    "store_id"?: string,
+                    "subtotal_centavos"?: number,
+                    "total_centavos"?: number,
+                    "updated_at"?: string
+                  },
+                  Relationships: [
+                    {
+                      foreignKeyName: "orders_customer_id_fkey",
+                      columns: ["customer_id"],
+                      isOneToOne: false,
+                      referencedRelation: "profiles",
+                      referencedColumns: ["id"]
+                    },
+                    {
+                      foreignKeyName: "orders_store_id_fkey",
+                      columns: ["store_id"],
+                      isOneToOne: false,
+                      referencedRelation: "stores",
+                      referencedColumns: ["id"]
+                    },
+                    {
+                      foreignKeyName: "orders_rider_id_fkey",
+                      columns: ["rider_id"],
+                      isOneToOne: false,
+                      referencedRelation: "profiles",
+                      referencedColumns: ["id"]
+                    }
+                  ]
+                },
+            "order_items": {
+                  Row: {
+                    "created_at": string,
+                    "id": string,
+                    "item_name": string,
+                    "menu_item_id": string | null,
+                    "order_id": string,
+                    "price_centavos": number,
+                    "quantity": number,
+                    "subtotal_centavos": number
+                  },
+                  Insert: {
+                    "created_at"?: string,
+                    "id"?: string,
+                    "item_name": string,
+                    "menu_item_id"?: string | null,
+                    "order_id": string,
+                    "price_centavos": number,
+                    "quantity": number,
+                    "subtotal_centavos": number
+                  },
+                  Update: {
+                    "created_at"?: string,
+                    "id"?: string,
+                    "item_name"?: string,
+                    "menu_item_id"?: string | null,
+                    "order_id"?: string,
+                    "price_centavos"?: number,
+                    "quantity"?: number,
+                    "subtotal_centavos"?: number
+                  },
+                  Relationships: [
+                    {
+                      foreignKeyName: "order_items_order_id_fkey",
+                      columns: ["order_id"],
+                      isOneToOne: false,
+                      referencedRelation: "orders",
+                      referencedColumns: ["id"]
+                    },
+                    {
+                      foreignKeyName: "order_items_menu_item_id_fkey",
+                      columns: ["menu_item_id"],
+                      isOneToOne: false,
+                      referencedRelation: "menu_items",
+                      referencedColumns: ["id"]
+                    }
+                  ]
+                },
+            "table_reservations": {
+                  Row: {
+                    "created_at": string,
+                    "customer_id": string,
+                    "customer_name": string,
+                    "customer_phone": string,
+                    "id": string,
+                    "party_size": number,
+                    "reservation_date": string,
+                    "reservation_number": string,
+                    "reservation_time": string,
+                    "seating_preference": string | null,
+                    "special_notes": string | null,
+                    "status": Database["public"]['Enums']["reservation_status"],
+                    "store_id": string,
+                    "store_notes": string | null,
+                    "updated_at": string
+                  },
+                  Insert: {
+                    "created_at"?: string,
+                    "customer_id": string,
+                    "customer_name": string,
+                    "customer_phone"?: string,
+                    "id"?: string,
+                    "party_size": number,
+                    "reservation_date": string,
+                    "reservation_number"?: string,
+                    "reservation_time": string,
+                    "seating_preference"?: string | null,
+                    "special_notes"?: string | null,
+                    "status"?: Database["public"]['Enums']["reservation_status"],
+                    "store_id": string,
+                    "store_notes"?: string | null,
+                    "updated_at"?: string
+                  },
+                  Update: {
+                    "created_at"?: string,
+                    "customer_id"?: string,
+                    "customer_name"?: string,
+                    "customer_phone"?: string,
+                    "id"?: string,
+                    "party_size"?: number,
+                    "reservation_date"?: string,
+                    "reservation_number"?: string,
+                    "reservation_time"?: string,
+                    "seating_preference"?: string | null,
+                    "special_notes"?: string | null,
+                    "status"?: Database["public"]['Enums']["reservation_status"],
+                    "store_id"?: string,
+                    "store_notes"?: string | null,
+                    "updated_at"?: string
+                  },
+                  Relationships: [
+                    {
+                      foreignKeyName: "table_reservations_customer_id_fkey",
+                      columns: ["customer_id"],
+                      isOneToOne: false,
+                      referencedRelation: "profiles",
+                      referencedColumns: ["id"]
+                    },
+                    {
+                      foreignKeyName: "table_reservations_store_id_fkey",
+                      columns: ["store_id"],
+                      isOneToOne: false,
+                      referencedRelation: "stores",
+                      referencedColumns: ["id"]
+                    }
+                  ]
+                },
+            "notifications": {
+                  Row: {
+                    "created_at": string,
+                    "id": string,
+                    "is_read": boolean,
+                    "message": string,
+                    "title": string,
+                    "type": "order" | "reservation" | "promo" | "system",
+                    "user_id": string
+                  },
+                  Insert: {
+                    "created_at"?: string,
+                    "id"?: string,
+                    "is_read"?: boolean,
+                    "message": string,
+                    "title": string,
+                    "type"?: "order" | "reservation" | "promo" | "system",
+                    "user_id": string
+                  },
+                  Update: {
+                    "created_at"?: string,
+                    "id"?: string,
+                    "is_read"?: boolean,
+                    "message"?: string,
+                    "title"?: string,
+                    "type"?: "order" | "reservation" | "promo" | "system",
+                    "user_id"?: string
+                  },
+                  Relationships: [
+                    {
+                      foreignKeyName: "notifications_user_id_fkey",
+                      columns: ["user_id"],
+                      isOneToOne: false,
+                      referencedRelation: "profiles",
+                      referencedColumns: ["id"]
+                    }
+                  ]
+                },
+            "store_visits": {
+                  Row: {
+                    "id": string,
+                    "store_id": string,
+                    "user_id": string,
+                    "verified_via": "qr_scan" | "order_fulfillment" | "manual",
+                    "visited_at": string
+                  },
+                  Insert: {
+                    "id"?: string,
+                    "store_id": string,
+                    "user_id": string,
+                    "verified_via"?: "qr_scan" | "order_fulfillment" | "manual",
+                    "visited_at"?: string
+                  },
+                  Update: {
+                    "id"?: string,
+                    "store_id"?: string,
+                    "user_id"?: string,
+                    "verified_via"?: "qr_scan" | "order_fulfillment" | "manual",
+                    "visited_at"?: string
+                  },
+                  Relationships: [
+                    {
+                      foreignKeyName: "store_visits_store_id_fkey",
+                      columns: ["store_id"],
+                      isOneToOne: false,
+                      referencedRelation: "stores",
+                      referencedColumns: ["id"]
+                    },
+                    {
+                      foreignKeyName: "store_visits_user_id_fkey",
+                      columns: ["user_id"],
+                      isOneToOne: false,
+                      referencedRelation: "profiles",
+                      referencedColumns: ["id"]
+                    }
+                  ]
+                },
+            "community_posts": {
+                  Row: {
+                    "author_id": string,
+                    "author_name": string,
+                    "content": string,
+                    "created_at": string,
+                    "id": string,
+                    "image_url": string | null,
+                    "likes_count": number,
+                    "rating": number,
+                    "tagged_dish": string,
+                    "tagged_restaurant": string,
+                    "updated_at": string
+                  },
+                  Insert: {
+                    "author_id": string,
+                    "author_name": string,
+                    "content": string,
+                    "created_at"?: string,
+                    "id"?: string,
+                    "image_url"?: string | null,
+                    "likes_count"?: number,
+                    "rating"?: number,
+                    "tagged_dish"?: string,
+                    "tagged_restaurant"?: string,
+                    "updated_at"?: string
+                  },
+                  Update: {
+                    "author_id"?: string,
+                    "author_name"?: string,
+                    "content"?: string,
+                    "created_at"?: string,
+                    "id"?: string,
+                    "image_url"?: string | null,
+                    "likes_count"?: number,
+                    "rating"?: number,
+                    "tagged_dish"?: string,
+                    "tagged_restaurant"?: string,
+                    "updated_at"?: string
+                  },
+                  Relationships: [
+                    {
+                      foreignKeyName: "community_posts_author_id_fkey",
+                      columns: ["author_id"],
+                      isOneToOne: false,
+                      referencedRelation: "profiles",
+                      referencedColumns: ["id"]
+                    }
+                  ]
+                },
+            "community_likes": {
+                  Row: {
+                    "created_at": string,
+                    "post_id": string,
+                    "user_id": string
+                  },
+                  Insert: {
+                    "created_at"?: string,
+                    "post_id": string,
+                    "user_id": string
+                  },
+                  Update: {
+                    "created_at"?: string,
+                    "post_id"?: string,
+                    "user_id"?: string
+                  },
+                  Relationships: [
+                    {
+                      foreignKeyName: "community_likes_post_id_fkey",
+                      columns: ["post_id"],
+                      isOneToOne: false,
+                      referencedRelation: "community_posts",
+                      referencedColumns: ["id"]
+                    },
+                    {
+                      foreignKeyName: "community_likes_user_id_fkey",
+                      columns: ["user_id"],
+                      isOneToOne: false,
+                      referencedRelation: "profiles",
+                      referencedColumns: ["id"]
+                    }
+                  ]
+                },
+            "community_comments": {
+                  Row: {
+                    "author_id": string,
+                    "author_name": string,
+                    "created_at": string,
+                    "id": string,
+                    "post_id": string,
+                    "text": string
+                  },
+                  Insert: {
+                    "author_id": string,
+                    "author_name": string,
+                    "created_at"?: string,
+                    "id"?: string,
+                    "post_id": string,
+                    "text": string
+                  },
+                  Update: {
+                    "author_id"?: string,
+                    "author_name"?: string,
+                    "created_at"?: string,
+                    "id"?: string,
+                    "post_id"?: string,
+                    "text"?: string
+                  },
+                  Relationships: [
+                    {
+                      foreignKeyName: "community_comments_author_id_fkey",
+                      columns: ["author_id"],
+                      isOneToOne: false,
+                      referencedRelation: "profiles",
+                      referencedColumns: ["id"]
+                    },
+                    {
+                      foreignKeyName: "community_comments_post_id_fkey",
+                      columns: ["post_id"],
+                      isOneToOne: false,
+                      referencedRelation: "community_posts",
+                      referencedColumns: ["id"]
+                    }
+                  ]
                 }
           }
           Views: {
@@ -99,12 +503,51 @@ isOneToOne: false
 "admin_set_store_membership":
 { Args: { "active": boolean,"new_role": Database["public"]['Enums']["store_role"],"target_store": string,"target_user": string }; Returns: undefined
                            },
+"claim_delivery_job":
+{ Args: { "p_order_id": string }; Returns: Database["public"]['Tables']['orders']['Row']
+                           },
+"complete_delivery_with_pin":
+{ Args: { "p_order_id": string, "p_pin": string }; Returns: Database["public"]['Tables']['orders']['Row']
+                           },
 "get_my_application_roles":
 { Args: Record<PropertyKey, never>; Returns: (string)[]
+                           },
+"toggle_post_like":
+{ Args: { "p_post_id": string }; Returns: boolean
+                           },
+"admin_list_users":
+{ Args: Record<PropertyKey, never>; Returns: {
+    id: string;
+    display_name: string;
+    phone_number: string;
+    account_status: Database["public"]['Enums']["account_status"];
+    created_at: string;
+    email: string;
+    role: string;
+  }[]
+                           },
+"admin_get_platform_metrics":
+{ Args: Record<PropertyKey, never>; Returns: {
+    total_users: number;
+    total_stores: number;
+    pending_stores: number;
+    active_riders: number;
+    total_orders: number;
+    gross_sales_centavos: number;
+  }
+                           },
+"merchant_get_store_metrics":
+{ Args: { "p_store_id": string }; Returns: {
+    orders_today: number;
+    gross_sales_centavos: number;
+    active_orders: number;
+    reservations_today: number;
+    pending_reservations: number;
+  }
                            }
           }
           Enums: {
-            "account_status": "active"|"suspended","platform_role": "admin"|"rider","store_approval_status": "pending"|"approved"|"rejected","store_role": "owner"|"manager"|"staff"
+            "account_status": "active"|"suspended","order_status": "placed"|"accepted"|"preparing"|"ready_for_pickup"|"out_for_delivery"|"delivered"|"cancelled","platform_role": "admin"|"rider","reservation_status": "pending"|"confirmed"|"declined"|"cancelled"|"completed"|"no_show","store_approval_status": "pending"|"approved"|"rejected","store_role": "owner"|"manager"|"staff"
           }
           CompositeTypes: {
             [_ in never]: never

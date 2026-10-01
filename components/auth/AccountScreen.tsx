@@ -106,7 +106,10 @@ export function AccountScreen({ initialMode }: { initialMode: "login" | "registe
               </Pressable>
             </View>
           ) : (
-            <AccountForm initialMode={initialMode} />
+            <AccountForm
+              initialMode={initialMode}
+              onSuccess={() => router.replace("/(mobile)/(tabs)")}
+            />
           )}
 
           {!identity && (

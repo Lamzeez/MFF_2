@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { AppNotification } from "../../context/AuthContext";
+import { AppNotification } from "../../services/notifications";
 import { BottomSheetModal } from "../ui/BottomSheetModal";
 
 interface NotificationsSheetProps {

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -17,9 +17,18 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../context/AuthContext";
 import { OrderStatus } from "../../../types/order";
 import { ENFORCE_STRICT_PLATFORM_GUARDS, isDesktopDevice } from "../../../lib/platform-policy";
+import { fetchStoreOrders, updateOrderStatus as updateDbOrderStatus, subscribeToOrders, LiveOrder } from "../../../services/orders";
+import {
+  fetchStoreReservations,
+  subscribeToStoreReservations,
+  updateReservationStatus as updateBackendReservationStatus,
+  ReservationRow,
+} from "../../../services/reservations";
+import { getSupabaseClient } from "../../../lib/supabase/client";
 
 interface KitchenOrder {
   id: string;
+  rawId?: string;
   customer: string;
   phone: string;
   address: string;
@@ -38,55 +47,81 @@ export default function MobileMerchantMode() {
   }
 
   const router = useRouter();
-  const { reservations, updateReservationStatus } = useAuth();
   
   const [isOnline, setIsOnline] = useState(true);
   const [activeTab, setActiveTab] = useState<"orders" | "reservations" | "menu" | "qr" | "settings">("orders");
+  const [storeId, setStoreId] = useState<string>("11111111-1111-1111-1111-111111111111");
+  const [storeName, setStoreName] = useState<string>("Mama Letty's Karenderia");
 
-  // Filter reservations for Mama Letty's Karenderia
-  const storeReservations = reservations.filter(
-    (r) => r.restaurantName === "Mama Letty's Karenderia"
-  );
+  // Live State
+  const [kitchenOrders, setKitchenOrders] = useState<KitchenOrder[]>([]);
+  const [liveReservations, setLiveReservations] = useState<ReservationRow[]>([]);
 
-  // Live Orders Pipeline State
-  const [kitchenOrders, setKitchenOrders] = useState<KitchenOrder[]>([
-    {
-      id: "1094",
-      customer: "Juan dela Cruz",
-      phone: "+63 917 111 2222",
-      address: "Near Baywalk Pavilion, blue gate",
-      items: ["2x Classic Pork Humba", "2x Extra Rice"],
-      total: 220,
-      paymentType: "Cash on Delivery",
-      status: "preparing",
-      time: "5 mins ago",
-      notes: "Extra spicy sauce please",
-    },
-    {
-      id: "1095",
-      customer: "Maria Santos",
-      phone: "+63 928 333 4444",
-      address: "Purok 4, Brgy. Sainz",
-      items: ["1x Native Chicken Tinola", "1x Extra Rice"],
-      total: 140,
-      paymentType: "Cash on Delivery",
-      status: "placed",
-      time: "Just now",
-      notes: "Hot sabaw please",
-    },
-    {
-      id: "1093",
-      customer: "Rico Alcantara",
-      phone: "+63 939 555 6666",
-      address: "Dahican Beach Road",
-      items: ["1x Pork Sinigang", "2x Extra Rice"],
-      total: 110,
-      paymentType: "GCash Paid",
-      status: "ready_for_pickup",
-      time: "15 mins ago",
-      notes: "",
-    },
-  ]);
+  const displayReservations = liveReservations;
+
+  const loadMerchantStoreAndOrders = async () => {
+    try {
+      const client = getSupabaseClient();
+      const user = (await client.auth.getUser()).data.user;
+      let targetStoreId = "11111111-1111-1111-1111-111111111111";
+
+      if (user) {
+        const { data: memberships } = await client
+          .from("store_memberships")
+          .select("store_id, stores(name)")
+          .eq("user_id", user.id)
+          .eq("is_active", true)
+          .limit(1);
+
+        if (memberships && memberships.length > 0) {
+          targetStoreId = memberships[0].store_id;
+          const sName = (memberships[0].stores as any)?.name;
+          if (sName) setStoreName(sName);
+        }
+      }
+
+      setStoreId(targetStoreId);
+
+      const liveOrders = await fetchStoreOrders(targetStoreId);
+      if (liveOrders && liveOrders.length > 0) {
+        const mapped: KitchenOrder[] = liveOrders.map((o) => ({
+          id: o.orderNumber.replace("MFF-", "") || o.id.slice(0, 5),
+          rawId: o.id,
+          customer: o.customerName || "Customer",
+          phone: o.customerPhone || "Mati City",
+          address: `${o.deliveryAddress}, Brgy. ${o.barangay}`,
+          items: o.items.map((i) => `${i.quantity}x ${i.name}`),
+          total: o.total,
+          paymentType: o.paymentMethod === "cod" ? "Cash on Delivery" : "GCash Paid",
+          status: o.status,
+          time: new Date(o.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          notes: o.notes,
+        }));
+        setKitchenOrders(mapped);
+      }
+
+      const resData = await fetchStoreReservations(targetStoreId);
+      if (resData) {
+        setLiveReservations(resData);
+      }
+    } catch (err) {
+      console.error("Error loading merchant store orders and reservations:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadMerchantStoreAndOrders();
+    const unsubOrders = subscribeToOrders({ storeId }, () => {
+      loadMerchantStoreAndOrders();
+    });
+    const unsubReservations = subscribeToStoreReservations(storeId, () => {
+      loadMerchantStoreAndOrders();
+    });
+    return () => {
+      unsubOrders();
+      unsubReservations();
+    };
+  }, [storeId]);
 
   // Menu Inventory State
   const [menu, setMenu] = useState([
@@ -143,7 +178,17 @@ export default function MobileMerchantMode() {
   };
 
   // Update order status in kitchen pipeline
-  const updateOrderStatus = (id: string, newStatus: OrderStatus) => {
+  const updateOrderStatus = async (id: string, newStatus: OrderStatus) => {
+    const targetOrder = kitchenOrders.find((o) => o.id === id);
+    if (targetOrder?.rawId) {
+      try {
+        await updateDbOrderStatus(targetOrder.rawId, newStatus);
+      } catch (err: any) {
+        Alert.alert("Status Update Error", err?.message || "Could not update order status in Supabase.");
+        return;
+      }
+    }
+
     if (newStatus === "cancelled") {
       setKitchenOrders(kitchenOrders.filter((o) => o.id !== id));
       Alert.alert("Order Cancelled", `Order #${id} was declined and removed from the queue.`);
@@ -251,7 +296,7 @@ export default function MobileMerchantMode() {
                 activeTab === "reservations" ? "text-emerald-800" : "text-gray-600"
               }`}
             >
-              Tables ({storeReservations.length})
+              Tables ({liveReservations.length})
             </Text>
           </Pressable>
 
@@ -507,7 +552,7 @@ export default function MobileMerchantMode() {
               </View>
             </View>
 
-            {storeReservations.length === 0 ? (
+            {displayReservations.length === 0 ? (
               <View className="bg-white p-8 rounded-2xl border border-gray-200 items-center justify-center">
                 <Ionicons name="calendar-outline" size={38} color="#9ca3af" />
                 <Text className="text-sm font-extrabold text-gray-800 mt-2">No reservations yet</Text>
@@ -516,34 +561,41 @@ export default function MobileMerchantMode() {
                 </Text>
               </View>
             ) : (
-              storeReservations.map((res) => {
+              displayReservations.map((res: any) => {
                 const isPending = res.status === "pending";
                 const isConfirmed = res.status === "confirmed";
+                const partySize = res.party_size || res.partySize;
+                const date = res.reservation_date || res.date;
+                const time = res.reservation_time || res.time;
+                const idRef = res.reservation_number || res.id.slice(0, 8).toUpperCase();
+                const specialNotes = res.special_notes || res.specialNotes;
+                const guestName = res.customer_name || "Guest";
+                const guestPhone = res.customer_phone || "+63 917 234 5678";
 
                 return (
                   <View
                     key={res.id}
                     className={`bg-white p-4 rounded-2xl border mb-4 shadow-xs ${
-                      isPending ? "border-amber-400" : "border-emerald-300"
+                      isPending ? "border-amber-400" : isConfirmed ? "border-emerald-300" : "border-gray-200"
                     }`}
                   >
                     <View className="flex-row justify-between items-start mb-2">
                       <View>
                         <Text className="font-black text-base text-gray-900">
-                          Party of {res.partySize} Guests
+                          {guestName} • Party of {partySize} Guests
                         </Text>
                         <Text className="text-xs text-gray-500 font-medium">
-                          {res.date} at {res.time} • ID: {res.id.toUpperCase()}
+                          {date} at {time} • Ref: {idRef}
                         </Text>
                       </View>
                       <View
                         className={`px-2.5 py-0.5 rounded-md ${
-                          isConfirmed ? "bg-emerald-100" : "bg-amber-100"
+                          isConfirmed ? "bg-emerald-100" : isPending ? "bg-amber-100" : "bg-gray-100"
                         }`}
                       >
                         <Text
                           className={`text-[10px] font-black uppercase ${
-                            isConfirmed ? "text-emerald-800" : "text-amber-800"
+                            isConfirmed ? "text-emerald-800" : isPending ? "text-amber-800" : "text-gray-600"
                           }`}
                         >
                           {res.status}
@@ -551,10 +603,10 @@ export default function MobileMerchantMode() {
                       </View>
                     </View>
 
-                    {res.specialNotes ? (
+                    {specialNotes ? (
                       <View className="bg-gray-50 p-2.5 rounded-xl mb-3 border border-gray-100">
                         <Text className="text-xs text-gray-600 italic">
-                          "{res.specialNotes}"
+                          "{specialNotes}"
                         </Text>
                       </View>
                     ) : null}
@@ -562,20 +614,30 @@ export default function MobileMerchantMode() {
                     {isPending ? (
                       <View className="flex-row gap-2.5 pt-2 border-t border-gray-100">
                         <Pressable
-                          onPress={() => {
-                            updateReservationStatus(res.id, "declined");
-                            Alert.alert("Reservation Declined", "Customer has been notified.");
+                          onPress={async () => {
+                            try {
+                              await updateBackendReservationStatus(res.id, "declined");
+                              loadMerchantStoreAndOrders();
+                              Alert.alert("Reservation Declined", "Customer has been notified.");
+                            } catch (err: any) {
+                              Alert.alert("Error", err.message);
+                            }
                           }}
-                          className="flex-1 py-2.5 bg-gray-100 rounded-xl items-center"
+                          className="flex-1 py-2.5 bg-gray-100 rounded-xl items-center active:bg-gray-200"
                         >
                           <Text className="text-gray-700 font-bold text-xs">Decline</Text>
                         </Pressable>
                         <Pressable
-                          onPress={() => {
-                            updateReservationStatus(res.id, "confirmed");
-                            Alert.alert("Reservation Approved! 🎉", "Customer has been notified with table confirmation.");
+                          onPress={async () => {
+                            try {
+                              await updateBackendReservationStatus(res.id, "confirmed");
+                              loadMerchantStoreAndOrders();
+                              Alert.alert("Reservation Approved! 🎉", "Customer has been notified with table confirmation.");
+                            } catch (err: any) {
+                              Alert.alert("Error", err.message);
+                            }
                           }}
-                          className="flex-1 py-2.5 bg-emerald-700 rounded-xl items-center shadow-xs"
+                          className="flex-1 py-2.5 bg-emerald-700 rounded-xl items-center shadow-xs active:bg-emerald-800"
                         >
                           <Text className="text-white font-bold text-xs">Approve Table</Text>
                         </Pressable>
@@ -586,8 +648,8 @@ export default function MobileMerchantMode() {
                           Table Assigned & Confirmed
                         </Text>
                         <Pressable
-                          onPress={() => Alert.alert("Customer Contact", "Calling guest Juan (+63 917 234 5678)...")}
-                          className="px-3 py-1 bg-gray-100 rounded-lg"
+                          onPress={() => Alert.alert("Customer Contact", `Calling guest ${guestName} (${guestPhone})...`)}
+                          className="px-3 py-1 bg-gray-100 rounded-lg active:bg-gray-200"
                         >
                           <Text className="text-xs font-bold text-gray-700">Call Guest</Text>
                         </Pressable>
