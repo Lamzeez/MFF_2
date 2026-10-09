@@ -1,5 +1,6 @@
 import { getSupabaseClient } from "../lib/supabase/client";
 import type { FoodItem, RestaurantProfile, Store, MenuItem } from "../types/restaurant";
+import { parsePostGisPoint, MATI_CITY_HALL_COORDS } from "../lib/geo-serviceability";
 
 export const CATEGORIES = [
   "All",
@@ -16,6 +17,9 @@ export interface LiveStoreProfile extends RestaurantProfile {
   barangay: string;
   approvalStatus: string;
   deliveryEnabled: boolean;
+  latitude: number;
+  longitude: number;
+  deliveryRadiusKm: number;
 }
 
 const STORE_IMAGES: Record<string, string> = {
@@ -69,6 +73,13 @@ export function mapStoreToProfile(store: Store): LiveStoreProfile {
 
   const imageUrl = STORE_IMAGES[store.slug] || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop&q=80";
 
+  const parsedCoords = parsePostGisPoint(store.location);
+  const latitude = parsedCoords?.latitude ?? MATI_CITY_HALL_COORDS.latitude;
+  const longitude = parsedCoords?.longitude ?? MATI_CITY_HALL_COORDS.longitude;
+  const isCoastal = (store.barangay || "").toLowerCase().includes("dahican") ||
+    (store.name || "").toLowerCase().includes("dahican");
+  const deliveryRadiusKm = isCoastal ? 12.0 : 6.0;
+
   return {
     id: store.id,
     name: store.name,
@@ -90,6 +101,9 @@ export function mapStoreToProfile(store: Store): LiveStoreProfile {
     barangay: store.barangay,
     approvalStatus: store.approval_status,
     deliveryEnabled: store.delivery_enabled,
+    latitude,
+    longitude,
+    deliveryRadiusKm,
   };
 }
 
@@ -271,5 +285,65 @@ export async function fetchUserStoreId(userId?: string): Promise<string | null> 
     return null;
   }
 }
+
+export async function createStoreMenuItem(
+  storeId: string,
+  item: {
+    name: string;
+    price: number;
+    description?: string;
+    isAvailable?: boolean;
+  }
+): Promise<{ success: boolean; data?: FoodItem; error?: string }> {
+  try {
+    const client = getSupabaseClient();
+    const priceCentavos = Math.round(item.price * 100);
+    const { data, error } = await client
+      .from("menu_items")
+      .insert({
+        store_id: storeId,
+        name: item.name.trim(),
+        price_centavos: priceCentavos,
+        description: item.description?.trim() || "",
+        is_available: item.isAvailable ?? true,
+        is_published: true,
+      })
+      .select("*, stores(name)")
+      .single();
+
+    if (error) return { success: false, error: error.message };
+    const storeName = (data as any)?.stores?.name || "Store";
+    return { success: true, data: mapMenuItemToFoodItem(data, storeName) };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export function subscribeToStoreMenuItems(
+  storeId: string,
+  onChange: () => void
+): () => void {
+  const client = getSupabaseClient();
+  const channel = client
+    .channel(`store_menu_items_${storeId}_${Date.now()}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "menu_items",
+        filter: `store_id=eq.${storeId}`,
+      },
+      () => {
+        onChange();
+      }
+    )
+    .subscribe();
+
+  return () => {
+    client.removeChannel(channel);
+  };
+}
+
 
 

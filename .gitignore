@@ -44,3 +44,6 @@ yarn-error.*
 # Local credentials and privileged one-off database scripts
 /credentials.txt
 /scratch/
+
+# Office temporary lock files
+~$*

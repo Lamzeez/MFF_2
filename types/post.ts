@@ -28,4 +28,9 @@ export interface SocialPost {
   likes: number;
   hasLiked: boolean;
   comments: FeedComment[];
+  createdAt?: string;
+  engagementScore?: number;
+  isTrending?: boolean;
+  isPhotoVerified?: boolean;
+  isPopularEatery?: boolean;
 }

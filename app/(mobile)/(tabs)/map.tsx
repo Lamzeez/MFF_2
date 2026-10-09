@@ -17,134 +17,164 @@ import { RestaurantProfile, FoodItem } from "../../../types/restaurant";
 import { MATI_RESTAURANTS_DATA } from "../../../mock/restaurants";
 import { FOOD_ITEMS } from "../../../mock/dishes";
 import { MATI_BARANGAYS } from "../../../mock/barangays";
-import { fetchLiveStores, fetchLiveMenuItems } from "../../../services/catalog";
+import { fetchLiveStores, fetchLiveMenuItems, LiveStoreProfile } from "../../../services/catalog";
 import { createOrder } from "../../../services/orders";
 import { createReservation } from "../../../services/reservations";
 import { RestaurantProfileSheet } from "../../../components/restaurant/RestaurantProfileSheet";
 import { CheckoutSheet } from "../../../components/checkout/CheckoutSheet";
 import { ReservationSheet } from "../../../components/reservation/ReservationSheet";
 import { GuestGateModal } from "../../../components/auth/GuestGateModal";
+import {
+  MATI_CITY_HALL_COORDS,
+  projectGeoToMapPercent,
+  evaluateStoreDeliveryServiceability,
+  StoreDeliveryEvaluation,
+} from "../../../lib/geo-serviceability";
 
-// Canonical Coordinates and Metadata for Mati City Food Spots
-const EXPLORE_SPOTS = [
+interface ExploreSpotItem {
+  id: string | number;
+  storeId?: string;
+  name: string;
+  category: string;
+  latitude: number;
+  longitude: number;
+  area: string;
+  barangay: string;
+  rating: string;
+  reviews: number;
+  open: boolean;
+  hours: string;
+  specialty: string;
+  deliveryFee: number;
+  deliveryEnabled: boolean;
+  deliveryRadiusKm: number;
+  imageUrl: string;
+}
+
+// Canonical PostGIS Seed Coordinates & Metadata for Mati City Food Spots
+const EXPLORE_FALLBACK_SPOTS: ExploreSpotItem[] = [
   {
-    id: 1,
+    id: "11111111-1111-1111-1111-111111111111",
+    storeId: "11111111-1111-1111-1111-111111111111",
     name: "Mama Letty's Karenderia",
     category: "Karenderias",
-    latitude: 6.9552,
-    longitude: 126.2168,
+    latitude: 6.955,
+    longitude: 126.2165,
     area: "Magsaysay St, Brgy. Central",
+    barangay: "Central",
     rating: "4.8",
     reviews: 142,
     open: true,
     hours: "7:00 AM - 8:30 PM",
     specialty: "Classic Pork Humba, Native Tinola & Unlimited Sabaw",
-    estDeliveryTime: "15-20 min",
     deliveryFee: 35,
+    deliveryEnabled: true,
+    deliveryRadiusKm: 6.0,
     imageUrl:
       "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop&q=80",
   },
   {
-    id: 2,
+    id: "22222222-2222-2222-2222-222222222222",
+    storeId: "22222222-2222-2222-2222-222222222222",
     name: "Mati Baywalk Seafood Grill",
     category: "Seafood",
     latitude: 6.949,
-    longitude: 126.224,
+    longitude: 126.225,
     area: "Baywalk Boulevard, Pujada Bay",
+    barangay: "Central",
     rating: "4.9",
     reviews: 218,
     open: true,
     hours: "10:30 AM - 10:00 PM",
     specialty: "Grilled Tuna Panga, Blue Marlin & Fresh Kinilaw",
-    estDeliveryTime: "25-35 min",
     deliveryFee: 45,
+    deliveryEnabled: true,
+    deliveryRadiusKm: 6.0,
     imageUrl:
       "https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=800&auto=format&fit=crop&q=80",
   },
   {
-    id: 3,
-    name: "Dahican Beach Bites",
-    category: "Merienda",
-    latitude: 6.92,
-    longitude: 126.275,
-    area: "Dahican Coastline",
-    rating: "4.7",
-    reviews: 110,
-    open: true,
-    hours: "8:00 AM - 9:00 PM",
-    specialty: "Fresh Kinilaw, Mango Shakes & Beach Snacks",
-    estDeliveryTime: "30-40 min",
-    deliveryFee: 40,
-    imageUrl:
-      "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80",
-  },
-  {
-    id: 4,
-    name: "Aling Nena's Kitchen",
-    category: "Karenderias",
-    latitude: 6.962,
-    longitude: 126.21,
-    area: "Rizal Extension, Brgy. Sainz",
-    rating: "4.8",
-    reviews: 95,
-    open: true,
-    hours: "7:30 AM - 9:00 PM",
-    specialty: "Native Chicken Tinola & Beef Bulalo",
-    estDeliveryTime: "20-30 min",
-    deliveryFee: 35,
-    imageUrl:
-      "https://images.unsplash.com/photo-1547592180-85f173990554?w=800&auto=format&fit=crop&q=80",
-  },
-  {
-    id: 5,
+    id: "33333333-3333-3333-3333-333333333333",
+    storeId: "33333333-3333-3333-3333-333333333333",
     name: "Subangan Street Grills",
     category: "BBQ & Grill",
-    latitude: 6.942,
-    longitude: 126.23,
-    area: "Near Subangan Museum Grounds",
+    latitude: 6.96,
+    longitude: 126.22,
+    area: "Near Subangan Museum, Brgy. Sainz",
+    barangay: "Sainz",
     rating: "4.9",
     reviews: 96,
     open: true,
     hours: "4:00 PM - 11:00 PM",
     specialty: "Pork BBQ Skewers, Isaw & Chicken Inasal",
-    estDeliveryTime: "15-25 min",
     deliveryFee: 30,
+    deliveryEnabled: true,
+    deliveryRadiusKm: 6.0,
     imageUrl:
       "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&auto=format&fit=crop&q=80",
   },
+  {
+    id: "44444444-4444-4444-4444-444444444444",
+    storeId: "44444444-4444-4444-4444-444444444444",
+    name: "Dahican Beach Bites",
+    category: "Merienda",
+    latitude: 6.918,
+    longitude: 126.275,
+    area: "Dahican Coastline, Brgy. Dahican",
+    barangay: "Dahican",
+    rating: "4.7",
+    reviews: 110,
+    open: true,
+    hours: "8:00 AM - 9:00 PM",
+    specialty: "Fresh Kinilaw, Mango Shakes & Beach Snacks",
+    deliveryFee: 40,
+    deliveryEnabled: true,
+    deliveryRadiusKm: 12.0,
+    imageUrl:
+      "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80",
+  },
+  {
+    id: "55555555-5555-5555-5555-555555555555",
+    storeId: "55555555-5555-5555-5555-555555555555",
+    name: "Aling Nena's Kitchen",
+    category: "Karenderias",
+    latitude: 6.958,
+    longitude: 126.219,
+    area: "Rizal Extension, Brgy. Sainz",
+    barangay: "Sainz",
+    rating: "4.8",
+    reviews: 95,
+    open: true,
+    hours: "7:30 AM - 9:00 PM",
+    specialty: "Native Chicken Tinola & Beef Bulalo",
+    deliveryFee: 35,
+    deliveryEnabled: true,
+    deliveryRadiusKm: 6.0,
+    imageUrl:
+      "https://images.unsplash.com/photo-1547592180-85f173990554?w=800&auto=format&fit=crop&q=80",
+  },
 ];
-
-// Haversine distance formula in kilometers
-function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // Earth radius in km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
 
 export default function MobileMapScreen() {
   const { isLoggedIn } = useAuth();
   const router = useRouter();
 
   // Mati City Center default coordinates
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number }>({
-    latitude: 6.954,
-    longitude: 126.218,
-  });
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number }>(
+    MATI_CITY_HALL_COORDS
+  );
   const [locationName, setLocationName] = useState("Mati City Center (GPS loading...)");
   const [isLocating, setIsLocating] = useState(false);
-  const [selectedSpotId, setSelectedSpotId] = useState<number>(1);
-  const [activeFilter, setActiveFilter] = useState<"all" | "closest" | "open">("closest");
+  const [selectedSpotId, setSelectedSpotId] = useState<string | number>(
+    EXPLORE_FALLBACK_SPOTS[0].id
+  );
+  const [activeFilter, setActiveFilter] = useState<"closest" | "serviceable" | "open" | "all">(
+    "closest"
+  );
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
 
-  // Live Catalog State for Modals
+  // Live Catalog State
+  const [rawSpots, setRawSpots] = useState<ExploreSpotItem[]>(EXPLORE_FALLBACK_SPOTS);
   const [restaurants, setRestaurants] = useState<Record<string, RestaurantProfile>>(
     MATI_RESTAURANTS_DATA
   );
@@ -172,6 +202,7 @@ export default function MobileMapScreen() {
         fetchLiveStores(),
         fetchLiveMenuItems(),
       ]);
+
       if (liveStores.length > 0) {
         const storeMap: Record<string, RestaurantProfile> = {};
         Object.assign(storeMap, MATI_RESTAURANTS_DATA);
@@ -179,12 +210,36 @@ export default function MobileMapScreen() {
           storeMap[s.name] = s;
         }
         setRestaurants(storeMap);
+
+        const mappedSpots: ExploreSpotItem[] = liveStores.map((s) => ({
+          id: s.id,
+          storeId: s.id,
+          name: s.name,
+          category: s.category,
+          latitude: s.latitude,
+          longitude: s.longitude,
+          area: s.address || `${s.barangay}, Mati City`,
+          barangay: s.barangay,
+          rating: s.rating || "4.8",
+          reviews: s.reviews || 120,
+          open: true,
+          hours: s.hours || "7:30 AM - 9:00 PM Daily",
+          specialty: s.description || "Local Mati Specialties & Fresh Seafood",
+          deliveryFee: s.deliveryFee || (s.deliveryEnabled ? 35 : 0),
+          deliveryEnabled: s.deliveryEnabled,
+          deliveryRadiusKm: s.deliveryRadiusKm || 6.0,
+          imageUrl:
+            s.imageUrl ||
+            "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop&q=80",
+        }));
+        setRawSpots(mappedSpots);
       }
+
       if (liveMenu.length > 0) {
         setFoodItems(liveMenu);
       }
     } catch {
-      // fallback to mock fixtures
+      // Fallback to initial seed spots
     }
   };
 
@@ -193,7 +248,7 @@ export default function MobileMapScreen() {
       setIsLocating(true);
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        setLocationName("Mati City Center (Default GPS)");
+        setLocationName("Mati City Hall, Poblacion (Default GPS)");
         setIsLocating(false);
         return;
       }
@@ -208,54 +263,86 @@ export default function MobileMapScreen() {
       });
       setLocationName("Your Current Location (Live GPS)");
     } catch {
-      setLocationName("Mati City Center");
+      setLocationName("Mati City Hall, Poblacion");
     } finally {
       setIsLocating(false);
     }
   };
 
-  // Compute live distances to user
-  const spotsWithDistance = EXPLORE_SPOTS.map((spot) => {
-    const dist = calculateDistanceKm(
-      userLocation.latitude,
-      userLocation.longitude,
-      spot.latitude,
-      spot.longitude
+  // Compute live PostGIS distance, road ETA, and delivery serviceability for each store
+  const spotsWithEvaluation = rawSpots.map((spot) => {
+    const { xPercent, yPercent } = projectGeoToMapPercent(spot.latitude, spot.longitude);
+    const evaluation: StoreDeliveryEvaluation = evaluateStoreDeliveryServiceability(
+      userLocation,
+      {
+        latitude: spot.latitude,
+        longitude: spot.longitude,
+        deliveryEnabled: spot.deliveryEnabled,
+        deliveryRadiusKm: spot.deliveryRadiusKm,
+        barangay: spot.barangay,
+        name: spot.name,
+      }
     );
+
     return {
       ...spot,
-      distanceKm: dist,
-      distanceFormatted:
-        dist < 1 ? `${Math.round(dist * 1000)} m away` : `${dist.toFixed(1)} km away`,
+      xPercent,
+      yPercent,
+      evaluation,
     };
   });
 
-  // Sort / Filter spots
-  const sortedSpots = [...spotsWithDistance].sort((a, b) => {
-    if (activeFilter === "closest") return a.distanceKm - b.distanceKm;
-    if (activeFilter === "open") return (b.open ? 1 : 0) - (a.open ? 1 : 0);
-    return 0;
+  // Filter & Sort spots
+  const filteredSpots = spotsWithEvaluation.filter((s) => {
+    if (activeFilter === "serviceable") return s.evaluation.isServiceable;
+    if (activeFilter === "open") return s.open;
+    return true;
   });
 
-  const selectedSpot = sortedSpots.find((s) => s.id === selectedSpotId) || sortedSpots[0];
+  const sortedSpots = [...filteredSpots].sort((a, b) => {
+    if (activeFilter === "closest") {
+      return a.evaluation.straightLineKm - b.evaluation.straightLineKm;
+    }
+    if (activeFilter === "serviceable") {
+      return a.evaluation.roadDistanceKm - b.evaluation.roadDistanceKm;
+    }
+    if (activeFilter === "open") {
+      return (b.open ? 1 : 0) - (a.open ? 1 : 0);
+    }
+    return a.evaluation.straightLineKm - b.evaluation.straightLineKm;
+  });
+
+  const selectedSpot =
+    sortedSpots.find((s) => s.id === selectedSpotId) ||
+    spotsWithEvaluation.find((s) => s.id === selectedSpotId) ||
+    sortedSpots[0] ||
+    spotsWithEvaluation[0];
+
+  const userPositionMap = projectGeoToMapPercent(
+    userLocation.latitude,
+    userLocation.longitude
+  );
 
   // Open Full Restaurant Profile Sheet
   const handleOpenRestaurant = (spotName: string) => {
-    const resto = restaurants[spotName] || {
+    const match = Object.values(restaurants).find(
+      (r) => r.name.toLowerCase() === spotName.toLowerCase()
+    );
+    const resto = match || {
       name: spotName,
-      category: "Local Mati Restaurant",
-      rating: "4.8",
-      address: "Mati City, Davao Oriental",
+      category: selectedSpot?.category || "Local Mati Restaurant",
+      rating: selectedSpot?.rating || "4.8",
+      address: selectedSpot?.area || "Mati City, Davao Oriental",
       phone: "+63 900 000 0000",
-      hours: "8:00 AM - 9:00 PM Daily",
+      hours: selectedSpot?.hours || "7:30 AM - 9:00 PM Daily",
       availableTables: 4,
       emoji: "🏪",
-      description: "Authentic food establishment in Mati City serving local specialties.",
-      deliveryFee: 35,
-      deliveryTime: "20-30 min",
-      reviews: 95,
+      description: selectedSpot?.specialty || "Authentic food establishment in Mati City.",
+      deliveryFee: selectedSpot?.deliveryFee ?? 35,
+      deliveryTime: selectedSpot?.evaluation?.roadRouteFormatted || "20-30 min",
+      reviews: selectedSpot?.reviews || 95,
       bgColor: "#FED7AA",
-      imageUrl: selectedSpot.imageUrl,
+      imageUrl: selectedSpot?.imageUrl,
     };
     setActiveRestaurant(resto);
     setShowRestaurantModal(true);
@@ -298,7 +385,6 @@ export default function MobileMapScreen() {
     fulfillment: "delivery" | "pickup";
     total: number;
   }) => {
-    // Resolve store ID from dish or store name
     let storeId = orderPayload.dish.storeId;
     if (!storeId) {
       const match = Object.values(restaurants).find(
@@ -407,64 +493,88 @@ export default function MobileMapScreen() {
           </Text>
           <View className="bg-orange-100 px-2 py-0.5 rounded-full">
             <Text className="text-[10px] font-black text-[#EA5410] uppercase">
-              {sortedSpots.filter((s) => s.open).length} open near you
+              {spotsWithEvaluation.filter((s) => s.evaluation.isServiceable).length} deliverable
             </Text>
           </View>
         </View>
 
         {/* Proximity & Status Filter Chips */}
-        <View className="flex-row gap-2 mt-2.5">
-          <Pressable
-            onPress={() => setActiveFilter("closest")}
-            className={`px-3.5 py-1.5 rounded-full border ${
-              activeFilter === "closest"
-                ? "bg-[#EA5410] border-[#EA5410] shadow-xs"
-                : "bg-white border-gray-200"
-            }`}
-          >
-            <Text
-              className={`text-xs font-bold ${
-                activeFilter === "closest" ? "text-white" : "text-gray-700"
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2.5 flex-row">
+          <View className="flex-row gap-2 pr-4">
+            <Pressable
+              onPress={() => setActiveFilter("closest")}
+              className={`px-3.5 py-1.5 rounded-full border ${
+                activeFilter === "closest"
+                  ? "bg-[#EA5410] border-[#EA5410] shadow-xs"
+                  : "bg-white border-gray-200"
               }`}
             >
-              Closest to Me
-            </Text>
-          </Pressable>
+              <Text
+                className={`text-xs font-bold ${
+                  activeFilter === "closest" ? "text-white" : "text-gray-700"
+                }`}
+              >
+                Closest to Me
+              </Text>
+            </Pressable>
 
-          <Pressable
-            onPress={() => setActiveFilter("open")}
-            className={`px-3.5 py-1.5 rounded-full border ${
-              activeFilter === "open"
-                ? "bg-[#EA5410] border-[#EA5410] shadow-xs"
-                : "bg-white border-gray-200"
-            }`}
-          >
-            <Text
-              className={`text-xs font-bold ${
-                activeFilter === "open" ? "text-white" : "text-gray-700"
+            <Pressable
+              onPress={() => setActiveFilter("serviceable")}
+              className={`px-3.5 py-1.5 rounded-full border flex-row items-center gap-1 ${
+                activeFilter === "serviceable"
+                  ? "bg-[#EA5410] border-[#EA5410] shadow-xs"
+                  : "bg-white border-gray-200"
               }`}
             >
-              Open Now
-            </Text>
-          </Pressable>
+              <Ionicons
+                name="bicycle"
+                size={12}
+                color={activeFilter === "serviceable" ? "white" : "#EA5410"}
+              />
+              <Text
+                className={`text-xs font-bold ${
+                  activeFilter === "serviceable" ? "text-white" : "text-gray-700"
+                }`}
+              >
+                Within Delivery Zone
+              </Text>
+            </Pressable>
 
-          <Pressable
-            onPress={() => setActiveFilter("all")}
-            className={`px-3.5 py-1.5 rounded-full border ${
-              activeFilter === "all"
-                ? "bg-[#EA5410] border-[#EA5410] shadow-xs"
-                : "bg-white border-gray-200"
-            }`}
-          >
-            <Text
-              className={`text-xs font-bold ${
-                activeFilter === "all" ? "text-white" : "text-gray-700"
+            <Pressable
+              onPress={() => setActiveFilter("open")}
+              className={`px-3.5 py-1.5 rounded-full border ${
+                activeFilter === "open"
+                  ? "bg-[#EA5410] border-[#EA5410] shadow-xs"
+                  : "bg-white border-gray-200"
               }`}
             >
-              All Spots ({sortedSpots.length})
-            </Text>
-          </Pressable>
-        </View>
+              <Text
+                className={`text-xs font-bold ${
+                  activeFilter === "open" ? "text-white" : "text-gray-700"
+                }`}
+              >
+                Open Now
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setActiveFilter("all")}
+              className={`px-3.5 py-1.5 rounded-full border ${
+                activeFilter === "all"
+                  ? "bg-[#EA5410] border-[#EA5410] shadow-xs"
+                  : "bg-white border-gray-200"
+              }`}
+            >
+              <Text
+                className={`text-xs font-bold ${
+                  activeFilter === "all" ? "text-white" : "text-gray-700"
+                }`}
+              >
+                All Spots ({spotsWithEvaluation.length})
+              </Text>
+            </Pressable>
+          </View>
+        </ScrollView>
       </View>
 
       {/* 2. MAIN VIEW: MAP OR LIST */}
@@ -473,28 +583,36 @@ export default function MobileMapScreen() {
           {/* Visual Map Surface with Mati Landmarks */}
           <View className="flex-1 bg-slate-100 items-center justify-center relative overflow-hidden">
             {/* Street Grid pattern */}
-            <View className="absolute inset-0 opacity-20 flex-row flex-wrap">
+            <View className="absolute inset-0 opacity-20 flex-row flex-wrap pointer-events-none">
               {[...Array(32)].map((_, i) => (
                 <View key={i} className="w-1/4 h-24 border border-slate-300" />
               ))}
             </View>
 
             {/* Geographical Mati Landmarks */}
-            <View className="absolute top-4 left-4 bg-white/95 px-3 py-1 rounded-xl shadow-xs border border-gray-200 flex-row items-center gap-1">
+            <View className="absolute bottom-60 left-4 bg-white/95 px-3 py-1 rounded-xl shadow-xs border border-gray-200 flex-row items-center gap-1 z-10">
               <Text className="text-xs">🌊</Text>
               <Text className="text-[11px] font-black text-gray-800">Pujada Bay</Text>
             </View>
-            <View className="absolute top-12 right-4 bg-white/95 px-3 py-1 rounded-xl shadow-xs border border-gray-200 flex-row items-center gap-1">
+            <View className="absolute bottom-28 right-4 bg-white/95 px-3 py-1 rounded-xl shadow-xs border border-gray-200 flex-row items-center gap-1 z-10">
               <Text className="text-xs">🏖️</Text>
               <Text className="text-[11px] font-black text-gray-800">Dahican Beach</Text>
             </View>
-            <View className="absolute bottom-56 left-5 bg-white/95 px-3 py-1 rounded-xl shadow-xs border border-gray-200 flex-row items-center gap-1">
+            <View className="absolute top-4 left-4 bg-white/95 px-3 py-1 rounded-xl shadow-xs border border-gray-200 flex-row items-center gap-1 z-10">
               <Text className="text-xs">🏛️</Text>
               <Text className="text-[11px] font-black text-gray-800">Mati City Hall</Text>
             </View>
 
             {/* GPS Pulse Marker: YOU ARE HERE */}
-            <View className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 items-center z-30">
+            <View
+              style={{
+                position: "absolute",
+                left: `${userPositionMap.xPercent}%`,
+                top: `${userPositionMap.yPercent}%`,
+                transform: [{ translateX: -40 }, { translateY: -20 }],
+              }}
+              className="items-center z-30 pointer-events-none"
+            >
               <View className="w-10 h-10 rounded-full bg-blue-500/20 items-center justify-center absolute" />
               <View className="w-5 h-5 rounded-full bg-blue-600 border-2 border-white shadow-md items-center justify-center">
                 <View className="w-2 h-2 rounded-full bg-white" />
@@ -504,179 +622,190 @@ export default function MobileMapScreen() {
               </View>
             </View>
 
-            {/* Food Spot Pins on Map */}
+            {/* Dynamic PostGIS Food Spot Pins on Map */}
             <View className="w-full h-full relative">
-              {/* Pin 1 - Mama Letty's Karenderia */}
-              <Pressable
-                onPress={() => setSelectedSpotId(1)}
-                className="absolute top-1/3 left-1/4 items-center z-20"
-              >
-                <View
-                  className={`px-2.5 py-1 rounded-xl shadow-md mb-0.5 ${
-                    selectedSpotId === 1 ? "bg-[#EA5410] scale-105" : "bg-white border border-gray-200"
-                  }`}
-                >
-                  <Text
-                    className={`text-[10px] font-black ${
-                      selectedSpotId === 1 ? "text-white" : "text-gray-900"
-                    }`}
+              {spotsWithEvaluation.map((spot) => {
+                const isSelected = selectedSpot?.id === spot.id;
+                return (
+                  <Pressable
+                    key={String(spot.id)}
+                    onPress={() => setSelectedSpotId(spot.id)}
+                    style={{
+                      position: "absolute",
+                      left: `${spot.xPercent}%`,
+                      top: `${spot.yPercent}%`,
+                      transform: [{ translateX: -48 }, { translateY: -38 }],
+                    }}
+                    className="items-center z-20"
                   >
-                    Mama Letty's · {spotsWithDistance.find((s) => s.id === 1)?.distanceFormatted}
-                  </Text>
-                </View>
-                <Ionicons
-                  name="restaurant"
-                  size={selectedSpotId === 1 ? 32 : 24}
-                  color={selectedSpotId === 1 ? "#EA5410" : "#374151"}
-                />
-              </Pressable>
-
-              {/* Pin 2 - Baywalk Seafood */}
-              <Pressable
-                onPress={() => setSelectedSpotId(2)}
-                className="absolute top-3/5 left-1/2 items-center z-20"
-              >
-                <View
-                  className={`px-2.5 py-1 rounded-xl shadow-md mb-0.5 ${
-                    selectedSpotId === 2 ? "bg-[#EA5410] scale-105" : "bg-white border border-gray-200"
-                  }`}
-                >
-                  <Text
-                    className={`text-[10px] font-black ${
-                      selectedSpotId === 2 ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    Baywalk Seafood · {spotsWithDistance.find((s) => s.id === 2)?.distanceFormatted}
-                  </Text>
-                </View>
-                <Ionicons
-                  name="restaurant"
-                  size={selectedSpotId === 2 ? 32 : 24}
-                  color={selectedSpotId === 2 ? "#EA5410" : "#374151"}
-                />
-              </Pressable>
-
-              {/* Pin 3 - Dahican Beach Bites */}
-              <Pressable
-                onPress={() => setSelectedSpotId(3)}
-                className="absolute top-1/4 right-6 items-center z-20"
-              >
-                <View
-                  className={`px-2.5 py-1 rounded-xl shadow-md mb-0.5 ${
-                    selectedSpotId === 3 ? "bg-[#EA5410] scale-105" : "bg-white border border-gray-200"
-                  }`}
-                >
-                  <Text
-                    className={`text-[10px] font-black ${
-                      selectedSpotId === 3 ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    Dahican Beach · {spotsWithDistance.find((s) => s.id === 3)?.distanceFormatted}
-                  </Text>
-                </View>
-                <Ionicons
-                  name="restaurant"
-                  size={selectedSpotId === 3 ? 32 : 24}
-                  color={selectedSpotId === 3 ? "#EA5410" : "#374151"}
-                />
-              </Pressable>
-
-              {/* Pin 5 - Subangan BBQ */}
-              <Pressable
-                onPress={() => setSelectedSpotId(5)}
-                className="absolute bottom-52 right-1/3 items-center z-20"
-              >
-                <View
-                  className={`px-2.5 py-1 rounded-xl shadow-md mb-0.5 ${
-                    selectedSpotId === 5 ? "bg-[#EA5410] scale-105" : "bg-white border border-gray-200"
-                  }`}
-                >
-                  <Text
-                    className={`text-[10px] font-black ${
-                      selectedSpotId === 5 ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    Subangan BBQ · {spotsWithDistance.find((s) => s.id === 5)?.distanceFormatted}
-                  </Text>
-                </View>
-                <Ionicons
-                  name="restaurant"
-                  size={selectedSpotId === 5 ? 32 : 24}
-                  color={selectedSpotId === 5 ? "#EA5410" : "#374151"}
-                />
-              </Pressable>
+                    <View
+                      className={`px-2 py-0.5 rounded-xl shadow-md mb-0.5 flex-row items-center gap-1 ${
+                        isSelected
+                          ? "bg-[#EA5410] scale-105"
+                          : "bg-white border border-gray-200"
+                      }`}
+                    >
+                      <View
+                        className={`w-2 h-2 rounded-full ${
+                          spot.evaluation.isServiceable ? "bg-emerald-500" : "bg-amber-500"
+                        }`}
+                      />
+                      <Text
+                        className={`text-[10px] font-black ${
+                          isSelected ? "text-white" : "text-gray-900"
+                        }`}
+                        numberOfLines={1}
+                      >
+                        {spot.name.split(" ")[0]} · {spot.evaluation.straightLineFormatted}
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name="restaurant"
+                      size={isSelected ? 30 : 22}
+                      color={
+                        isSelected
+                          ? "#EA5410"
+                          : spot.evaluation.isServiceable
+                          ? "#075E46"
+                          : "#6B7280"
+                      }
+                    />
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
 
           {/* Selected Restaurant Floating Card at Bottom of Map */}
-          <View className="m-4 p-4 bg-white rounded-3xl border border-gray-200 shadow-xl">
-            <View className="flex-row items-center gap-3.5 mb-2.5">
-              <Image
-                source={{ uri: selectedSpot.imageUrl }}
-                className="w-16 h-16 rounded-2xl bg-gray-100"
-                resizeMode="cover"
-              />
-              <View className="flex-1 pr-1">
-                <View className="flex-row items-center gap-1.5 mb-0.5">
-                  <Text className="text-base font-black text-gray-900 flex-1 leading-tight" numberOfLines={1}>
-                    {selectedSpot.name}
-                  </Text>
-                  <View className="bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                    <Text className="text-[10px] font-bold text-emerald-800">
-                      {selectedSpot.open ? "Open Now" : "Closed"}
+          {selectedSpot && (
+            <View className="m-4 p-4 bg-white rounded-3xl border border-gray-200 shadow-xl">
+              <View className="flex-row items-center gap-3.5 mb-2.5">
+                <Image
+                  source={{ uri: selectedSpot.imageUrl }}
+                  className="w-16 h-16 rounded-2xl bg-gray-100"
+                  resizeMode="cover"
+                />
+                <View className="flex-1 pr-1">
+                  <View className="flex-row items-center gap-1.5 mb-0.5">
+                    <Text
+                      className="text-base font-black text-gray-900 flex-1 leading-tight"
+                      numberOfLines={1}
+                    >
+                      {selectedSpot.name}
                     </Text>
+                    <View className="bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                      <Text className="text-[10px] font-bold text-emerald-800">
+                        {selectedSpot.open ? "Open Now" : "Closed"}
+                      </Text>
+                    </View>
                   </View>
-                </View>
 
-                <Text className="text-xs text-gray-500 font-medium" numberOfLines={1}>
-                  {selectedSpot.category} · {selectedSpot.area}
-                </Text>
+                  <Text className="text-xs text-gray-500 font-medium" numberOfLines={1}>
+                    {selectedSpot.category} · {selectedSpot.area}
+                  </Text>
 
-                <View className="flex-row items-center gap-2 mt-1">
-                  <View className="flex-row items-center gap-1">
-                    <Ionicons name="star" size={12} color="#D97706" />
-                    <Text className="text-xs font-black text-gray-800">{selectedSpot.rating}</Text>
-                  </View>
-                  <Text className="text-xs text-gray-400">·</Text>
-                  <View className="bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-md">
-                    <Text className="text-[10px] font-black text-[#EA5410]">
-                      {selectedSpot.distanceFormatted}
+                  {/* Delivery Serviceability Badge */}
+                  <View
+                    className={`self-start px-2 py-0.5 rounded-md border flex-row items-center gap-1 mt-1.5 ${selectedSpot.evaluation.badgeColor}`}
+                  >
+                    <Text className="text-[10px]">
+                      {selectedSpot.evaluation.statusBadge === "serviceable"
+                        ? "🛵"
+                        : selectedSpot.evaluation.statusBadge === "outside_radius"
+                        ? "📍"
+                        : "🏪"}
+                    </Text>
+                    <Text className="text-[10px] font-black">
+                      {selectedSpot.evaluation.badgeText}
                     </Text>
                   </View>
                 </View>
               </View>
+
+              {/* Haversine Straight-Line vs. Road Route Metrics Strip */}
+              <View className="flex-row items-center gap-2 mb-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                <View className="flex-1">
+                  <Text className="text-[9px] font-bold text-gray-400 uppercase">Haversine GPS</Text>
+                  <Text className="text-xs font-black text-gray-800" numberOfLines={1}>
+                    {selectedSpot.evaluation.straightLineFormatted}
+                  </Text>
+                </View>
+                <View className="w-px h-6 bg-gray-200" />
+                <View className="flex-1">
+                  <Text className="text-[9px] font-bold text-gray-400 uppercase">Road Travel Time</Text>
+                  <Text className="text-xs font-black text-[#EA5410]" numberOfLines={1}>
+                    {selectedSpot.evaluation.roadRouteFormatted}
+                  </Text>
+                </View>
+                <View className="w-px h-6 bg-gray-200" />
+                <View className="flex-1">
+                  <Text className="text-[9px] font-bold text-gray-400 uppercase">Delivery Fee</Text>
+                  <Text className="text-xs font-black text-gray-800" numberOfLines={1}>
+                    {selectedSpot.deliveryEnabled ? `₱${selectedSpot.deliveryFee}` : "Dine-in"}
+                  </Text>
+                </View>
+              </View>
+
+              <Text className="text-xs text-gray-600 font-medium mb-3" numberOfLines={1}>
+                🔥 <Text className="font-bold text-[#EA5410]">Specialty:</Text> {selectedSpot.specialty}
+              </Text>
+
+              {/* Quick Actions: View Full Profile or Route */}
+              <View className="flex-row gap-2 pt-2 border-t border-gray-100">
+                <Pressable
+                  onPress={() => handleOpenRestaurant(selectedSpot.name)}
+                  className="flex-1 py-3 bg-[#EA5410] rounded-2xl items-center shadow-sm active:opacity-95"
+                >
+                  <Text className="text-white font-black text-xs">View Details & Menu</Text>
+                </Pressable>
+
+                {selectedSpot.evaluation.isServiceable ? (
+                  <Pressable
+                    onPress={() => {
+                      const restoDish = foodItems.find(
+                        (f) =>
+                          (f.store && f.store.toLowerCase().includes(selectedSpot.name.toLowerCase())) ||
+                          (selectedSpot.storeId && f.storeId === selectedSpot.storeId)
+                      );
+                      if (restoDish) {
+                        handleOpenCheckout(restoDish);
+                      } else {
+                        handleOpenRestaurant(selectedSpot.name);
+                      }
+                    }}
+                    className="py-3 px-3.5 bg-emerald-700 rounded-2xl items-center flex-row gap-1 shadow-sm active:opacity-95"
+                  >
+                    <Ionicons name="bicycle" size={14} color="white" />
+                    <Text className="text-white font-bold text-xs">Order COD</Text>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    onPress={() => handleOpenReservation(selectedSpot.name)}
+                    className="py-3 px-3.5 bg-amber-600 rounded-2xl items-center flex-row gap-1 shadow-sm active:opacity-95"
+                  >
+                    <Ionicons name="calendar-outline" size={14} color="white" />
+                    <Text className="text-white font-bold text-xs">Book Table</Text>
+                  </Pressable>
+                )}
+
+                <Pressable
+                  onPress={() =>
+                    Alert.alert(
+                      "Mati Route Navigation 🚗",
+                      `Routing to ${selectedSpot.name} (${selectedSpot.area}):\n\n• Straight-line Distance: ${selectedSpot.evaluation.straightLineFormatted}\n• Estimated Road Distance: ${selectedSpot.evaluation.roadDistanceKm} km\n• Estimated Travel Time: ${selectedSpot.evaluation.roadRouteFormatted}\n\nNotice: ${selectedSpot.evaluation.notice}`
+                    )
+                  }
+                  className="py-3 px-3.5 bg-gray-100 rounded-2xl items-center border border-gray-200 flex-row gap-1 active:bg-gray-200"
+                >
+                  <Ionicons name="navigate-outline" size={14} color="#374151" />
+                  <Text className="text-gray-800 font-bold text-xs">Route</Text>
+                </Pressable>
+              </View>
             </View>
-
-            <Text className="text-xs text-gray-600 font-medium mb-3" numberOfLines={1}>
-              🔥 <Text className="font-bold text-[#EA5410]">Specialty:</Text> {selectedSpot.specialty}
-            </Text>
-
-            {/* Quick Actions: View Full Profile or Route */}
-            <View className="flex-row gap-2.5 pt-2.5 border-t border-gray-100">
-              <Pressable
-                onPress={() => handleOpenRestaurant(selectedSpot.name)}
-                className="flex-1 py-3 bg-[#EA5410] rounded-2xl items-center shadow-sm active:opacity-95"
-              >
-                <Text className="text-white font-black text-xs">View Details & Menu</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() =>
-                  Alert.alert(
-                    "Turn-by-turn Navigation 🚗",
-                    `Starting road route to ${selectedSpot.name} (${selectedSpot.area}). Straight-line distance: ${selectedSpot.distanceFormatted}.`
-                  )
-                }
-                className="py-3 px-4 bg-gray-100 rounded-2xl items-center border border-gray-200 flex-row gap-1 active:bg-gray-200"
-              >
-                <Ionicons name="navigate-outline" size={15} color="#374151" />
-                <Text className="text-gray-800 font-bold text-xs">Route</Text>
-              </Pressable>
-            </View>
-          </View>
+          )}
         </View>
       ) : (
-        /* LIST VIEW: SORTED BY PROXIMITY */
+        /* LIST VIEW: SORTED BY PROXIMITY & SERVICEABILITY */
         <ScrollView
           className="flex-1 px-4 pt-3"
           contentContainerStyle={{ paddingBottom: 110 }}
@@ -712,7 +841,7 @@ export default function MobileMapScreen() {
           <View className="gap-3.5">
             {sortedSpots.map((spot) => (
               <Pressable
-                key={spot.id}
+                key={String(spot.id)}
                 onPress={() => handleOpenRestaurant(spot.name)}
                 className="bg-white rounded-3xl border border-gray-200 p-4 shadow-sm flex-row items-center gap-3.5 active:bg-orange-50/40"
               >
@@ -738,14 +867,22 @@ export default function MobileMapScreen() {
                     {spot.area} · {spot.category}
                   </Text>
 
-                  <Text className="text-[11px] text-[#EA5410] font-bold mb-1.5" numberOfLines={1}>
-                    Specialty: {spot.specialty}
-                  </Text>
+                  {/* Delivery Serviceability Badge */}
+                  <View
+                    className={`self-start px-2 py-0.5 rounded-md border mb-1.5 flex-row items-center gap-1 ${spot.evaluation.badgeColor}`}
+                  >
+                    <Text className="text-[9px]">
+                      {spot.evaluation.isServiceable ? "🛵" : "📍"}
+                    </Text>
+                    <Text className="text-[9px] font-black">
+                      {spot.evaluation.badgeText}
+                    </Text>
+                  </View>
 
                   <View className="flex-row items-center gap-2">
                     <View className="bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-md">
                       <Text className="text-[10px] font-black text-[#EA5410]">
-                        {spot.distanceFormatted}
+                        {spot.evaluation.straightLineFormatted}
                       </Text>
                     </View>
                     <View className="flex-row items-center gap-1">

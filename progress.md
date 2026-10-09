@@ -2,7 +2,196 @@
 
 > Living project memory for Codex/agents. Update after meaningful
 > development sessions. Last repository review used for this snapshot:
-> 2026-10-01.
+> 2026-10-09.
+
+## Phase 3: Automated Rider COD Remittance & Settlement Log (2026-10-09)
+
+- **24/7 Rolling COD Remittance & Cash Reconciliation Engine (`services/orders.ts`)**:
+  - Implemented `calculateCodSettlement(orders: LiveOrder[]): CodSettlementSummary`:
+    - Strict financial balancing invariant: `totalCashCollected === totalRiderFeesEarned + totalFoodSubtotalToRemit`.
+    - Distinguishes **Gross Physical Cash in Pocket** (all COD money received from customers: food subtotal + delivery fee) from **Rider Delivery Fee Kept** (₱35+ retained earnings) and **Food Subtotal Due to Merchants** (payable to stores).
+    - Tracks `totalRemitted` vs `totalPendingRemittance` in real-time.
+    - Groups settlements by restaurant (`byStore`) with per-store pending and remitted balances, plus `isFullySettled` accounting flags.
+  - Implemented `confirmCodRemittance(orderId: string, confirmedBy: string)`:
+    - Atomically updates `orders.notes` in Supabase with timestamped audit tag (`[COD Remitted: Food cash confirmed by <confirmedBy> at <timestamp>]`).
+    - Supabase Realtime broadcast triggers instant sync across merchant and courier screens without requiring page reload.
+  - Added `isRemitted?: boolean` to `LiveOrder` mapped from `mapDatabaseOrderToLiveOrder` (checks if notes contain `"COD Remitted"`, `"Cash Remitted"`, or `"Settled"`).
+  - 24/7 rolling ledger architecture ensures zero cutoff downtime for round-the-clock operating merchants.
+
+- **Rider App COD Settlement Sheet (`app/(mobile)/rider/index.tsx`)**:
+  - Added `"View COD Cash in Pocket & Remittance Sheet 📋"` action button on Today's Delivery Earnings card.
+  - Implemented modal `RiderCodSettlementModal` displaying:
+    - Gross physical cash currently held in pocket.
+    - Earned delivery fees kept by rider.
+    - Total food cash owed to restaurants (remitted vs pending turnover).
+    - Breakdown per restaurant (Mama Letty's, Baywalk Grill, etc.) with settled vs pending indicators.
+    - Comprehensive delivered order log with breakdown of collected amount, delivery fee, and food cash due.
+    - Transparent protocol guidance on turning over physical food cash to store staff upon arrival.
+
+- **Merchant App COD Remittance & Settlement Log (`app/(mobile)/merchant/index.tsx`)**:
+  - Added dedicated `"COD Remittance & Settlement Log 📋"` action banner in the Kitchen Pipeline header.
+  - Implemented modal `MerchantCodSettlementModal` displaying:
+    - Total completed COD delivery orders.
+    - Gross food sales generated via COD.
+    - Cash remitted and received in store drawer vs cash pending courier turnover.
+    - Per-order courier turnover list showing order #, courier name, customer, and food subtotal due.
+    - Interactive `"Confirm Cash Received (₱X.00) 🤝"` action button allowing merchant cashier to confirm physical cash handoff with 1 tap, automatically updating the Supabase ledger in real-time.
+
+- **Verification**:
+  - `npm test`: 31/31 unit tests passing (`tests/foundation/cod-settlement.test.ts` added with 3 comprehensive financial accounting tests).
+  - `npm run typecheck`: 0 TypeScript errors across the entire codebase.
+  - `npm run check`: Combined typecheck and unit tests passing cleanly.
+  - `npm run check:client-bundle`: Android and iOS Metro bundling verified (1060 modules).
+
+## Phase 2: Foodie Feed Smart Algorithm & Photo Ranking (2026-10-09)
+
+- **Smart Engagement Score Formula & Photo Ranking (`services/community.ts`)**:
+  - Implemented `calculateEngagementScore(input, referenceTimeMs)` calculating a deterministic engagement score for each foodie post review.
+  - Configured `ENGAGEMENT_WEIGHTS`:
+    - **Photo Verification Bonus (`+35 pts`)**: Substantial quality boost for posts with authentic dish photography (`imageUrl`).
+    - **Tagged Restaurant Bonus (`+15 pts`)**: Encourages contextual reviews attached to Mati dining places.
+    - **Popular Mati Eatery Bonus (`+25 pts`)**: Extra weight for verified canonical Mati food spots (Mama Letty's, Baywalk Seafood Grill, Subangan Grills, Dahican Beach Bites, Aling Nena's Kitchen, etc.), totaling `+40 pts` for popular local eateries.
+    - **Community Engagement Multipliers**: `3 pts` per like, `5 pts` per comment (reflecting deep conversation).
+    - **Quality Dining Rating**: `2 pts` per star.
+    - **Time Decay Gravity Model**: `1 / ((hoursElapsed / 12) + 1)^0.75` allowing fresh reviews to trend dynamically while keeping highly engaging visual reviews near the top.
+  - Mathematical weighting guarantees verified photo reviews of popular Mati eateries outrank text-only reviews with higher like counts.
+  - Implemented `isPopularMatiEatery(restaurantName)` checking against canonical Mati culinary hotspots.
+- **Feed Integration & Ranking Toggles (`fetchCommunityPosts` & `community.tsx`)**:
+  - Updated `fetchCommunityPosts(page, pageSize, sortBy)` supporting both `"trending"` (smart score ranking, default) and `"recent"` (strict chronological) modes.
+  - Attached `engagementScore`, `isTrending`, `isPhotoVerified`, and `isPopularEatery` metadata directly to `SocialPost`.
+  - Added interactive `Trending (Smart)` vs `Latest` feed pills to the subheader in `app/(mobile)/(tabs)/community.tsx`.
+  - Added visual badges on post cards (`🔥 Trending`, `📸 Photo Verified`, `⭐ Popular Spot`).
+- **Verification**:
+  - `npm test`: 28/28 tests passing (`tests/foundation/community-ranking.test.ts` added with 5 targeted unit tests).
+  - `npm run typecheck`: 0 TypeScript errors across the entire codebase.
+  - `npm run check:client-bundle`: Android and iOS client bundle verification passing cleanly.
+
+## Phase 1: Operational Edge Cases & Rider Auto-Reassignment (2026-10-09)
+
+- **Inactive Rider Timeout & Auto-Reassignment Logic**:
+  - Implemented `isDeliveryStale(updatedAt: string, maxMinutes = 15)` in `services/orders.ts` to calculate elapsed minutes and flag abandoned or stalled deliveries.
+  - Implemented `reassignStaleDeliveryJob(orderId: string)`: automatically unassigns inactive couriers (`rider_id = null`), resets status to `ready_for_pickup`, and appends an audit trail note (`[Auto-Reassigned: Inactive courier timeout]`).
+  - Updated `fetchAvailableRiderJobs()` to proactively scan and release any order stuck in `out_for_delivery` for >15 minutes so orders never get indefinitely stranded.
+  - Added `releaseDeliveryJob(orderId, reason)` allowing couriers to voluntarily drop accepted jobs (e.g., flat tire, vehicle breakdown, emergency) returning the order back to the courier pool.
+  - Added `isRebroadcast?: boolean` flag detected from audit notes, rendering a prominent `"⚠️ URGENT RE-BROADCAST (Immediate Courier Needed)"` badge in the available requests pool (`app/(mobile)/rider/index.tsx`).
+  - Added "Emergency Drop / Release Job ⚠️" button to the active delivery card at the `heading_to_store` stage.
+
+- **Verified Customer No-Show Handling with Courier GPS**:
+  - Implemented `reportCustomerNoShow(orderId, gps, reason)` in `services/orders.ts`: cancels the delivery order atomically and permanently writes the courier's verified GPS coordinates `(lat° N, lng° E)` and timestamp to `orders.notes`.
+  - In `app/(mobile)/rider/index.tsx`: added "Report Customer No-Show 📍⚠️" action button at the `arrived` stage. Requests real-time location via `expo-location` (`Location.getCurrentPositionAsync`), confirms with courier, and submits verified coordinates to the backend.
+  - Updated Customer Tracking (`app/(mobile)/(tabs)/orders.tsx`): cancelled orders now display an explicit banner explaining the cancellation reason (`"⚠️ Delivery Cancelled — Customer No-Show"`), informing the customer that the courier arrived and verified GPS coordinates at their drop-off address.
+  - Updated Merchant Kitchen view (`app/(mobile)/merchant/index.tsx`): cancelled orders clearly show `"Cancelled: Customer No-Show (GPS Verified)"` with the full audit notes string, rose styling, and real-time courier reassignment indicators.
+
+- **Verification**:
+  - `npm test`: 23/23 foundation tests passing (`tests/foundation/orders-edge-cases.test.ts` added).
+  - `npm run typecheck`: 0 TypeScript errors across the entire codebase.
+  - `npm run check:client-bundle`: Metro bundler probe verified for Android and iOS.
+
+## Merchant / Store Admin Mobile Mode Gaps Resolution (2026-10-09)
+
+- **Authentication & Role Guard**:
+  - Bound `app/(mobile)/merchant/index.tsx` to `SessionContext.tsx`. Added strict route guard: unauthenticated users or users without the `merchant` role are redirected to `/(web)/auth/store-login`.
+  - Added native "Sign Out of Merchant Account" button in the Settings tab using `logoutToGuest()`.
+- **Dynamic Store Membership Resolution**:
+  - Eliminated the hardcoded Mama Letty UUID fallback (`11111111-1111-1111-1111-111111111111`).
+  - Dynamically resolves the merchant's assigned store via `fetchUserStoreId(identity.id)` and loads store profile details via `fetchStoreById(targetStoreId)`.
+  - Header, business information, Stand QR card, and deep links dynamically reflect `{storeName}`, `{storeAddress}`, `{storePhone}`, and `{storeId}`.
+  - Computed today's pipeline revenue dynamically from live orders.
+- **Live Menu Inventory & Catalog Operations**:
+  - Replaced the hardcoded static array of 7 dishes in `app/(mobile)/merchant/index.tsx` with live data fetched via `fetchStoreMenuItems(targetStoreId)`.
+  - Added `createStoreMenuItem` and `subscribeToStoreMenuItems` in `services/catalog.ts`.
+  - Wired live availability toggle (`toggleItem`) to call `updateMenuItemAvailability(menuItemId, isAvailable)` with optimistic UI update.
+  - Wired "Add Dish" modal to persist new dishes directly into `public.menu_items` via `createStoreMenuItem(storeId, ...)`.
+  - Subscribed to real-time menu item updates via `subscribeToStoreMenuItems(storeId, loadMerchantStoreAndOrders)`.
+- **Verification**:
+  - `npm run typecheck`: 0 TypeScript errors across the entire codebase.
+  - `npm test`: 20/20 foundation unit tests passing.
+
+## Delivery Rider / Driver Role Live Integration & Profile Binding (2026-10-09)
+
+- **Dynamic Rider Identity & Profile**:
+  - Bound `app/(mobile)/rider/index.tsx` header and Profile & Settings modal to the real authenticated Supabase session (`identity.profile.display_name`, `identity.profile.contact_phone`, `identity.email`, `identity.id`).
+  - Completely eliminated hardcoded "Kuya Mark", static phone numbers, and placeholder vehicle text.
+- **Accurate Delivery Wallet & Trips**:
+  - Dynamically computed today's earnings (`todayEarnings`) and completed trips (`completedTrips`) from real completed deliveries in `public.orders` via `fetchRiderDeliveries()`.
+  - Replaced the arbitrary ₱620 / 7 trips mock baseline with true delivery earnings and trip counts.
+- **Rider Route Guard & Authentication**:
+  - Added strict route guard in `app/(mobile)/rider/index.tsx`: unauthenticated users or users without the `rider` role are redirected to `/(mobile)/auth/rider-login`.
+  - Added native "Sign Out of Rider Account" action in the profile modal, properly clearing session and returning to portal.
+- **Live Customer-Rider Dispatch Binding**:
+  - Enhanced `services/orders.ts` to include `customer:customer_id(display_name, contact_phone), rider:rider_id(display_name, contact_phone)` relations on orders queries (`fetchCustomerOrders`, `fetchStoreOrders`, `fetchAvailableRiderJobs`, `fetchRiderDeliveries`, `claimRiderJob`).
+  - Added `riderPhone` to `LiveOrder`.
+  - Updated Customer Tracking screen (`app/(mobile)/(tabs)/orders.tsx`) to show the real courier's name and contact number once claimed, with a direct call trigger, or an active "Broadcasting to Couriers..." status when awaiting dispatch.
+- **Verification**:
+  - `npm run typecheck`: 0 TypeScript errors across the entire codebase.
+  - `npm test`: 20/20 foundation unit tests passing.
+
+## List Virtualization, Brand Theme Consolidation & Real Storage Uploads (2026-10-02)
+
+- **List Virtualization & Memory Recycling (`FlatList` Migration)**:
+  - `app/(mobile)/(tabs)/community.tsx`: Migrated foodie review feed to `FlatList<SocialPost>` with progressive backend pagination (`page = 1, pageSize = 10`), `onEndReached`, `RefreshControl`, `initialNumToRender={6}`, `maxToRenderPerBatch={8}`, `windowSize={5}`, and `removeClippedSubviews`.
+  - `app/(mobile)/(tabs)/orders.tsx`: Migrated COD Deliveries and Dining Table Bookings to dedicated `FlatList<LiveOrder>` and `FlatList<CustomerReservation>` with memory recycling and pull-to-refresh.
+  - `app/(mobile)/rider/index.tsx`: Replaced outer unvirtualized ScrollView with `FlatList<RiderJob>` for available delivery pool, with `ListHeaderComponent` housing the Earnings Card, active delivery job card, and pull-to-refresh (`RefreshControl`).
+  - `app/(mobile)/merchant/index.tsx`: Replaced monolithic ScrollView with virtualized `FlatList<KitchenOrder>` for kitchen pipeline, `FlatList<ReservationRow>` for dining tables, and `FlatList<typeof menu[0]>` for live menu inventory.
+- **Brand Theme Consolidation for Rider & Merchant Surfaces**:
+  - Eliminated legacy sky blue (`#0284c7`, `bg-sky-600`, `bg-sky-900`) and emerald green accents from non-status UI elements.
+  - Unified Rider and Merchant mobile UIs to the canonical Mati FoodFinder brand token palette: Warm Orange (`#EA5410`), Dark Charcoal (`#111827`), clean surfaces (`#F8FAFC`).
+  - Preserved semantic emerald (`#10B981`) strictly for active/online status indicators, ready-for-pickup badges, and verified credentials.
+  - Updated earnings cards, partner subscription banners, action buttons, category pills, and modal dialogs.
+- **Real Media Uploads (`foodie-uploads` Storage Bucket)**:
+  - Migration `20261002000200_foodie_uploads_storage.sql` applied to remote Supabase pooler: created public `foodie-uploads` storage bucket with 10MB limit and RLS policies for public read and authenticated insert.
+  - Implemented `services/storage.ts` with `uploadDishPhoto(fileUri, options)` returning persistent public URLs (`https://tqztlckmeznbsjcszzyg.supabase.co/storage/v1/object/public/foodie-uploads/...`).
+  - Integrated `expo-image-picker` in `app/(mobile)/(tabs)/community.tsx` enabling diners to snap camera photos or upload local gallery photos of dishes when posting community reviews.
+- **Printable Acrylic Table Stand Vector QR Generator (`components/merchant/PrintableTableQrModal.tsx`)**:
+  - Created standalone acrylic stand generator component using `toQR` to construct mathematical SVG QR matrix (zero heavy canvas dependencies).
+  - Features dining table selector presets ("Counter Stand", "Table 1" - "Table 6", "Patio A", "Patio B") constructing deep-link QR payloads (`mff://check-in?storeId=...&table=...`).
+  - Formatted in standard A6 acrylic stand dimensions with a 1-tap browser print trigger (`window.print()`).
+  - Wired into `app/(mobile)/merchant/index.tsx` Stand QR tab with an "Open Table Stand Generator (A6 Print) 🖨️" button.
+- **Verification**:
+  - `npm test`: 20/20 foundation unit tests passing.
+  - `npm run typecheck`: 0 TypeScript errors across the entire codebase.
+  - `npm run check`: Combined TypeScript analysis and unit tests passing cleanly.
+  - `npm run check:client-bundle`: Metro bundler probe verified for Android and iOS (1028 and 950 modules).
+
+## Real PostGIS Coordinates & Store Serviceability on the Map (2026-10-02)
+
+- **PostGIS Coordinate Extraction & Zero-Dependency WKB Parser (`lib/geo-serviceability.ts`)**:
+  - Implemented `parsePostGisPoint` using standard `Uint8Array` and `DataView` (zero external dependencies, 100% universal across React Native iOS/Android, Node, and Web).
+  - Robustly extracts exact geographic latitude and longitude from PostGIS `geography(Point, 4326)` Hex EWKB strings (e.g., `0101000020E6100000...`), WKT strings (`POINT(lng lat)`), and GeoJSON coordinate arrays.
+  - Aligned database stores to canonical Mati City coordinates:
+    - *Mama Letty's Karenderia* (Central): 6.9550° N, 126.2165° E
+    - *Mati Baywalk Seafood Grill* (Central): 6.9490° N, 126.2250° E
+    - *Subangan Street Grills* (Sainz): 6.9600° N, 126.2200° E
+    - *Dahican Beach Bites* (Dahican): 6.9180° N, 126.2750° E
+    - *Aling Nena's Kitchen* (Sainz): 6.9580° N, 126.2190° E
+
+- **Mati City Geo-Serviceability & Road Travel Time Engine (`lib/geo-serviceability.ts`)**:
+  - Defined canonical centroids for Mati City barangays: Central (Poblacion), Sainz, Matiao, Dahican, Badas, and Mayo.
+  - Implemented `evaluateStoreDeliveryServiceability` which evaluates customer GPS coordinates against store delivery radius:
+    - Standard city proper restaurants (Central, Sainz, Matiao, Badas): **6.0 km** coverage.
+    - Coastal / Beach establishments (Dahican strip): **12.0 km** coverage.
+  - Rigorously distinguishes **straight-line Haversine distance** (e.g., `1.4 km straight-line`) from **estimated road route distance** (`1.25x` factor) and **realistic road travel time** (`~12–18 min road trip by motorcycle/tricycle` including a 10-minute order prep buffer).
+  - Assigns semantic serviceability badges:
+    - 🛵 **Within Delivery Zone** (green pill with realistic road route ETA)
+    - 📍 **Outside Delivery Zone** (amber/rose warning with delivery limit explanation)
+    - 🏪 **Dine-In & Pickup Only** (for stores with merchant delivery disabled)
+
+- **Interactive Explore Screen Dynamic Map Refactor (`app/(mobile)/(tabs)/map.tsx`)**:
+  - Eliminated static mock arrays and hardcoded CSS pin percentages.
+  - Connected map pins directly to live approved stores returned by `fetchLiveStores()`.
+  - Implemented mathematical map coordinate projection `projectGeoToMapPercent` mapping real GPS coordinates onto the 2D map surface relative to Mati City boundaries (Pujada Bay to the south, Dahican to the east, Central to the center).
+  - Selected store card displays live delivery serviceability status, distance metrics row (Haversine GPS vs Estimated Road ETA vs Delivery Fee), and dynamic quick actions:
+    - If serviceable: provides active "Order COD" button routing to `CheckoutSheet`.
+    - If outside delivery zone: provides active "Book Table" button routing to `ReservationSheet`.
+    - "Route" button displays an informative navigation dialog detailing straight-line distance, road distance, and travel time.
+  - Enhanced List View with "Within Delivery Zone" filter chip, instant delivery badges, and straight-line vs. road route metrics.
+  - All existing working features (`RestaurantProfileSheet`, `CheckoutSheet`, `ReservationSheet`, `GuestGateModal`) preserved with 100% operational fidelity.
+
+- **Verification**:
+  - `npm test`: 20/20 unit tests passing (added 4 new tests in `tests/foundation/geo-serviceability.test.ts` covering WKB parsing, map projection, road ETA, and delivery serviceability).
+  - `npm run typecheck`: 0 TypeScript errors across the entire repository.
+  - `npm run check`: Combined typecheck and unit tests passing cleanly.
+  - `npm run check:client-bundle`: Android and iOS client bundles verified with Metro (971 and 916 modules).
 
 ## GitHub backup configuration (2026-10-01)
 

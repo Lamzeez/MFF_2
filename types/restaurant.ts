@@ -29,6 +29,9 @@ export interface RestaurantProfile {
   promo?: string;
   bgColor?: string;
   imageUrl?: string;
+  latitude?: number;
+  longitude?: number;
+  deliveryRadiusKm?: number;
 }
 
 export interface FoodItem {
