@@ -1,28 +1,38 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Link } from "expo-router";
 import {
-  fetchPlatformMetrics,
-  fetchAdminStoreApplications,
+  fetchPlatformMetricsWithStatus,
+  fetchAdminStoreApplicationsWithStatus,
   setStoreApproval,
   type PlatformMetrics,
   type StoreApplication,
 } from "../../../services/admin";
+import { buildAdminCsvReport } from "../../../lib/admin-report";
+import { NotificationBanner, type BannerMessage } from "../../../components/ui/NotificationBanner";
 
 export default function SystemAdminDashboard() {
   const [metrics, setMetrics] = useState<PlatformMetrics | null>(null);
   const [approvals, setApprovals] = useState<StoreApplication[]>([]);
   const [loading, setLoading] = useState(true);
+  const [banner, setBanner] = useState<BannerMessage | null>(null);
 
   const loadData = async () => {
     setLoading(true);
-    const [metricsData, appsData] = await Promise.all([
-      fetchPlatformMetrics(),
-      fetchAdminStoreApplications(),
+    const [metricsRes, appsRes] = await Promise.all([
+      fetchPlatformMetricsWithStatus(),
+      fetchAdminStoreApplicationsWithStatus(),
     ]);
-    if (metricsData) setMetrics(metricsData);
-    setApprovals(appsData);
+    setMetrics(metricsRes.data);
+    setApprovals(appsRes.data);
+    const loadError = metricsRes.error || appsRes.error;
+    if (loadError) {
+      setBanner({
+        type: "error",
+        message: `Could not load dashboard data: ${loadError}`,
+      });
+    }
     setLoading(false);
   };
 
@@ -30,16 +40,46 @@ export default function SystemAdminDashboard() {
     loadData();
   }, []);
 
+  const handleExportCsv = () => {
+    const csv = buildAdminCsvReport(metrics, approvals);
+    if (Platform.OS === "web" && typeof document !== "undefined" && typeof URL !== "undefined") {
+      try {
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        const dateStamp = new Date().toISOString().slice(0, 10);
+        link.href = url;
+        link.setAttribute("download", `mff-admin-report-${dateStamp}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        setBanner({ type: "success", message: "CSV report downloaded." });
+        return;
+      } catch {
+        setBanner({ type: "error", message: "Could not download the CSV report." });
+        return;
+      }
+    }
+    setBanner({ type: "info", message: "CSV export is supported on desktop browsers." });
+  };
+
   const handleApprove = async (id: string, name: string) => {
     const res = await setStoreApproval(id, "approved");
     if (res.success) {
       setApprovals((prev) =>
         prev.map((a) => (a.id === id ? { ...a, approval_status: "approved" } : a))
       );
-      alert(`Approved ${name}! Store is now live on the Mati FoodFinder marketplace.`);
+      setBanner({
+        type: "success",
+        message: `${name} has been approved.`,
+      });
       loadData();
     } else {
-      alert(`Failed to approve: ${res.error || "Unknown error"}`);
+      setBanner({
+        type: "error",
+        message: `Failed to approve store: ${res.error || "Unknown error"}`,
+      });
     }
   };
 
@@ -49,139 +89,162 @@ export default function SystemAdminDashboard() {
       setApprovals((prev) =>
         prev.map((a) => (a.id === id ? { ...a, approval_status: "rejected" } : a))
       );
-      alert(`Rejected ${name}.`);
+      setBanner({
+        type: "info",
+        message: `${name} has been rejected.`,
+      });
       loadData();
     } else {
-      alert(`Failed to reject: ${res.error || "Unknown error"}`);
+      setBanner({
+        type: "error",
+        message: `Failed to reject store: ${res.error || "Unknown error"}`,
+      });
     }
   };
 
   const pendingApps = approvals.filter((a) => a.approval_status === "pending");
 
   return (
-    <View className="flex-1 p-6 md:p-10 w-full max-w-7xl self-center">
+    <View className="flex-1 p-4 lg:p-6 w-full max-w-6xl self-center">
       {/* Header */}
-      <View className="mb-8 flex-col md:flex-row justify-between items-start md:items-end gap-4">
+      <View className="mb-5 flex-col md:flex-row justify-between items-start md:items-end gap-3">
         <View>
-          <View className="flex-row items-center gap-2 mb-1">
-            <Text className="text-[11px] font-black text-[#EA5410] uppercase tracking-wider">
-              MATI CITY PLATFORM OVERSIGHT
-            </Text>
-            <View className="bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
-              <Text className="text-[10px] font-black text-emerald-800 uppercase">Live Supabase</Text>
-            </View>
-          </View>
-          <Text className="text-3xl font-black text-gray-900 tracking-tight">Platform Administration</Text>
-          <Text className="text-gray-500 text-sm mt-1">
-            Mati FoodFinder operations, merchant approvals, and real-time delivery activity.
+          <Text className="text-xl lg:text-2xl font-bold text-gray-900 tracking-tight">
+            Dashboard
+          </Text>
+          <Text className="text-gray-500 text-xs mt-0.5">
+            Store applications, user activity, and delivery summary.
           </Text>
         </View>
 
         <Pressable
-          onPress={() => alert("Audit Log: System audit log verified active on remote Supabase instance.")}
-          className="bg-[#111827] px-5 py-3 rounded-2xl hover:bg-black transition-colors shadow-sm flex-row items-center gap-2"
+          accessibilityRole="button"
+          accessibilityLabel="Export CSV report"
+          onPress={handleExportCsv}
+          className="bg-[#111827] px-3.5 py-2 rounded-xl hover:bg-black transition-colors shadow-2xs flex-row items-center gap-1.5"
         >
-          <Ionicons name="download-outline" size={16} color="white" />
-          <Text className="text-white font-extrabold text-xs">Export Audit Report</Text>
+          <Ionicons name="download-outline" size={14} color="white" />
+          <Text className="text-white font-semibold text-xs">Export CSV</Text>
         </Pressable>
       </View>
 
+      {/* Inline Notification Banner */}
+      <NotificationBanner banner={banner} onDismiss={() => setBanner(null)} />
+
       {/* KPI Stats Grid */}
-      <View className="flex-row flex-wrap gap-5 mb-10">
-        <View className="flex-1 min-w-[220px] bg-white p-6 rounded-3xl shadow-sm border border-gray-200/80">
-          <View className="flex-row justify-between items-center mb-3">
-            <Text className="text-xs font-extrabold text-gray-400 uppercase tracking-wider">Registered Users</Text>
-            <View className="w-9 h-9 rounded-xl bg-blue-100 items-center justify-center">
-              <Ionicons name="people" size={18} color="#2563EB" />
+      <View className="flex-row flex-wrap gap-3.5 mb-5">
+        <View className="w-full sm:w-auto sm:flex-1 sm:min-w-[175px] bg-white p-4 rounded-2xl shadow-2xs border border-gray-200/80">
+          <View className="flex-row justify-between items-center mb-2">
+            <Text className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+              Total Users
+            </Text>
+            <View className="w-7 h-7 rounded-lg bg-blue-100 items-center justify-center">
+              <Ionicons name="people" size={14} color="#2563EB" />
             </View>
           </View>
-          <Text className="text-3xl font-black text-gray-900 tracking-tight">
-            {metrics ? metrics.total_users : <ActivityIndicator size="small" color="#2563EB" />}
+          <Text className="text-xl lg:text-2xl font-bold text-gray-900 tracking-tight">
+            {loading ? <ActivityIndicator size="small" color="#2563EB" /> : metrics ? metrics.total_users : "—"}
           </Text>
-          <Text className="text-emerald-600 font-bold text-xs mt-2">Verified in Mati City</Text>
+          <Text className="text-gray-500 font-medium text-[11px] mt-1">Registered accounts</Text>
         </View>
 
-        <View className="flex-1 min-w-[220px] bg-white p-6 rounded-3xl shadow-sm border border-gray-200/80">
-          <View className="flex-row justify-between items-center mb-3">
-            <Text className="text-xs font-extrabold text-gray-400 uppercase tracking-wider">Active Stores</Text>
-            <View className="w-9 h-9 rounded-xl bg-orange-100 items-center justify-center">
-              <Ionicons name="storefront" size={18} color="#EA5410" />
+        <View className="w-full sm:w-auto sm:flex-1 sm:min-w-[175px] bg-white p-4 rounded-2xl shadow-2xs border border-gray-200/80">
+          <View className="flex-row justify-between items-center mb-2">
+            <Text className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+              Active Stores
+            </Text>
+            <View className="w-7 h-7 rounded-lg bg-orange-100 items-center justify-center">
+              <Ionicons name="storefront" size={14} color="#EA5410" />
             </View>
           </View>
-          <Text className="text-3xl font-black text-gray-900 tracking-tight">
-            {metrics ? `${metrics.total_stores} Verified` : <ActivityIndicator size="small" color="#EA5410" />}
+          <Text className="text-xl lg:text-2xl font-bold text-gray-900 tracking-tight">
+            {loading ? <ActivityIndicator size="small" color="#EA5410" /> : metrics ? metrics.total_stores : "—"}
           </Text>
-          <Text className="text-[#EA5410] font-bold text-xs mt-2">In Poblacion & Dahican</Text>
+          <Text className="text-gray-500 font-medium text-[11px] mt-1">Approved stores</Text>
         </View>
 
-        <View className="flex-1 min-w-[220px] bg-white p-6 rounded-3xl shadow-sm border border-gray-200/80">
-          <View className="flex-row justify-between items-center mb-3">
-            <Text className="text-xs font-extrabold text-gray-400 uppercase tracking-wider">Pending Approvals</Text>
-            <View className="w-9 h-9 rounded-xl bg-amber-100 items-center justify-center">
-              <Ionicons name="hourglass" size={18} color="#D97706" />
+        <View className="w-full sm:w-auto sm:flex-1 sm:min-w-[175px] bg-white p-4 rounded-2xl shadow-2xs border border-gray-200/80">
+          <View className="flex-row justify-between items-center mb-2">
+            <Text className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+              Pending Approvals
+            </Text>
+            <View className="w-7 h-7 rounded-lg bg-amber-100 items-center justify-center">
+              <Ionicons name="hourglass" size={14} color="#D97706" />
             </View>
           </View>
-          <Text className="text-3xl font-black text-gray-900 tracking-tight">
-            {metrics ? `${metrics.pending_stores} Stores` : <ActivityIndicator size="small" color="#D97706" />}
+          <Text className="text-xl lg:text-2xl font-bold text-gray-900 tracking-tight">
+            {loading ? <ActivityIndicator size="small" color="#D97706" /> : metrics ? metrics.pending_stores : "—"}
           </Text>
-          <Text className="text-amber-600 font-bold text-xs mt-2">
-            {pendingApps.length > 0 ? "Requires review" : "All reviewed"}
+          <Text className="text-gray-500 font-medium text-[11px] mt-1">
+            {pendingApps.length > 0 ? "Awaiting review" : "All caught up"}
           </Text>
         </View>
 
-        <View className="flex-1 min-w-[220px] bg-white p-6 rounded-3xl shadow-sm border border-gray-200/80">
-          <View className="flex-row justify-between items-center mb-3">
-            <Text className="text-xs font-extrabold text-gray-400 uppercase tracking-wider">COD Gross Volume</Text>
-            <View className="w-9 h-9 rounded-xl bg-emerald-100 items-center justify-center">
-              <Ionicons name="cash" size={18} color="#047857" />
+        <View className="w-full sm:w-auto sm:flex-1 sm:min-w-[175px] bg-white p-4 rounded-2xl shadow-2xs border border-gray-200/80">
+          <View className="flex-row justify-between items-center mb-2">
+            <Text className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+              Order Volume
+            </Text>
+            <View className="w-7 h-7 rounded-lg bg-emerald-100 items-center justify-center">
+              <Ionicons name="cash" size={14} color="#047857" />
             </View>
           </View>
-          <Text className="text-3xl font-black text-gray-900 tracking-tight">
-            {metrics
-              ? `₱${((metrics.gross_sales_centavos) / 100).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
-              : <ActivityIndicator size="small" color="#047857" />}
+          <Text className="text-xl lg:text-2xl font-bold text-gray-900 tracking-tight">
+            {loading
+              ? <ActivityIndicator size="small" color="#047857" />
+              : metrics
+              ? `₱${(metrics.gross_sales_centavos / 100).toLocaleString("en-PH", {
+                  minimumFractionDigits: 2,
+                })}`
+              : "—"}
           </Text>
-          <Text className="text-emerald-600 font-bold text-xs mt-2">100% Cash on Delivery</Text>
+          <Text className="text-gray-500 font-medium text-[11px] mt-1">
+            {metrics ? `${metrics.total_orders} total orders` : "Total sales"}
+          </Text>
         </View>
       </View>
 
-      {/* Main Section: Pending Store Approvals + Live Audit Stream */}
-      <View className="flex-col xl:flex-row gap-8 w-full">
-        {/* Pending Approvals Widget */}
-        <View className="flex-[2] bg-white rounded-3xl shadow-sm border border-gray-200/80 overflow-hidden">
-          <View className="px-8 py-5 border-b border-gray-100 flex-row justify-between items-center">
+      {/* Main Content Split */}
+      <View className="flex-col xl:flex-row gap-5 w-full">
+        {/* Store Applications List */}
+        <View className="flex-[2] bg-white rounded-2xl shadow-2xs border border-gray-200/80 overflow-hidden">
+          <View className="px-5 py-3.5 border-b border-gray-100 flex-row justify-between items-center gap-2">
             <View>
-              <Text className="text-lg font-black text-gray-900">Store Verification Queue</Text>
-              <Text className="text-xs text-gray-400">Applications from Mati restaurant owners awaiting verification</Text>
+              <Text className="text-sm font-bold text-gray-900">Store Applications</Text>
+              <Text className="text-[11px] text-gray-400">
+                Recent restaurant registrations and approval status
+              </Text>
             </View>
             <Link href="/(web)/system-admin/approvals" asChild>
               <Pressable>
-                <Text className="text-xs font-bold text-[#EA5410] hover:underline">View All</Text>
+                <Text className="text-[11px] font-bold text-[#EA5410] hover:underline">View All</Text>
               </Pressable>
             </Link>
           </View>
 
           {loading ? (
-            <View className="py-16 items-center justify-center">
+            <View className="py-12 items-center justify-center">
               <ActivityIndicator size="small" color="#EA5410" />
-              <Text className="text-xs text-gray-400 mt-2">Loading applications from Supabase...</Text>
+              <Text className="text-[11px] text-gray-400 mt-2">Loading applications...</Text>
             </View>
           ) : approvals.length === 0 ? (
-            <View className="py-16 items-center justify-center">
-              <Ionicons name="checkmark-done-circle" size={40} color="#047857" />
-              <Text className="text-gray-800 font-bold text-sm mt-3">All store applications processed!</Text>
-              <Text className="text-gray-400 text-xs mt-1">No pending merchant verifications in Mati City</Text>
+            <View className="py-12 items-center justify-center">
+              <Ionicons name="checkmark-done-circle" size={32} color="#047857" />
+              <Text className="text-gray-800 font-bold text-xs mt-2.5">No store applications</Text>
+              <Text className="text-gray-400 text-[11px] mt-0.5">
+                New merchant applications will appear here.
+              </Text>
             </View>
           ) : (
-            <ScrollView className="max-h-[440px]">
+            <ScrollView className="max-h-[380px]">
               {approvals.slice(0, 5).map((app) => (
                 <View
                   key={app.id}
-                  className="px-8 py-5 border-b border-gray-100 flex-col md:flex-row items-start md:items-center justify-between hover:bg-gray-50/70 transition-colors gap-3"
+                  className="px-5 py-3.5 border-b border-gray-100 flex-col lg:flex-row items-start lg:items-center justify-between hover:bg-gray-50/70 transition-colors gap-2.5"
                 >
                   <View className="flex-1 pr-2">
-                    <View className="flex-row items-center gap-2 mb-1">
-                      <Text className="font-black text-gray-900 text-base">{app.name}</Text>
+                    <View className="flex-row items-center gap-2 mb-0.5">
+                      <Text className="font-bold text-gray-900 text-sm">{app.name}</Text>
                       <View
                         className={`px-2 py-0.5 rounded-full ${
                           app.approval_status === "approved"
@@ -192,7 +255,7 @@ export default function SystemAdminDashboard() {
                         }`}
                       >
                         <Text
-                          className={`text-[10px] font-black uppercase ${
+                          className={`text-[9px] font-bold uppercase ${
                             app.approval_status === "approved"
                               ? "text-emerald-800"
                               : app.approval_status === "rejected"
@@ -204,11 +267,12 @@ export default function SystemAdminDashboard() {
                         </Text>
                       </View>
                     </View>
-                    <Text className="text-xs text-gray-500 font-medium">
-                      Barangay: {app.barangay || "Mati"} • {app.address_text}
+                    <Text className="text-[11px] text-gray-500 font-medium">
+                      {app.barangay ? `${app.barangay} • ` : ""}
+                      {app.address_text}
                     </Text>
                     <Text className="text-[11px] text-gray-400 mt-0.5">
-                      Phone: {app.public_phone || "Not specified"}
+                      Phone: {app.public_phone || "Not provided"}
                     </Text>
                   </View>
 
@@ -216,17 +280,17 @@ export default function SystemAdminDashboard() {
                     {app.approval_status !== "approved" && (
                       <Pressable
                         onPress={() => handleApprove(app.id, app.name)}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-2xs"
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-2xs"
                       >
-                        <Text className="text-white font-extrabold text-xs">Approve</Text>
+                        <Text className="text-white font-bold text-[11px]">Approve</Text>
                       </Pressable>
                     )}
                     {app.approval_status !== "rejected" && (
                       <Pressable
                         onPress={() => handleReject(app.id, app.name)}
-                        className="px-3.5 py-2 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-colors"
+                        className="px-3 py-1.5 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors"
                       >
-                        <Text className="text-red-700 font-bold text-xs">Reject</Text>
+                        <Text className="text-red-700 font-bold text-[11px]">Reject</Text>
                       </Pressable>
                     )}
                   </View>
@@ -236,53 +300,49 @@ export default function SystemAdminDashboard() {
           )}
         </View>
 
-        {/* Live Platform Security Stream */}
-        <View className="flex-1 bg-white rounded-3xl shadow-sm border border-gray-200/80 p-8 flex-col justify-between">
+        {/* Platform Operations Summary */}
+        <View className="flex-1 bg-white rounded-2xl shadow-2xs border border-gray-200/80 p-5 flex-col justify-between">
           <View>
-            <View className="flex-row items-center gap-2 mb-1">
-              <Ionicons name="shield-outline" size={18} color="#EA5410" />
-              <Text className="text-lg font-black text-gray-900">Security & Audit</Text>
+            <View className="flex-row items-center gap-2 mb-0.5">
+              <Ionicons name="stats-chart-outline" size={15} color="#EA5410" />
+              <Text className="text-sm font-bold text-gray-900">Summary</Text>
             </View>
-            <Text className="text-xs text-gray-400 mb-6">Recent system security & identity events</Text>
+            <Text className="text-[11px] text-gray-400 mb-4">Current marketplace totals</Text>
 
-            <View className="gap-4">
-              <View className="pb-3 border-b border-gray-100">
-                <View className="flex-row justify-between items-center mb-1">
-                  <Text className="text-xs font-bold text-gray-900">RLS Policies Enforced</Text>
-                  <Text className="text-[10px] text-emerald-600 font-bold">Passing</Text>
-                </View>
-                <Text className="text-[11px] text-gray-500">Row Level Security verified active across public tables.</Text>
+            <View className="gap-3">
+              <View className="pb-2.5 border-b border-gray-100 flex-row justify-between items-center">
+                <Text className="text-xs font-medium text-gray-600">Approved Stores</Text>
+                <Text className="text-xs font-bold text-gray-900">
+                  {metrics?.total_stores ?? 0}
+                </Text>
               </View>
 
-              <View className="pb-3 border-b border-gray-100">
-                <View className="flex-row justify-between items-center mb-1">
-                  <Text className="text-xs font-bold text-gray-900">Auth Token Cycles</Text>
-                  <Text className="text-[10px] text-emerald-600 font-bold">100% Valid</Text>
-                </View>
-                <Text className="text-[11px] text-gray-500">GoTrue identity session recovery verified on remote Supabase.</Text>
+              <View className="pb-2.5 border-b border-gray-100 flex-row justify-between items-center">
+                <Text className="text-xs font-medium text-gray-600">Pending Approvals</Text>
+                <Text className="text-xs font-bold text-amber-700">
+                  {metrics?.pending_stores ?? 0}
+                </Text>
               </View>
 
-              <View className="pb-3 border-b border-gray-100">
-                <View className="flex-row justify-between items-center mb-1">
-                  <Text className="text-xs font-bold text-gray-900">Rider Role Verification</Text>
-                  <Text className="text-[10px] text-blue-600 font-bold">{metrics?.active_riders ?? 3} Active</Text>
-                </View>
-                <Text className="text-[11px] text-gray-500">get_my_application_roles RPC enforcing courier claims.</Text>
+              <View className="pb-2.5 border-b border-gray-100 flex-row justify-between items-center">
+                <Text className="text-xs font-medium text-gray-600">Active Riders</Text>
+                <Text className="text-xs font-bold text-blue-700">
+                  {metrics?.active_riders ?? 0}
+                </Text>
               </View>
 
-              <View>
-                <View className="flex-row justify-between items-center mb-1">
-                  <Text className="text-xs font-bold text-gray-900">COD Settlement Integrity</Text>
-                  <Text className="text-[10px] text-emerald-600 font-bold">Audited</Text>
-                </View>
-                <Text className="text-[11px] text-gray-500">4-digit handshake PIN required on all customer handoffs.</Text>
+              <View className="flex-row justify-between items-center">
+                <Text className="text-xs font-medium text-gray-600">Total Orders</Text>
+                <Text className="text-xs font-bold text-emerald-700">
+                  {metrics?.total_orders ?? 0}
+                </Text>
               </View>
             </View>
           </View>
 
           <Link href="/(web)/system-admin/metrics" asChild>
-            <Pressable className="mt-8 py-3 bg-gray-50 border border-gray-200 rounded-2xl items-center hover:bg-gray-100 transition-colors">
-              <Text className="text-xs font-bold text-gray-700">View Full Platform Telemetry</Text>
+            <Pressable className="mt-5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl items-center hover:bg-gray-100 transition-colors">
+              <Text className="text-xs font-bold text-gray-700">View Analytics</Text>
             </Pressable>
           </Link>
         </View>

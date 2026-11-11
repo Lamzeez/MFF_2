@@ -16,7 +16,7 @@ export default function MobileGroupRootLayout() {
     !pathname.endsWith("/portal") &&
     pathname !== "/"
   ) {
-    return <Redirect href="/portal" />;
+    return <Redirect href="/" />;
   }
 
   return (

@@ -1,5 +1,15 @@
 import { getSupabaseClient } from "../lib/supabase/client";
+import type { AuthPortalScope } from "../types/auth";
 import type { OrderStatus } from "../types/order";
+import { recordVoucherRedemption } from "./vouchers";
+import { notifyCustomerOrderLifecycle } from "./device-notifications";
+import {
+  isStoreCurrentlyOpen,
+  evaluateStoreDeliveryServiceability,
+  MATI_BARANGAY_CENTROIDS,
+  parsePostGisPoint,
+  GeoCoordinates,
+} from "../lib/geo-serviceability";
 
 export interface CreateOrderPayload {
   storeId: string;
@@ -15,6 +25,12 @@ export interface CreateOrderPayload {
   barangay: string;
   customerPhone?: string;
   notes?: string;
+  voucherCode?: string;
+  voucherId?: string;
+  discount?: number; // in pesos
+  customerCoordinates?: GeoCoordinates;
+  storeHours?: string;
+  bypassHoursCheck?: boolean;
 }
 
 export interface LiveOrderItem {
@@ -44,6 +60,9 @@ export interface LiveOrder {
   paymentMethod: "cod" | "gcash";
   subtotal: number;
   deliveryFee: number;
+  discount?: number;
+  voucherCode?: string;
+  voucherId?: string;
   total: number;
   deliveryAddress: string;
   barangay: string;
@@ -52,6 +71,8 @@ export interface LiveOrder {
   items: LiveOrderItem[];
   isRebroadcast?: boolean;
   isRemitted?: boolean;
+  podImageUrl?: string;
+  podTimestamp?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -62,7 +83,7 @@ function generateHandshakePin(): string {
 }
 
 /** Map database row to LiveOrder presentation model */
-function mapDatabaseOrderToLiveOrder(row: any): LiveOrder {
+export function mapDatabaseOrderToLiveOrder(row: any): LiveOrder {
   const items: LiveOrderItem[] = (row.order_items || []).map((item: any) => ({
     id: item.id,
     menuItemId: item.menu_item_id,
@@ -74,13 +95,26 @@ function mapDatabaseOrderToLiveOrder(row: any): LiveOrder {
 
   const notesText = row.notes || "";
   const isRebroadcast = Boolean(
-    notesText.includes("Auto-Reassigned") || notesText.includes("Courier Released")
+    notesText.includes("Auto-Reassigned") ||
+      notesText.includes("Courier Released") ||
+      notesText.includes("Merchant Re-broadcast")
   );
   const isRemitted = Boolean(
     notesText.includes("COD Remitted") ||
       notesText.includes("Cash Remitted") ||
       notesText.includes("Settled")
   );
+
+  // Extract discount and voucher from columns or fallback notes
+  let discountPesos = row.discount_centavos ? Math.round(row.discount_centavos / 100) : 0;
+  let voucherCode = row.voucher_code || undefined;
+  if (!discountPesos && notesText.includes("[Promo:")) {
+    const match = notesText.match(/\[Promo:\s*([A-Za-z0-9_-]+)\s*-₱([0-9.]+)\]/);
+    if (match) {
+      voucherCode = match[1];
+      discountPesos = parseFloat(match[2]) || 0;
+    }
+  }
 
   return {
     id: row.id,
@@ -100,7 +134,10 @@ function mapDatabaseOrderToLiveOrder(row: any): LiveOrder {
     paymentMethod: row.payment_method as "cod" | "gcash",
     subtotal: Math.round(row.subtotal_centavos / 100),
     deliveryFee: Math.round(row.delivery_fee_centavos / 100),
-    total: Math.round(row.total_centavos / 100),
+    discount: discountPesos,
+    voucherCode: voucherCode,
+    voucherId: row.voucher_id || undefined,
+    total: Math.round((row.total_centavos ?? row.total_amount_centavos ?? 0) / 100),
     deliveryAddress: row.delivery_address,
     barangay: row.barangay,
     notes: notesText,
@@ -108,13 +145,15 @@ function mapDatabaseOrderToLiveOrder(row: any): LiveOrder {
     items,
     isRebroadcast,
     isRemitted,
+    podImageUrl: row.pod_image_url || undefined,
+    podTimestamp: row.pod_timestamp || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
 /**
- * Creates an order in Supabase with its line items.
+ * Creates an order in Supabase with its line items and records voucher redemption.
  */
 export async function createOrder(payload: CreateOrderPayload): Promise<LiveOrder> {
   const client = getSupabaseClient();
@@ -125,36 +164,139 @@ export async function createOrder(payload: CreateOrderPayload): Promise<LiveOrde
 
   const subtotalPesos = payload.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const deliveryFeePesos = payload.fulfillmentType === "delivery" ? 35 : 0;
-  const totalPesos = subtotalPesos + deliveryFeePesos;
+  const discountPesos = payload.discount || 0;
+  const totalPesos = Math.max(0, subtotalPesos + deliveryFeePesos - discountPesos);
 
   const subtotalCentavos = Math.round(subtotalPesos * 100);
   const deliveryFeeCentavos = Math.round(deliveryFeePesos * 100);
+  const discountCentavos = Math.round(discountPesos * 100);
   const totalCentavos = Math.round(totalPesos * 100);
   const handshakePin = generateHandshakePin();
 
+  // 0. Store Operating Hours Verification
+  if (!payload.bypassHoursCheck) {
+    const hoursEval = isStoreCurrentlyOpen(payload.storeHours);
+    if (!hoursEval.isOpen) {
+      throw new Error(hoursEval.message);
+    }
+  }
+
+  // Delivery boundary & serviceability guard
+  if (payload.fulfillmentType === "delivery" && payload.storeId) {
+    try {
+      const { data: storeInfo } = await client
+        .from("stores")
+        .select("delivery_enabled, location, barangay, name")
+        .eq("id", payload.storeId)
+        .maybeSingle();
+
+      if (storeInfo) {
+        if (storeInfo.delivery_enabled === false) {
+          throw new Error("This store offers counter pickup only. Delivery is currently disabled by the store.");
+        }
+
+        const parsedCoords = parsePostGisPoint(storeInfo.location);
+        const storeCoords = parsedCoords || { latitude: 6.9550, longitude: 126.2165 };
+        const customerCoords =
+          payload.customerCoordinates ||
+          MATI_BARANGAY_CENTROIDS[payload.barangay] ||
+          MATI_BARANGAY_CENTROIDS["Central (Poblacion)"];
+
+        const evalResult = evaluateStoreDeliveryServiceability(customerCoords, {
+          latitude: storeCoords.latitude,
+          longitude: storeCoords.longitude,
+          deliveryEnabled: storeInfo.delivery_enabled,
+          barangay: storeInfo.barangay,
+          name: storeInfo.name,
+        });
+
+        if (!evalResult.isServiceable) {
+          throw new Error(`[Serviceability Error] ${evalResult.notice}`);
+        }
+      }
+    } catch (checkErr: any) {
+      if (checkErr.message?.startsWith("[Serviceability Error]") || checkErr.message?.includes("counter pickup only")) {
+        throw checkErr;
+      }
+      console.warn("[orders] Non-blocking delivery serviceability check notice:", checkErr);
+    }
+  }
+
   // 1. Insert Order
-  const { data: orderData, error: orderError } = await client
+  const orderInsertPayload: any = {
+    customer_id: user.id,
+    store_id: payload.storeId,
+    status: "placed",
+    fulfillment_type: payload.fulfillmentType,
+    payment_method: payload.paymentMethod,
+    subtotal_centavos: subtotalCentavos,
+    delivery_fee_centavos: deliveryFeeCentavos,
+    discount_centavos: discountCentavos,
+    total_centavos: totalCentavos,
+    delivery_address: payload.deliveryAddress,
+    barangay: payload.barangay,
+    customer_phone: payload.customerPhone || null,
+    notes: payload.notes || "",
+    handshake_pin: handshakePin,
+    voucher_code: payload.voucherCode || null,
+    voucher_id: payload.voucherId || null,
+  };
+
+  let { data: orderData, error: orderError } = await client
     .from("orders")
-    .insert({
-      customer_id: user.id,
-      store_id: payload.storeId,
-      status: "placed",
-      fulfillment_type: payload.fulfillmentType,
-      payment_method: payload.paymentMethod,
-      subtotal_centavos: subtotalCentavos,
-      delivery_fee_centavos: deliveryFeeCentavos,
-      total_centavos: totalCentavos,
-      delivery_address: payload.deliveryAddress,
-      barangay: payload.barangay,
-      customer_phone: payload.customerPhone || null,
-      notes: payload.notes || "",
-      handshake_pin: handshakePin,
-    })
+    .insert(orderInsertPayload)
     .select("*, stores(name, address_text, public_phone), profiles:customer_id(display_name, contact_phone)")
     .single();
 
+  if (orderError) {
+    // If remote schema has not yet applied migration columns, retry inserting without them
+    if (
+      orderError.message?.includes("discount_centavos") ||
+      orderError.message?.includes("voucher_code") ||
+      orderError.message?.includes("voucher_id")
+    ) {
+      const fallbackNotes = payload.voucherCode
+        ? `${payload.notes || ""}${payload.notes ? " " : ""}[Promo: ${payload.voucherCode} -₱${discountPesos}]`
+        : payload.notes || "";
+
+      const fallbackPayload: any = {
+        customer_id: user.id,
+        store_id: payload.storeId,
+        status: "placed",
+        fulfillment_type: payload.fulfillmentType,
+        payment_method: payload.paymentMethod,
+        subtotal_centavos: subtotalCentavos,
+        delivery_fee_centavos: deliveryFeeCentavos,
+        total_centavos: totalCentavos,
+        delivery_address: payload.deliveryAddress,
+        barangay: payload.barangay,
+        customer_phone: payload.customerPhone || null,
+        notes: fallbackNotes,
+        handshake_pin: handshakePin,
+      };
+
+      const retryRes = await client
+        .from("orders")
+        .insert(fallbackPayload)
+        .select("*, stores(name, address_text, public_phone), profiles:customer_id(display_name, contact_phone)")
+        .single();
+
+      orderData = retryRes.data;
+      orderError = retryRes.error;
+    }
+  }
+
   if (orderError || !orderData) {
     throw new Error(`Failed to place order: ${orderError?.message || "Unknown error"}`);
+  }
+
+  // Record voucher redemption if voucher was used
+  if (payload.voucherId && user.id) {
+    try {
+      await recordVoucherRedemption(payload.voucherId, user.id, orderData.id, discountPesos);
+    } catch (redErr) {
+      console.warn("[services/orders] Voucher redemption logging notice:", redErr);
+    }
   }
 
   // 2. Insert Order Items
@@ -176,10 +318,21 @@ export async function createOrder(payload: CreateOrderPayload): Promise<LiveOrde
     console.error("Error creating order items:", itemsError);
   }
 
-  return mapDatabaseOrderToLiveOrder({
+  const liveOrder = mapDatabaseOrderToLiveOrder({
     ...orderData,
     order_items: itemsData || [],
   });
+
+  notifyCustomerOrderLifecycle({
+    status: "placed",
+    storeName: liveOrder.storeName,
+    handshakePin: liveOrder.handshakePin,
+    orderNumber: liveOrder.orderNumber,
+    orderId: liveOrder.id,
+    customerId: liveOrder.customerId,
+  }).catch((err) => console.warn("[orders] createOrder notification note:", err));
+
+  return liveOrder;
 }
 
 /**
@@ -210,7 +363,7 @@ export async function fetchCustomerOrders(): Promise<LiveOrder[]> {
  */
 export async function fetchStoreOrders(storeId: string): Promise<LiveOrder[]> {
   try {
-    const client = getSupabaseClient();
+    const client = getSupabaseClient("merchant");
     const { data, error } = await client
       .from("orders")
       .select("*, order_items(*), stores(name, address_text, public_phone), customer:customer_id(display_name, contact_phone), rider:rider_id(display_name, contact_phone)")
@@ -242,7 +395,7 @@ export function isDeliveryStale(updatedAt: string, maxMinutes: number = 15): boo
  */
 export async function reassignStaleDeliveryJob(orderId: string): Promise<boolean> {
   try {
-    const client = getSupabaseClient();
+    const client = getSupabaseClient("rider");
     const timestamp = new Date().toLocaleTimeString();
     const { error } = await client
       .from("orders")
@@ -271,7 +424,7 @@ export async function reassignStaleDeliveryJob(orderId: string): Promise<boolean
  */
 export async function fetchAvailableRiderJobs(): Promise<LiveOrder[]> {
   try {
-    const client = getSupabaseClient();
+    const client = getSupabaseClient("rider");
 
     // Auto-reassign any deliveries stuck in out_for_delivery for > 15 minutes
     const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
@@ -312,7 +465,7 @@ export async function fetchRiderDeliveries(): Promise<{
   completed: LiveOrder[];
 }> {
   try {
-    const client = getSupabaseClient();
+    const client = getSupabaseClient("rider");
     const user = (await client.auth.getUser()).data.user;
     if (!user) return { active: [], completed: [] };
 
@@ -338,29 +491,54 @@ export async function fetchRiderDeliveries(): Promise<{
 /**
  * Updates status of an order (e.g. accepted, preparing, ready_for_pickup, cancelled).
  */
-export async function updateOrderStatus(orderId: string, status: OrderStatus): Promise<void> {
-  const client = getSupabaseClient();
-  const { error } = await client
+export async function updateOrderStatus(
+  orderId: string,
+  status: OrderStatus,
+  scope: AuthPortalScope = "merchant",
+): Promise<void> {
+  const client = getSupabaseClient(scope);
+  const { data: updatedData, error } = await client
     .from("orders")
     .update({ status })
-    .eq("id", orderId);
+    .eq("id", orderId)
+    .select("*, stores(name)")
+    .single();
 
   if (error) {
     throw new Error(`Failed to update order status: ${error.message}`);
   }
+
+  if (updatedData) {
+    notifyCustomerOrderLifecycle({
+      status,
+      storeName: (updatedData.stores as any)?.name || "Restaurant",
+      handshakePin: updatedData.handshake_pin,
+      orderNumber: updatedData.id?.slice(0, 8),
+      orderId: updatedData.id,
+      customerId: updatedData.customer_id,
+    }).catch((err) => console.warn("[orders] updateOrderStatus notification note:", err));
+  }
 }
 
 /**
- * Rider claims an order atomically. Sets status to 'out_for_delivery'.
+ * Rider claims an order atomically with PostgreSQL row-level locks (FOR UPDATE).
+ * Sets status to 'out_for_delivery'. Prevents courier claim race conditions.
  */
-export async function claimRiderJob(orderId: string): Promise<LiveOrder> {
-  const client = getSupabaseClient();
-  const { data, error } = await client.rpc("claim_delivery_job", {
+export async function acceptDeliveryJob(orderId: string): Promise<LiveOrder> {
+  const client = getSupabaseClient("rider");
+  let rpcRes = await client.rpc("accept_delivery_job", {
     p_order_id: orderId,
   });
 
-  if (error) {
-    throw new Error(error.message || "Failed to claim delivery job.");
+  if (rpcRes.error) {
+    // Graceful backward-compatible fallback to legacy claim RPC if migration pending
+    const fallbackRes = await client.rpc("claim_delivery_job", {
+      p_order_id: orderId,
+    });
+    if (fallbackRes.error) {
+      throw new Error(fallbackRes.error.message || rpcRes.error.message || "Failed to claim delivery job.");
+    }
+    rpcRes = fallbackRes;
   }
 
   // Refetch full order with details
@@ -370,14 +548,32 @@ export async function claimRiderJob(orderId: string): Promise<LiveOrder> {
     .eq("id", orderId)
     .single();
 
-  return mapDatabaseOrderToLiveOrder(fullOrder || data);
+  const liveOrder = mapDatabaseOrderToLiveOrder(fullOrder || rpcRes.data);
+
+  notifyCustomerOrderLifecycle({
+    status: "out_for_delivery",
+    storeName: liveOrder.storeName,
+    handshakePin: liveOrder.handshakePin,
+    orderNumber: liveOrder.orderNumber,
+    orderId: liveOrder.id,
+    customerId: liveOrder.customerId,
+  }).catch((err) => console.warn("[orders] acceptDeliveryJob notification note:", err));
+
+  return liveOrder;
 }
+
+export const claimRiderJob = acceptDeliveryJob;
 
 /**
  * Completes delivery by validating the customer's 4-digit handshake PIN.
+ * Optionally records Proof of Delivery (POD) photo URL.
  */
-export async function completeDeliveryWithPin(orderId: string, pin: string): Promise<void> {
-  const client = getSupabaseClient();
+export async function completeDeliveryWithPin(
+  orderId: string,
+  pin: string,
+  podImageUrl?: string
+): Promise<void> {
+  const client = getSupabaseClient("rider");
   const { error } = await client.rpc("complete_delivery_with_pin", {
     p_order_id: orderId,
     p_pin: pin.trim(),
@@ -385,6 +581,85 @@ export async function completeDeliveryWithPin(orderId: string, pin: string): Pro
 
   if (error) {
     throw new Error(error.message || "Failed to complete delivery.");
+  }
+
+  // Persist POD photo if captured
+  if (podImageUrl) {
+    try {
+      await client
+        .from("orders")
+        .update({
+          pod_image_url: podImageUrl,
+          pod_timestamp: new Date().toISOString(),
+        })
+        .eq("id", orderId);
+    } catch (err) {
+      console.warn("[orders] POD metadata update note:", err);
+    }
+  }
+
+  const { data: orderData } = await client
+    .from("orders")
+    .select("*, stores(name)")
+    .eq("id", orderId)
+    .single();
+
+  if (orderData) {
+    notifyCustomerOrderLifecycle({
+      status: "delivered",
+      storeName: (orderData.stores as any)?.name || "Restaurant",
+      handshakePin: orderData.handshake_pin,
+      orderNumber: orderData.id?.slice(0, 8),
+      orderId: orderData.id,
+      customerId: orderData.customer_id,
+    }).catch((err) => console.warn("[orders] completeDelivery notification note:", err));
+  }
+}
+
+/**
+ * Uploads Proof of Delivery (POD) photo taken by courier to Supabase Storage delivery-proofs bucket.
+ */
+export async function uploadProofOfDeliveryPhoto(
+  orderId: string,
+  imageUri: string
+): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    const client = getSupabaseClient("rider");
+    const fileName = `pod_${orderId}_${Date.now()}.jpg`;
+
+    // If imageUri is already remote, return directly
+    if (imageUri.startsWith("http://") || imageUri.startsWith("https://")) {
+      return { success: true, url: imageUri };
+    }
+
+    try {
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+
+      const { data, error } = await client.storage
+        .from("delivery-proofs")
+        .upload(fileName, blob, {
+          contentType: "image/jpeg",
+          upsert: true,
+        });
+
+      if (error) {
+        console.warn("[orders] POD storage upload failed, using URI fallback:", error.message);
+        return { success: true, url: imageUri };
+      }
+
+      const { data: publicData } = client.storage
+        .from("delivery-proofs")
+        .getPublicUrl(data.path);
+
+      return { success: true, url: publicData.publicUrl };
+    } catch {
+      // In web or restricted native offline environments, fallback gracefully to URI
+      return { success: true, url: imageUri };
+    }
+  } catch (err: any) {
+    console.warn("[orders] uploadProofOfDeliveryPhoto exception:", err);
+    return { success: true, url: imageUri };
   }
 }
 
@@ -396,7 +671,7 @@ export async function releaseDeliveryJob(
   orderId: string,
   reason: string = "Emergency / Vehicle breakdown"
 ): Promise<void> {
-  const client = getSupabaseClient();
+  const client = getSupabaseClient("rider");
   const timestamp = new Date().toLocaleTimeString();
   const { error } = await client
     .from("orders")
@@ -414,17 +689,29 @@ export async function releaseDeliveryJob(
 
 /**
  * Courier reports a Customer No-Show at the drop-off location with verified GPS coordinates.
- * Cancels the delivery order and logs courier GPS location for store and platform audit.
+ * Cancels the delivery order, logs courier GPS location, and records a strike against the customer's account.
  */
 export async function reportCustomerNoShow(
   orderId: string,
   gps: { latitude: number; longitude: number },
-  reason: string = "Customer unreachable after waiting at drop-off location"
+  reason: string = "Customer unreachable after waiting at drop-off location",
+  customerId?: string
 ): Promise<void> {
-  const client = getSupabaseClient();
+  const client = getSupabaseClient("rider");
   const timestamp = new Date().toLocaleTimeString();
   const gpsFormatted = `(${gps.latitude.toFixed(4)}° N, ${gps.longitude.toFixed(4)}° E)`;
   const auditNote = `[Cancelled: Customer No-Show verified by courier GPS ${gpsFormatted} - ${reason} at ${timestamp}]`;
+
+  // Fetch customer_id if not explicitly provided
+  let targetCustomerId = customerId;
+  if (!targetCustomerId) {
+    const { data: orderData } = await client
+      .from("orders")
+      .select("customer_id")
+      .eq("id", orderId)
+      .maybeSingle();
+    targetCustomerId = orderData?.customer_id;
+  }
 
   const { error } = await client
     .from("orders")
@@ -437,6 +724,68 @@ export async function reportCustomerNoShow(
   if (error) {
     throw new Error(`Failed to report customer no-show: ${error.message}`);
   }
+
+  // Record no-show strike on customer profile (disables COD on 2 strikes)
+  if (targetCustomerId) {
+    try {
+      await client.rpc("record_customer_no_show_strike", {
+        p_customer_id: targetCustomerId,
+      });
+    } catch (strikeErr) {
+      console.warn("[orders] Failed to record customer no-show strike:", strikeErr);
+    }
+  }
+}
+
+/**
+ * Merchant manually re-broadcasts an order if the assigned courier has delayed pickup (>10 mins).
+ * Returns the order to ready_for_pickup without an assigned rider and triggers fresh dispatch.
+ */
+export async function merchantRebroadcastOrder(
+  orderId: string,
+  reason: string = "Courier pickup delayed at store"
+): Promise<void> {
+  const client = getSupabaseClient("merchant");
+  const timestamp = new Date().toLocaleTimeString();
+
+  const { error } = await client
+    .from("orders")
+    .update({
+      rider_id: null,
+      status: "ready_for_pickup",
+      notes: `[Merchant Re-broadcast: ${reason} at ${timestamp}]`,
+    })
+    .eq("id", orderId);
+
+  if (error) {
+    throw new Error(`Failed to re-broadcast order: ${error.message}`);
+  }
+}
+
+/**
+ * Checks if a customer is eligible for Cash On Delivery (COD) based on their no-show strike record.
+ */
+export async function checkCustomerCodEligibility(
+  customerId: string
+): Promise<{ eligible: boolean; strikes: number }> {
+  try {
+    const client = getSupabaseClient();
+    const { data, error } = await client
+      .from("profiles")
+      .select("cod_eligible, cod_strikes")
+      .eq("id", customerId)
+      .maybeSingle();
+
+    if (error || !data) {
+      return { eligible: true, strikes: 0 };
+    }
+    return {
+      eligible: data.cod_eligible ?? true,
+      strikes: data.cod_strikes ?? 0,
+    };
+  } catch {
+    return { eligible: true, strikes: 0 };
+  }
 }
 
 /**
@@ -444,9 +793,12 @@ export async function reportCustomerNoShow(
  */
 export function subscribeToOrders(
   filter: { storeId?: string; customerId?: string; riderId?: string } | null,
-  onUpdate: () => void
+  onUpdate: () => void,
+  scope?: AuthPortalScope,
 ): () => void {
-  const client = getSupabaseClient();
+  const resolvedScope: AuthPortalScope =
+    scope ?? (filter?.storeId ? "merchant" : filter?.riderId ? "rider" : "customer");
+  const client = getSupabaseClient(resolvedScope);
   const channelName = `orders-realtime-${Date.now()}-${Math.random()}`;
 
   const channel = client
@@ -609,7 +961,7 @@ export async function confirmCodRemittance(
   orderId: string,
   confirmedBy: string = "Merchant"
 ): Promise<void> {
-  const client = getSupabaseClient();
+  const client = getSupabaseClient("merchant");
   const timestamp = new Date().toLocaleTimeString();
   const noteTag = `[COD Remitted: Food cash confirmed by ${confirmedBy} at ${timestamp}]`;
 

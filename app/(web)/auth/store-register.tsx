@@ -1,115 +1,1386 @@
-import { View, Text, TextInput, Pressable, ScrollView } from "react-native";
-import { Link } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Animated,
+  Image,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { Link, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
+import { useSession } from "../../../context/SessionContext";
+import { authMessage } from "../../../services/auth";
+import { getSupabaseClient } from "../../../lib/supabase/client";
+import { uploadStoreVerificationDocument } from "../../../services/storage";
+import { filterPhoneInput, sanitizePhoneNumber } from "../../../lib/phone";
+import {
+  DEFAULT_CLOSE_TIME,
+  DEFAULT_OPEN_TIME,
+  MAX_DOCUMENT_SIZE_BYTES,
+  STORE_BARANGAY_OPTIONS,
+  STORE_CUISINE_OPTIONS,
+  STORE_OPERATING_TIME_OPTIONS,
+  type StoreRegistrationFieldKey,
+  buildOperatingHoursString,
+  buildStoreDescription,
+  evaluateMerchantPassword,
+  filterAddressInput,
+  filterDescriptionInput,
+  filterEmailInput,
+  filterOtpInput,
+  filterOwnerNameInput,
+  filterStoreNameInput,
+  getBarangayDefaultCoordinates,
+  isWithinMatiBounds,
+  parseOperatingTimeMinutes,
+  submitMerchantStoreApplication,
+  validateStoreRegistrationFieldErrors,
+  validateVerificationDocumentFile,
+} from "../../../services/merchant-registration";
+import StoreMapPicker from "../../../components/auth/StoreMapPicker";
+import { MATI_CITY_HALL_COORDS } from "../../../lib/geo-serviceability";
+import { NotificationBanner, type BannerMessage } from "../../../components/ui/NotificationBanner";
+
+const mffLogo = require("../../../assets/logo.jpg");
+
+interface PickedDocument {
+  blobOrUri: Blob | string;
+  previewUri: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes?: number;
+  isObjectUrl?: boolean;
+}
+
+function FieldErrorText({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <View className="flex-row items-center gap-1 mt-1 ml-0.5">
+      <Ionicons name="alert-circle-outline" size={12} color="#DC2626" />
+      <Text className="text-[11px] font-medium text-red-600 flex-1">{message}</Text>
+    </View>
+  );
+}
+
+function AnimatedRulePhrase({
+  met,
+  text,
+  pendingColor,
+}: {
+  met: boolean;
+  text: string;
+  pendingColor: string;
+}) {
+  const progress = useRef(new Animated.Value(met ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(progress, {
+      toValue: met ? 1 : 0,
+      duration: 240,
+      useNativeDriver: false,
+    }).start();
+  }, [met, progress]);
+
+  const color = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [pendingColor, "#059669"],
+  });
+
+  return (
+    <Animated.Text style={{ color, fontWeight: met ? "600" : "500" }}>
+      {text}
+    </Animated.Text>
+  );
+}
+
+function LivePasswordSentence({
+  password,
+  evaluation,
+  showErrorState,
+}: {
+  password: string;
+  evaluation: ReturnType<typeof evaluateMerchantPassword>;
+  showErrorState: boolean;
+}) {
+  const pulseScale = useRef(new Animated.Value(1)).current;
+  const prevMetCount = useRef(evaluation.metCount);
+
+  useEffect(() => {
+    if (evaluation.metCount > prevMetCount.current) {
+      pulseScale.setValue(1);
+      Animated.sequence([
+        Animated.timing(pulseScale, {
+          toValue: 1.025,
+          duration: 120,
+          useNativeDriver: true,
+        }),
+        Animated.spring(pulseScale, {
+          toValue: 1,
+          friction: 5,
+          tension: 180,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+    prevMetCount.current = evaluation.metCount;
+  }, [evaluation.metCount, pulseScale]);
+
+  if (password.length > 0 && !evaluation.noEdgeWhitespace) {
+    return (
+      <View className="flex-row items-center gap-1 mt-1.5 ml-0.5">
+        <Ionicons name="alert-circle-outline" size={12} color="#DC2626" />
+        <Text className="text-[11px] font-medium text-red-600 flex-1">
+          Password cannot start or end with spaces.
+        </Text>
+      </View>
+    );
+  }
+
+  const pendingColor = showErrorState
+    ? "#DC2626"
+    : password.length > 0
+      ? "#EA5410"
+      : "#6B7280";
+
+  return (
+    <Animated.View
+      style={{ transform: [{ scale: pulseScale }] }}
+      className="flex-row items-start gap-1 mt-1.5 ml-0.5"
+    >
+      {evaluation.isValid ? (
+        <Ionicons
+          name="checkmark-circle"
+          size={13}
+          color="#059669"
+          style={{ marginTop: 1 }}
+        />
+      ) : showErrorState ? (
+        <Ionicons
+          name="alert-circle-outline"
+          size={12}
+          color="#DC2626"
+          style={{ marginTop: 2 }}
+        />
+      ) : null}
+      <Text className="text-[11px] leading-4 flex-1">
+        <AnimatedRulePhrase
+          met={evaluation.isValid}
+          text="Password must be "
+          pendingColor={pendingColor}
+        />
+        <AnimatedRulePhrase
+          met={evaluation.minLength}
+          text="12+ characters"
+          pendingColor={pendingColor}
+        />
+        <AnimatedRulePhrase
+          met={evaluation.isValid}
+          text=" with "
+          pendingColor={pendingColor}
+        />
+        <AnimatedRulePhrase
+          met={evaluation.hasUppercase}
+          text="uppercase"
+          pendingColor={pendingColor}
+        />
+        <AnimatedRulePhrase
+          met={evaluation.isValid}
+          text=", "
+          pendingColor={pendingColor}
+        />
+        <AnimatedRulePhrase
+          met={evaluation.hasLowercase}
+          text="lowercase"
+          pendingColor={pendingColor}
+        />
+        <AnimatedRulePhrase
+          met={evaluation.isValid}
+          text=", and "
+          pendingColor={pendingColor}
+        />
+        <AnimatedRulePhrase
+          met={evaluation.hasNumber}
+          text="a number."
+          pendingColor={pendingColor}
+        />
+      </Text>
+    </Animated.View>
+  );
+}
 
 export default function StoreRegister() {
+  const router = useRouter();
+  const { signUp, verifyCode, resendConfirmation, retrySession } = useSession("merchant");
+
+  // Store details
+  const [storeName, setStoreName] = useState("");
+  const [categories, setCategories] = useState<string[]>([STORE_CUISINE_OPTIONS[0]]);
+  const [description, setDescription] = useState("");
+  const [storePhone, setStorePhone] = useState("");
+  const [openTime, setOpenTime] = useState(DEFAULT_OPEN_TIME);
+  const [closeTime, setCloseTime] = useState(DEFAULT_CLOSE_TIME);
+  const [isOpen24Hours, setIsOpen24Hours] = useState(false);
+  const [timePickerTarget, setTimePickerTarget] = useState<"open" | "close" | null>(null);
+
+  // Location & map pinpoint
+  const [barangay, setBarangay] = useState<string>(STORE_BARANGAY_OPTIONS[0]);
+  const [addressText, setAddressText] = useState("");
+  const [latitude, setLatitude] = useState<number>(MATI_CITY_HALL_COORDS.latitude);
+  const [longitude, setLongitude] = useState<number>(MATI_CITY_HALL_COORDS.longitude);
+
+  // Owner credentials
+  const [ownerName, setOwnerName] = useState("");
+  const [ownerPhone, setOwnerPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Verification document
+  const [documentAsset, setDocumentAsset] = useState<PickedDocument | null>(null);
+
+  // Validation state
+  const [touched, setTouched] = useState<Partial<Record<StoreRegistrationFieldKey, boolean>>>({});
+  const [submittedAttempt, setSubmittedAttempt] = useState(false);
+
+  // Flow & feedback
+  const [step, setStep] = useState<"form" | "otp">("form");
+  const [otpCode, setOtpCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [banner, setBanner] = useState<BannerMessage | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (
+        Platform.OS === "web" &&
+        documentAsset?.isObjectUrl &&
+        typeof URL !== "undefined"
+      ) {
+        URL.revokeObjectURL(documentAsset.previewUri);
+      }
+    };
+  }, [documentAsset]);
+
+  const operatingHours = useMemo(
+    () => buildOperatingHoursString({ isOpen24Hours, openTime, closeTime }),
+    [isOpen24Hours, openTime, closeTime]
+  );
+
+  const passwordEval = useMemo(() => evaluateMerchantPassword(password), [password]);
+  const mapInMatiBounds = useMemo(
+    () => isWithinMatiBounds(latitude, longitude),
+    [latitude, longitude]
+  );
+
+  const fieldErrors = useMemo(
+    () =>
+      validateStoreRegistrationFieldErrors({
+        storeName,
+        categories,
+        description,
+        storePhone,
+        openTime,
+        closeTime,
+        isOpen24Hours,
+        operatingHours,
+        barangay,
+        addressText,
+        latitude,
+        longitude,
+        ownerName,
+        ownerPhone,
+        email,
+        password,
+        confirmPassword,
+        hasDocument: Boolean(documentAsset),
+      }),
+    [
+      storeName,
+      categories,
+      description,
+      storePhone,
+      openTime,
+      closeTime,
+      isOpen24Hours,
+      operatingHours,
+      barangay,
+      addressText,
+      latitude,
+      longitude,
+      ownerName,
+      ownerPhone,
+      email,
+      password,
+      confirmPassword,
+      documentAsset,
+    ]
+  );
+
+  const markTouched = (field: StoreRegistrationFieldKey) => {
+    setTouched((prev) => (prev[field] ? prev : { ...prev, [field]: true }));
+  };
+
+  const getVisibleError = (field: StoreRegistrationFieldKey): string | undefined => {
+    if (!submittedAttempt && !touched[field]) return undefined;
+    return fieldErrors[field];
+  };
+
+  const handleToggleCategory = (item: string) => {
+    setBanner(null);
+    markTouched("categories");
+    setCategories((prev) =>
+      prev.includes(item) ? prev.filter((c) => c !== item) : [...prev, item]
+    );
+  };
+
+  const handleSelectBarangay = (nextBarangay: string) => {
+    setBanner(null);
+    markTouched("barangay");
+    markTouched("location");
+    setBarangay(nextBarangay);
+    const preset = getBarangayDefaultCoordinates(nextBarangay);
+    setLatitude(preset.latitude);
+    setLongitude(preset.longitude);
+  };
+
+  const handleMapPinChange = useCallback((nextLat: number, nextLng: number) => {
+    setBanner(null);
+    setTouched((prev) => ({ ...prev, location: true }));
+    setLatitude(nextLat);
+    setLongitude(nextLng);
+  }, []);
+
+  const handleMapError = useCallback((message: string) => {
+    setBanner({ type: "error", message });
+  }, []);
+
+  const handleClearMapError = useCallback(() => {
+    setBanner(null);
+  }, []);
+
+  const handlePickDocument = async () => {
+    setBanner(null);
+    markTouched("document");
+
+    if (Platform.OS === "web" && typeof document !== "undefined") {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/jpeg,image/png,image/webp";
+      input.onchange = (e: Event) => {
+        const target = e.target as HTMLInputElement | null;
+        const file = target?.files?.[0];
+        if (!file) return;
+
+        const fileErr = validateVerificationDocumentFile({
+          mimeType: file.type,
+          sizeBytes: file.size,
+        });
+        if (fileErr) {
+          setBanner({ type: "error", message: fileErr });
+          return;
+        }
+
+        const previewUri =
+          typeof URL !== "undefined" ? URL.createObjectURL(file) : "";
+        setDocumentAsset({
+          blobOrUri: file,
+          previewUri,
+          fileName: file.name,
+          mimeType: file.type,
+          sizeBytes: file.size,
+          isObjectUrl: Boolean(previewUri),
+        });
+      };
+      input.click();
+      return;
+    }
+
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        setBanner({
+          type: "error",
+          message: "Allow photo library access to upload your storefront or permit photo.",
+        });
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.85,
+      });
+
+      if (result.canceled || !result.assets?.[0]) return;
+      const picked = result.assets[0];
+      const nativeMime = picked.mimeType || "image/jpeg";
+      const fileErr = validateVerificationDocumentFile({
+        mimeType: nativeMime,
+        sizeBytes: typeof picked.fileSize === "number" ? picked.fileSize : undefined,
+      });
+      if (fileErr) {
+        setBanner({ type: "error", message: fileErr });
+        return;
+      }
+
+      if (typeof picked.fileSize === "number" && picked.fileSize > MAX_DOCUMENT_SIZE_BYTES) {
+        setBanner({
+          type: "error",
+          message: "Upload an image up to 5MB in size (JPEG, PNG, or WebP).",
+        });
+        return;
+      }
+
+      setDocumentAsset({
+        blobOrUri: picked.uri,
+        previewUri: picked.uri,
+        fileName: picked.fileName || "store-verification.jpg",
+        mimeType: nativeMime,
+        sizeBytes: picked.fileSize,
+      });
+    } catch {
+      setBanner({
+        type: "error",
+        message: "Could not open your photo library. Please try again.",
+      });
+    }
+  };
+
+  const finalizeStoreSubmission = async (userId: string) => {
+    if (!documentAsset) {
+      throw new Error("Upload a storefront or business permit photo to continue.");
+    }
+
+    const uploadRes = await uploadStoreVerificationDocument(
+      documentAsset.blobOrUri,
+      userId,
+      { mimeType: documentAsset.mimeType }
+    );
+
+    if (!uploadRes.publicUrl) {
+      throw new Error(
+        uploadRes.error || "Could not upload verification photo. Please retry."
+      );
+    }
+
+    const combinedDescription = buildStoreDescription(categories, description);
+
+    await submitMerchantStoreApplication({
+      name: storeName,
+      categories,
+      addressText,
+      barangay,
+      publicPhone: storePhone,
+      description: combinedDescription,
+      operatingHours,
+      deliveryEnabled: false,
+      latitude,
+      longitude,
+      verificationDocumentUrl: uploadRes.publicUrl,
+    });
+
+    await retrySession();
+    router.replace("/(web)/auth/verification");
+  };
+
+  const handleSubmitForm = async () => {
+    setBanner(null);
+    setSubmittedAttempt(true);
+
+    const orderedErrorKeys: StoreRegistrationFieldKey[] = [
+      "storeName",
+      "storePhone",
+      "categories",
+      "description",
+      "operatingHours",
+      "barangay",
+      "addressText",
+      "location",
+      "ownerName",
+      "ownerPhone",
+      "email",
+      "password",
+      "confirmPassword",
+      "document",
+    ];
+    const firstKey = orderedErrorKeys.find((k) => Boolean(fieldErrors[k]));
+    if (firstKey && fieldErrors[firstKey]) {
+      setBanner({ type: "error", message: fieldErrors[firstKey]! });
+      return;
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedOwnerPhone = sanitizePhoneNumber(ownerPhone);
+
+    setLoading(true);
+    try {
+      const client = getSupabaseClient("merchant");
+      const {
+        data: { session: existingSession },
+      } = await client.auth.getSession();
+
+      if (
+        existingSession?.user?.email?.toLowerCase() === normalizedEmail &&
+        existingSession.user.email_confirmed_at
+      ) {
+        await finalizeStoreSubmission(existingSession.user.id);
+        return;
+      }
+
+      await signUp(ownerName.trim(), normalizedEmail, password, normalizedOwnerPhone);
+
+      const {
+        data: { session: nextSession },
+      } = await client.auth.getSession();
+
+      if (nextSession?.user && nextSession.user.email_confirmed_at) {
+        await finalizeStoreSubmission(nextSession.user.id);
+        return;
+      }
+
+      setStep("otp");
+      setBanner({
+        type: "success",
+        message: `We sent a 6-digit confirmation code to ${normalizedEmail}. Enter it below to finish submitting your store.`,
+      });
+    } catch (err: unknown) {
+      const msg = authMessage(err);
+      const errMessage =
+        typeof err === "object" &&
+        err !== null &&
+        "message" in err &&
+        typeof (err as { message: unknown }).message === "string"
+          ? (err as { message: string }).message
+          : "";
+      const hasCode = typeof err === "object" && err !== null && "code" in err;
+      setBanner({
+        type: "error",
+        message: errMessage && !hasCode ? errMessage : msg,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtpAndSubmit = async () => {
+    if (otpCode.length !== 6) {
+      setBanner({ type: "error", message: "Enter the 6-digit numeric confirmation code." });
+      return;
+    }
+
+    setBanner(null);
+    setLoading(true);
+    try {
+      const client = getSupabaseClient("merchant");
+      const {
+        data: { session: existingSession },
+      } = await client.auth.getSession();
+
+      let userId = existingSession?.user?.email_confirmed_at
+        ? existingSession.user.id
+        : undefined;
+
+      if (!userId) {
+        await verifyCode(email.trim().toLowerCase(), otpCode, "signup");
+        const {
+          data: { user },
+        } = await client.auth.getUser();
+        if (!user) {
+          throw new Error("Verification succeeded, please try submitting again.");
+        }
+        userId = user.id;
+      }
+
+      await finalizeStoreSubmission(userId);
+    } catch (err: unknown) {
+      const msg = authMessage(err);
+      const errMessage =
+        typeof err === "object" &&
+        err !== null &&
+        "message" in err &&
+        typeof (err as { message: unknown }).message === "string"
+          ? (err as { message: string }).message
+          : "";
+      const hasCode = typeof err === "object" && err !== null && "code" in err;
+      setBanner({
+        type: "error",
+        message: errMessage && !hasCode ? errMessage : msg,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setBanner(null);
+    setResending(true);
+    try {
+      await resendConfirmation(email.trim().toLowerCase());
+      setBanner({
+        type: "success",
+        message: `Sent a fresh 6-digit code to ${email.trim().toLowerCase()}.`,
+      });
+    } catch (err: unknown) {
+      setBanner({ type: "error", message: authMessage(err) });
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const handleSelectTimeSlot = (slot: string) => {
+    markTouched("operatingHours");
+    if (timePickerTarget === "open") {
+      setOpenTime(slot);
+      const nextOpenMins = parseOperatingTimeMinutes(slot);
+      const currCloseMins = parseOperatingTimeMinutes(closeTime);
+      if (nextOpenMins !== null && (currCloseMins === null || currCloseMins <= nextOpenMins)) {
+        const nextValidClose = STORE_OPERATING_TIME_OPTIONS.find((candidate) => {
+          const mins = parseOperatingTimeMinutes(candidate);
+          return mins !== null && mins > nextOpenMins;
+        });
+        if (nextValidClose) setCloseTime(nextValidClose);
+      }
+    } else if (timePickerTarget === "close") {
+      setCloseTime(slot);
+    }
+    setTimePickerTarget(null);
+  };
+
+  const openMinutes = parseOperatingTimeMinutes(openTime);
+
   return (
-    <ScrollView className="flex-1 bg-gray-50" contentContainerStyle={{ flexGrow: 1, alignItems: 'center', padding: 24 }}>
-      <View className="w-full max-w-2xl bg-white p-8 md:p-10 rounded-3xl shadow-lg border border-gray-100 my-8">
-        
-        <View className="mb-8 border-b border-gray-100 pb-6">
-          <Text className="text-3xl font-extrabold text-gray-900 mb-2">Partner with MFF</Text>
-          <Text className="text-gray-500">
-            Join Mati City's exclusive food network. Get your 2-Month Free Trial and start receiving orders today.
-          </Text>
-        </View>
-
-        <View className="gap-6">
-          {/* Section 1 */}
-          <View>
-            <Text className="text-lg font-bold text-gray-900 mb-4">1. Store Information</Text>
-            <View className="gap-4">
-              <View>
-                <Text className="text-sm font-bold text-gray-700 mb-1 ml-1">Store Name *</Text>
-                <TextInput 
-                  placeholder="e.g. Mama Letty's Karenderia"
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:border-orange-500"
-                  placeholderTextColor="#9ca3af"
-                />
-              </View>
-              <View>
-                <Text className="text-sm font-bold text-gray-700 mb-1 ml-1">Complete Address *</Text>
-                <TextInput 
-                  placeholder="Street, Barangay, Landmark (Mati City only)"
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:border-orange-500"
-                  placeholderTextColor="#9ca3af"
-                />
-              </View>
-            </View>
-          </View>
-
-          {/* Section 2 */}
-          <View className="pt-4 border-t border-gray-100">
-            <Text className="text-lg font-bold text-gray-900 mb-4">2. Owner Details</Text>
-            <View className="gap-4">
-              <View className="flex-col md:flex-row gap-4">
-                <View className="flex-1">
-                  <Text className="text-sm font-bold text-gray-700 mb-1 ml-1">Full Name *</Text>
-                  <TextInput 
-                    placeholder="Owner's Name"
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:border-orange-500"
-                    placeholderTextColor="#9ca3af"
-                  />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-bold text-gray-700 mb-1 ml-1">Mobile Number (GCash) *</Text>
-                  <TextInput 
-                    placeholder="09XX XXX XXXX"
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:border-orange-500"
-                    placeholderTextColor="#9ca3af"
-                    keyboardType="phone-pad"
-                  />
-                </View>
-              </View>
-              <View>
-                <Text className="text-sm font-bold text-gray-700 mb-1 ml-1">Email Address *</Text>
-                <TextInput 
-                  placeholder="store@example.com"
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:border-orange-500"
-                  placeholderTextColor="#9ca3af"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              </View>
-              <View>
-                <Text className="text-sm font-bold text-gray-700 mb-1 ml-1">Password *</Text>
-                <TextInput 
-                  placeholder="Create a secure password"
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:border-orange-500"
-                  placeholderTextColor="#9ca3af"
-                  secureTextEntry
-                />
-              </View>
-            </View>
-          </View>
-
-          {/* Section 3 */}
-          <View className="pt-4 border-t border-gray-100">
-            <Text className="text-lg font-bold text-gray-900 mb-4">3. Verification Documents</Text>
-            <Text className="text-gray-500 mb-4 text-sm">
-              To ensure platform quality, please upload a clear photo of your Store Front or Business Permit.
-            </Text>
-            <Pressable className="w-full h-32 bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl items-center justify-center hover:bg-gray-100 transition-colors">
-              <Text className="text-2xl mb-2">📸</Text>
-              <Text className="text-gray-500 font-bold">Click to Upload Document</Text>
-              <Text className="text-gray-400 text-xs mt-1">JPEG, PNG up to 5MB</Text>
-            </Pressable>
-          </View>
-
-          <Link href="/(web)/auth/verification" asChild>
-            <Pressable className="w-full bg-orange-500 py-4 rounded-xl items-center shadow-md hover:bg-orange-600 transition-colors mt-6">
-              <Text className="text-white font-bold text-lg">Submit Application</Text>
-            </Pressable>
-          </Link>
-          
-          <View className="flex-row justify-center mt-2 gap-1">
-            <Text className="text-gray-500">Already have an account?</Text>
-            <Link href="/(web)/auth/store-login" asChild>
-              <Pressable><Text className="text-orange-600 font-bold">Sign In</Text></Pressable>
+    <View className="flex-1 bg-[#F8FAFC]">
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ flexGrow: 1 }}
+      >
+        <View className="w-full max-w-[920px] self-center px-5 sm:px-6 lg:px-8 py-6">
+          {/* Top Navigation Strip: Back to Home Top-Left & Branding Top-Right */}
+          <View className="flex-row flex-wrap items-center justify-between gap-3 mb-6">
+            <Link href="/" asChild>
+              <Pressable className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-gray-200 hover:bg-gray-100 transition-colors shadow-2xs">
+                <Ionicons name="arrow-back" size={12} color="#374151" />
+                <Text className="text-[11px] font-semibold text-gray-700">Back to Home</Text>
+              </Pressable>
             </Link>
+
+            <View className="flex-row items-center gap-2">
+              <View className="w-7 h-7 rounded-lg bg-white border border-gray-200 p-0.5 items-center justify-center overflow-hidden shadow-2xs">
+                <Image
+                  source={mffLogo}
+                  style={{ width: 22, height: 22, borderRadius: 4 }}
+                  resizeMode="contain"
+                  accessibilityLabel="Mati FoodFinder logo"
+                />
+              </View>
+              <Text className="text-gray-900 text-sm font-bold tracking-tight">
+                Mati FoodFinder
+              </Text>
+            </View>
           </View>
 
+          {/* Header */}
+          <View className="mb-5">
+            <Text className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
+              {step === "otp" ? "Verify Owner Email" : "Register Your Store"}
+            </Text>
+            <Text className="text-gray-500 text-xs mt-1 leading-relaxed">
+              {step === "otp"
+                ? "Confirm your email to complete your merchant application."
+                : "Provide accurate store details, pinpoint your location in Mati City, and upload verification."}
+            </Text>
+          </View>
+
+          <NotificationBanner banner={banner} onDismiss={() => setBanner(null)} />
+
+          {step === "otp" ? (
+            <View className="bg-white border border-gray-200/90 rounded-2xl p-5 max-w-[440px] self-center w-full mt-2 shadow-sm">
+              <Text className="text-sm font-bold text-gray-900 mb-1">
+                6-Digit Confirmation Code
+              </Text>
+              <Text className="text-xs text-gray-500 mb-4 leading-relaxed">
+                Sent to <Text className="text-gray-900 font-semibold">{email.trim().toLowerCase()}</Text>
+              </Text>
+
+              <TextInput
+                value={otpCode}
+                onChangeText={(text) => setOtpCode(filterOtpInput(text))}
+                placeholder="123456"
+                maxLength={6}
+                keyboardType="number-pad"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                onSubmitEditing={handleVerifyOtpAndSubmit}
+                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3.5 py-2.5 text-sm font-bold text-gray-900 tracking-widest text-center focus:border-[#EA5410] focus:bg-white mb-4"
+                placeholderTextColor="#9CA3AF"
+              />
+
+              <Pressable
+                onPress={handleVerifyOtpAndSubmit}
+                disabled={loading || otpCode.length !== 6}
+                className={`w-full py-2.5 rounded-lg items-center transition-colors ${
+                  loading || otpCode.length !== 6
+                    ? "bg-orange-300"
+                    : "bg-[#EA5410] hover:bg-[#D04508]"
+                }`}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text className="text-white font-bold text-xs">
+                    Verify & Submit Store Application
+                  </Text>
+                )}
+              </Pressable>
+
+              <View className="flex-row items-center justify-between mt-4 pt-3 border-t border-gray-100">
+                <Pressable onPress={handleResendOtp} disabled={resending}>
+                  <Text className="text-[11px] font-semibold text-[#EA5410]">
+                    {resending ? "Sending code..." : "Resend verification code"}
+                  </Text>
+                </Pressable>
+                <Pressable onPress={() => setStep("form")} disabled={loading}>
+                  <Text className="text-[11px] font-semibold text-gray-500 hover:text-gray-800">
+                    Edit details
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <View className="gap-5 pb-6">
+              {/* Section 1: Store Information */}
+              <View className="bg-white border border-gray-200/90 rounded-2xl p-5 shadow-2xs">
+                <View className="flex-row items-center justify-between mb-4 pb-3 border-b border-gray-100">
+                  <View className="flex-row items-center gap-2">
+                    <View className="w-6 h-6 rounded-md bg-orange-100 items-center justify-center">
+                      <Ionicons name="storefront-outline" size={13} color="#EA5410" />
+                    </View>
+                    <Text className="text-sm font-bold text-gray-900">1. Store Information</Text>
+                  </View>
+                  <Text className="text-[10px] font-semibold text-gray-400">
+                    Required fields *
+                  </Text>
+                </View>
+
+                <View className="gap-3.5">
+                  <View className="flex-col md:flex-row gap-3.5">
+                    <View className="flex-1">
+                      <Text className="text-[11px] font-semibold text-gray-700 mb-1 ml-0.5">
+                        Store Name *
+                      </Text>
+                      <TextInput
+                        value={storeName}
+                        onChangeText={(text) => setStoreName(filterStoreNameInput(text))}
+                        onBlur={() => markTouched("storeName")}
+                        maxLength={120}
+                        placeholder="e.g. Baywalk Native Kitchen"
+                        className={`w-full bg-gray-50 border rounded-lg px-3 py-2.5 text-xs text-gray-900 focus:border-[#EA5410] focus:bg-white ${
+                          getVisibleError("storeName") ? "border-red-400" : "border-gray-200"
+                        }`}
+                        placeholderTextColor="#9CA3AF"
+                      />
+                      <FieldErrorText message={getVisibleError("storeName")} />
+                    </View>
+
+                    <View className="flex-1">
+                      <Text className="text-[11px] font-semibold text-gray-700 mb-1 ml-0.5">
+                        Store Contact Phone *
+                      </Text>
+                      <TextInput
+                        value={storePhone}
+                        onChangeText={(text) => setStorePhone(filterPhoneInput(text))}
+                        onBlur={() => markTouched("storePhone")}
+                        maxLength={16}
+                        placeholder="0912 345 6789"
+                        keyboardType="phone-pad"
+                        inputMode="tel"
+                        className={`w-full bg-gray-50 border rounded-lg px-3 py-2.5 text-xs text-gray-900 focus:border-[#EA5410] focus:bg-white ${
+                          getVisibleError("storePhone") ? "border-red-400" : "border-gray-200"
+                        }`}
+                        placeholderTextColor="#9CA3AF"
+                      />
+                      <FieldErrorText message={getVisibleError("storePhone")} />
+                    </View>
+                  </View>
+
+                  <View>
+                    <View className="flex-row items-center justify-between mb-1.5 ml-0.5">
+                      <Text className="text-[11px] font-semibold text-gray-700">
+                        Choose Store Categories *
+                      </Text>
+                      <Text className="text-[10px] font-medium text-gray-400">
+                        Select all that apply ({categories.length} selected)
+                      </Text>
+                    </View>
+                    <View className="flex-row flex-wrap gap-2">
+                      {STORE_CUISINE_OPTIONS.map((item) => {
+                        const selected = categories.includes(item);
+                        return (
+                          <Pressable
+                            key={item}
+                            accessibilityRole="checkbox"
+                            accessibilityState={{ checked: selected }}
+                            onPress={() => handleToggleCategory(item)}
+                            className={`px-3 py-1.5 rounded-lg border flex-row items-center gap-1.5 transition-colors ${
+                              selected
+                                ? "bg-orange-50 border-[#EA5410]"
+                                : "bg-gray-50 border-gray-200 hover:bg-gray-100"
+                            }`}
+                          >
+                            <Ionicons
+                              name={selected ? "checkmark-circle" : "add-circle-outline"}
+                              size={13}
+                              color={selected ? "#EA5410" : "#6B7280"}
+                            />
+                            <Text
+                              className={`text-[11px] font-semibold ${
+                                selected ? "text-[#EA5410]" : "text-gray-700"
+                              }`}
+                            >
+                              {item}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                    <FieldErrorText message={getVisibleError("categories")} />
+                  </View>
+
+                  <View>
+                    <View className="flex-row items-center justify-between mb-1 ml-0.5">
+                      <Text className="text-[11px] font-semibold text-gray-700">
+                        Store Description & Specialty
+                      </Text>
+                      <Text className="text-[10px] text-gray-400">
+                        {description.length}/500
+                      </Text>
+                    </View>
+                    <TextInput
+                      value={description}
+                      onChangeText={(text) => setDescription(filterDescriptionInput(text))}
+                      onBlur={() => markTouched("description")}
+                      maxLength={500}
+                      placeholder="Signature dishes, dining setup, or service notes"
+                      multiline
+                      numberOfLines={2}
+                      className={`w-full bg-gray-50 border rounded-lg px-3 py-2.5 text-xs text-gray-900 focus:border-[#EA5410] focus:bg-white ${
+                        getVisibleError("description") ? "border-red-400" : "border-gray-200"
+                      }`}
+                      placeholderTextColor="#9CA3AF"
+                      style={{ minHeight: 58, textAlignVertical: "top" }}
+                    />
+                    <FieldErrorText message={getVisibleError("description")} />
+                  </View>
+
+                  {/* Structured Operating Hours Selector */}
+                  <View className="bg-gray-50/70 border border-gray-200/90 rounded-xl p-3.5 gap-3">
+                    <View className="flex-row items-center justify-between gap-3">
+                      <View className="flex-1">
+                        <Text className="text-[11px] font-semibold text-gray-800">
+                          Operating Hours *
+                        </Text>
+                        <Text className="text-[10px] text-gray-500 mt-0.5">
+                          Choose 30-minute AM/PM time slots or toggle 24-hour service
+                        </Text>
+                      </View>
+                      <View className="flex-row items-center gap-2">
+                        <Text className="text-[11px] font-semibold text-gray-700">Open 24 Hours</Text>
+                        <Switch
+                          value={isOpen24Hours}
+                          onValueChange={(next) => {
+                            markTouched("operatingHours");
+                            setIsOpen24Hours(next);
+                          }}
+                          trackColor={{ false: "#D1D5DB", true: "#FB923C" }}
+                          thumbColor={isOpen24Hours ? "#EA5410" : "#F9FAFB"}
+                        />
+                      </View>
+                    </View>
+
+                    {!isOpen24Hours ? (
+                      <View className="flex-col md:flex-row gap-3">
+                        <View className="flex-1">
+                          <Text className="text-[11px] font-semibold text-gray-700 mb-1 ml-0.5">
+                            Opening Time *
+                          </Text>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Select opening time"
+                            onPress={() => setTimePickerTarget("open")}
+                            className={`w-full bg-white border rounded-lg px-3 py-2.5 flex-row items-center justify-between ${
+                              getVisibleError("operatingHours") ? "border-red-400" : "border-gray-200"
+                            }`}
+                          >
+                            <View className="flex-row items-center gap-2">
+                              <Ionicons name="time-outline" size={14} color="#EA5410" />
+                              <Text className="text-xs font-semibold text-gray-900">{openTime}</Text>
+                            </View>
+                            <Ionicons name="chevron-down" size={14} color="#6B7280" />
+                          </Pressable>
+                        </View>
+
+                        <View className="flex-1">
+                          <Text className="text-[11px] font-semibold text-gray-700 mb-1 ml-0.5">
+                            Closing Time *
+                          </Text>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Select closing time"
+                            onPress={() => setTimePickerTarget("close")}
+                            className={`w-full bg-white border rounded-lg px-3 py-2.5 flex-row items-center justify-between ${
+                              getVisibleError("operatingHours") ? "border-red-400" : "border-gray-200"
+                            }`}
+                          >
+                            <View className="flex-row items-center gap-2">
+                              <Ionicons name="time-outline" size={14} color="#EA5410" />
+                              <Text className="text-xs font-semibold text-gray-900">{closeTime}</Text>
+                            </View>
+                            <Ionicons name="chevron-down" size={14} color="#6B7280" />
+                          </Pressable>
+                        </View>
+                      </View>
+                    ) : (
+                      <View className="flex-row items-center gap-2 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-lg">
+                        <Ionicons name="time" size={14} color="#059669" />
+                        <Text className="text-[11px] font-semibold text-emerald-800">
+                          Your store schedule will display as Open 24 Hours.
+                        </Text>
+                      </View>
+                    )}
+
+                    <FieldErrorText message={getVisibleError("operatingHours")} />
+                  </View>
+                </View>
+              </View>
+
+              {/* Section 2: Address & Map Pinpoint */}
+              <View className="bg-white border border-gray-200/90 rounded-2xl p-5 shadow-2xs">
+                <View className="flex-row items-center gap-2 mb-4 pb-3 border-b border-gray-100">
+                  <View className="w-6 h-6 rounded-md bg-orange-100 items-center justify-center">
+                    <Ionicons name="map-outline" size={13} color="#EA5410" />
+                  </View>
+                  <Text className="text-sm font-bold text-gray-900">
+                    2. Address & Map Pinpoint
+                  </Text>
+                </View>
+
+                <View className="gap-3.5">
+                  <View>
+                    <Text className="text-[11px] font-semibold text-gray-700 mb-1.5 ml-0.5">
+                      Barangay (Mati City) *
+                    </Text>
+                    <View className="flex-row flex-wrap gap-2">
+                      {STORE_BARANGAY_OPTIONS.map((item) => {
+                        const selected = barangay === item;
+                        return (
+                          <Pressable
+                            key={item}
+                            onPress={() => handleSelectBarangay(item)}
+                            className={`px-3 py-1.5 rounded-lg border transition-colors ${
+                              selected
+                                ? "bg-orange-50 border-[#EA5410]"
+                                : "bg-gray-50 border-gray-200 hover:bg-gray-100"
+                            }`}
+                          >
+                            <Text
+                              className={`text-[11px] font-semibold ${
+                                selected ? "text-[#EA5410]" : "text-gray-700"
+                              }`}
+                            >
+                              {item}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                    <FieldErrorText message={getVisibleError("barangay")} />
+                  </View>
+
+                  <View>
+                    <Text className="text-[11px] font-semibold text-gray-700 mb-1 ml-0.5">
+                      Complete Street Address & Landmark *
+                    </Text>
+                    <TextInput
+                      value={addressText}
+                      onChangeText={(text) => setAddressText(filterAddressInput(text))}
+                      onBlur={() => markTouched("addressText")}
+                      maxLength={250}
+                      placeholder="e.g. Magsaysay St, across Public Market, Mati City"
+                      className={`w-full bg-gray-50 border rounded-lg px-3 py-2.5 text-xs text-gray-900 focus:border-[#EA5410] focus:bg-white ${
+                        getVisibleError("addressText") ? "border-red-400" : "border-gray-200"
+                      }`}
+                      placeholderTextColor="#9CA3AF"
+                    />
+                    <FieldErrorText message={getVisibleError("addressText")} />
+                  </View>
+
+                  <View>
+                    <View className="flex-row flex-wrap items-center justify-between gap-2 mb-1.5 ml-0.5">
+                      <Text className="text-[11px] font-semibold text-gray-700">
+                        Pin Exact Store Location on Map (Mati City) *
+                      </Text>
+                      <View
+                        className={`px-2 py-0.5 rounded-full ${
+                          mapInMatiBounds ? "bg-emerald-50" : "bg-red-50"
+                        }`}
+                      >
+                        <Text
+                          className={`text-[10px] font-semibold ${
+                            mapInMatiBounds ? "text-emerald-700" : "text-red-700"
+                          }`}
+                        >
+                          {mapInMatiBounds
+                            ? "Within Mati City boundaries"
+                            : "Outside Mati City bounds"}
+                        </Text>
+                      </View>
+                    </View>
+                    <StoreMapPicker
+                      latitude={latitude}
+                      longitude={longitude}
+                      onChange={handleMapPinChange}
+                      onError={handleMapError}
+                      onClearError={handleClearMapError}
+                    />
+                    <FieldErrorText message={getVisibleError("location")} />
+                  </View>
+                </View>
+              </View>
+
+              {/* Section 3: Owner Account & Verification Document */}
+              <View className="bg-white border border-gray-200/90 rounded-2xl p-5 shadow-2xs">
+                <View className="flex-row items-center gap-2 mb-4 pb-3 border-b border-gray-100">
+                  <View className="w-6 h-6 rounded-md bg-orange-100 items-center justify-center">
+                    <Ionicons name="person-outline" size={13} color="#EA5410" />
+                  </View>
+                  <Text className="text-sm font-bold text-gray-900">
+                    3. Owner Account & Verification
+                  </Text>
+                </View>
+
+                <View className="gap-3.5">
+                  <View className="flex-col md:flex-row gap-3.5">
+                    <View className="flex-1">
+                      <Text className="text-[11px] font-semibold text-gray-700 mb-1 ml-0.5">
+                        Owner Full Name *
+                      </Text>
+                      <TextInput
+                        value={ownerName}
+                        onChangeText={(text) => setOwnerName(filterOwnerNameInput(text))}
+                        onBlur={() => markTouched("ownerName")}
+                        maxLength={100}
+                        placeholder="Owner full name"
+                        className={`w-full bg-gray-50 border rounded-lg px-3 py-2.5 text-xs text-gray-900 focus:border-[#EA5410] focus:bg-white ${
+                          getVisibleError("ownerName") ? "border-red-400" : "border-gray-200"
+                        }`}
+                        placeholderTextColor="#9CA3AF"
+                      />
+                      <FieldErrorText message={getVisibleError("ownerName")} />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-[11px] font-semibold text-gray-700 mb-1 ml-0.5">
+                        Owner Mobile (GCash) *
+                      </Text>
+                      <TextInput
+                        value={ownerPhone}
+                        onChangeText={(text) => setOwnerPhone(filterPhoneInput(text))}
+                        onBlur={() => markTouched("ownerPhone")}
+                        maxLength={16}
+                        placeholder="0912 345 6789"
+                        keyboardType="phone-pad"
+                        inputMode="tel"
+                        className={`w-full bg-gray-50 border rounded-lg px-3 py-2.5 text-xs text-gray-900 focus:border-[#EA5410] focus:bg-white ${
+                          getVisibleError("ownerPhone") ? "border-red-400" : "border-gray-200"
+                        }`}
+                        placeholderTextColor="#9CA3AF"
+                      />
+                      <FieldErrorText message={getVisibleError("ownerPhone")} />
+                    </View>
+                  </View>
+
+                  <View>
+                    <Text className="text-[11px] font-semibold text-gray-700 mb-1 ml-0.5">
+                      Email Address *
+                    </Text>
+                    <TextInput
+                      value={email}
+                      onChangeText={(text) => setEmail(filterEmailInput(text))}
+                      onBlur={() => markTouched("email")}
+                      maxLength={254}
+                      placeholder="owner@example.com"
+                      keyboardType="email-address"
+                      inputMode="email"
+                      autoCapitalize="none"
+                      autoComplete="email"
+                      className={`w-full bg-gray-50 border rounded-lg px-3 py-2.5 text-xs text-gray-900 focus:border-[#EA5410] focus:bg-white ${
+                        getVisibleError("email") ? "border-red-400" : "border-gray-200"
+                      }`}
+                      placeholderTextColor="#9CA3AF"
+                    />
+                    <FieldErrorText message={getVisibleError("email")} />
+                  </View>
+
+                  <View className="flex-col md:flex-row gap-3.5">
+                    <View className="flex-1">
+                      <Text className="text-[11px] font-semibold text-gray-700 mb-1 ml-0.5">
+                        Password *
+                      </Text>
+                      <View className="relative flex-row items-center">
+                        <TextInput
+                          value={password}
+                          onChangeText={(text) => setPassword(text.slice(0, 128))}
+                          onBlur={() => markTouched("password")}
+                          maxLength={128}
+                          placeholder="Create a secure password"
+                          secureTextEntry={!showPassword}
+                          className={`w-full bg-gray-50 border rounded-lg pl-3 pr-10 py-2.5 text-xs text-gray-900 focus:border-[#EA5410] focus:bg-white ${
+                            getVisibleError("password") ? "border-red-400" : "border-gray-200"
+                          }`}
+                          placeholderTextColor="#9CA3AF"
+                        />
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                          onPress={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 z-10"
+                        >
+                          <Ionicons
+                            name={showPassword ? "eye-off-outline" : "eye-outline"}
+                            size={15}
+                            color="#6B7280"
+                          />
+                        </Pressable>
+                      </View>
+                      <LivePasswordSentence
+                        password={password}
+                        evaluation={passwordEval}
+                        showErrorState={Boolean(getVisibleError("password"))}
+                      />
+                    </View>
+
+                    <View className="flex-1">
+                      <Text className="text-[11px] font-semibold text-gray-700 mb-1 ml-0.5">
+                        Confirm Password *
+                      </Text>
+                      <View className="relative flex-row items-center">
+                        <TextInput
+                          value={confirmPassword}
+                          onChangeText={(text) => setConfirmPassword(text.slice(0, 128))}
+                          onBlur={() => markTouched("confirmPassword")}
+                          maxLength={128}
+                          placeholder="Re-enter your password"
+                          secureTextEntry={!showConfirmPassword}
+                          className={`w-full bg-gray-50 border rounded-lg pl-3 pr-10 py-2.5 text-xs text-gray-900 focus:border-[#EA5410] focus:bg-white ${
+                            getVisibleError("confirmPassword") ||
+                            (confirmPassword.length > 0 && confirmPassword !== password)
+                              ? "border-red-400"
+                              : "border-gray-200"
+                          }`}
+                          placeholderTextColor="#9CA3AF"
+                        />
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={
+                            showConfirmPassword ? "Hide confirm password" : "Show confirm password"
+                          }
+                          onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-3 z-10"
+                        >
+                          <Ionicons
+                            name={showConfirmPassword ? "eye-off-outline" : "eye-outline"}
+                            size={15}
+                            color="#6B7280"
+                          />
+                        </Pressable>
+                      </View>
+                      {confirmPassword.length > 0 && confirmPassword === password ? (
+                        <View className="flex-row items-center gap-1 mt-1.5 ml-0.5">
+                          <Ionicons name="checkmark-circle" size={13} color="#059669" />
+                          <Text className="text-[11px] font-semibold text-emerald-700 flex-1">
+                            Passwords match.
+                          </Text>
+                        </View>
+                      ) : confirmPassword.length > 0 && confirmPassword !== password ? (
+                        <View className="flex-row items-center gap-1 mt-1.5 ml-0.5">
+                          <Ionicons
+                            name="alert-circle-outline"
+                            size={12}
+                            color={submittedAttempt || touched.confirmPassword ? "#DC2626" : "#EA5410"}
+                          />
+                          <Text
+                            className={`text-[11px] font-medium flex-1 ${
+                              submittedAttempt || touched.confirmPassword
+                                ? "text-red-600"
+                                : "text-[#EA5410]"
+                            }`}
+                          >
+                            Passwords do not match.
+                          </Text>
+                        </View>
+                      ) : (
+                        <FieldErrorText message={getVisibleError("confirmPassword")} />
+                      )}
+                    </View>
+                  </View>
+
+                  <View>
+                    <Text className="text-[11px] font-semibold text-gray-700 mb-1.5 ml-0.5">
+                      Storefront Photo or Business Permit *
+                    </Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Upload storefront photo or business permit"
+                      onPress={handlePickDocument}
+                      className={`w-full rounded-xl border border-dashed p-4 items-center justify-center transition-colors ${
+                        documentAsset
+                          ? "bg-emerald-50 border-emerald-300"
+                          : getVisibleError("document")
+                            ? "bg-red-50/40 border-red-400"
+                            : "bg-gray-50 border-gray-300 hover:bg-gray-100"
+                      }`}
+                    >
+                      {documentAsset ? (
+                        <View className="w-full flex-row items-center gap-3">
+                          {documentAsset.previewUri ? (
+                            <Image
+                              source={{ uri: documentAsset.previewUri }}
+                              className="w-12 h-12 rounded-lg border border-gray-200"
+                              resizeMode="cover"
+                            />
+                          ) : null}
+                          <View className="flex-1 min-w-0">
+                            <Text className="text-xs font-semibold text-emerald-800" numberOfLines={1}>
+                              {documentAsset.fileName}
+                            </Text>
+                            <Text className="text-[11px] text-gray-500 mt-0.5">
+                              Click to replace document photo
+                            </Text>
+                          </View>
+                          <Ionicons name="checkmark-circle" size={18} color="#059669" />
+                        </View>
+                      ) : (
+                        <>
+                          <Ionicons name="cloud-upload-outline" size={22} color="#EA5410" />
+                          <Text className="text-gray-700 font-semibold text-xs mt-1.5">
+                            Click to Upload Storefront or Permit Photo
+                          </Text>
+                          <Text className="text-gray-400 text-[10px] mt-0.5">
+                            JPEG, PNG, or WebP up to 5MB
+                          </Text>
+                        </>
+                      )}
+                    </Pressable>
+                    <FieldErrorText message={getVisibleError("document")} />
+                  </View>
+                </View>
+              </View>
+
+              {/* Submit Action */}
+              <View className="gap-3">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Submit Store Application"
+                  onPress={handleSubmitForm}
+                  disabled={loading}
+                  className="w-full bg-[#EA5410] py-3 rounded-xl items-center shadow-sm hover:bg-[#D04508] active:opacity-90 transition-colors"
+                >
+                  {loading ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <Text className="text-white font-bold text-xs tracking-wide">
+                      Submit Store Application
+                    </Text>
+                  )}
+                </Pressable>
+
+                <View className="flex-row flex-wrap justify-center gap-1">
+                  <Text className="text-xs text-gray-500">Already have a merchant account?</Text>
+                  <Link href="/(web)/auth/store-login" asChild>
+                    <Pressable>
+                      <Text className="text-xs text-[#EA5410] font-semibold hover:underline">
+                        Log In
+                      </Text>
+                    </Pressable>
+                  </Link>
+                </View>
+              </View>
+            </View>
+          )}
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+
+      {/* Curated 30-Min Time Slot Dropdown Modal */}
+      <Modal
+        visible={timePickerTarget !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTimePickerTarget(null)}
+      >
+        <Pressable
+          onPress={() => setTimePickerTarget(null)}
+          className="flex-1 bg-black/40 justify-center items-center p-4"
+        >
+          <Pressable
+            onPress={() => {}}
+            className="w-full max-w-xs bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-xl max-h-[70%]"
+          >
+            <View className="px-4 py-3 border-b border-gray-100 flex-row items-center justify-between">
+              <Text className="text-xs font-bold text-gray-900">
+                {timePickerTarget === "open" ? "Select Opening Time" : "Select Closing Time"}
+              </Text>
+              <Pressable onPress={() => setTimePickerTarget(null)}>
+                <Ionicons name="close" size={18} color="#6B7280" />
+              </Pressable>
+            </View>
+            <ScrollView className="p-2" showsVerticalScrollIndicator={false}>
+              {STORE_OPERATING_TIME_OPTIONS.map((slot) => {
+                const isSelected =
+                  (timePickerTarget === "open" && slot === openTime) ||
+                  (timePickerTarget === "close" && slot === closeTime);
+                const slotMins = parseOperatingTimeMinutes(slot);
+                const isEarlierOrEqual =
+                  timePickerTarget === "close" &&
+                  openMinutes !== null &&
+                  slotMins !== null &&
+                  slotMins <= openMinutes;
+
+                return (
+                  <Pressable
+                    key={slot}
+                    disabled={isEarlierOrEqual}
+                    onPress={() => handleSelectTimeSlot(slot)}
+                    className={`px-3.5 py-2.5 rounded-xl flex-row items-center justify-between mb-1 ${
+                      isSelected
+                        ? "bg-orange-50 border border-[#EA5410]"
+                        : isEarlierOrEqual
+                          ? "opacity-40"
+                          : "hover:bg-gray-50"
+                    }`}
+                  >
+                    <Text
+                      className={`text-xs font-semibold ${
+                        isSelected ? "text-[#EA5410]" : "text-gray-800"
+                      }`}
+                    >
+                      {slot}
+                    </Text>
+                    {isSelected && <Ionicons name="checkmark" size={15} color="#EA5410" />}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
   );
 }

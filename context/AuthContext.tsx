@@ -1,22 +1,30 @@
 import React, { type ReactNode } from "react";
 import { SessionProvider, useSession } from "./SessionContext";
+import { CartProvider } from "./CartContext";
+import { isExclusiveCustomerIdentity } from "../services/auth";
 
 /**
  * Global authentication and session provider.
  * Backed authoritatively by remote Supabase GoTrue Auth.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
-  return <SessionProvider>{children}</SessionProvider>;
+  return (
+    <SessionProvider>
+      <CartProvider>{children}</CartProvider>
+    </SessionProvider>
+  );
 }
 
 /**
- * Convenience hook that delegates directly to Supabase SessionContext.
+ * Customer-scoped hook delegating to the isolated 'customer' Supabase session.
+ * Rejects partner/admin identities defensively so non-customer accounts cannot act as customers.
  */
 export function useAuth() {
-  const session = useSession();
-  const identity = session.identity;
+  const session = useSession("customer");
+  const identity = isExclusiveCustomerIdentity(session.identity) ? session.identity : null;
   return {
     ...session,
+    identity,
     isLoggedIn: !!identity,
     user: identity
       ? {

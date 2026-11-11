@@ -6,6 +6,7 @@ export type StoreMembershipRole = Database["public"]["Enums"]["store_role"];
 export type StoreMembership = Database["public"]["Tables"]["store_memberships"]["Row"];
 // Customer is baseline; merchant derives from active store membership.
 export type ApplicationRole = "customer" | "merchant" | PlatformRole;
+export type AuthPortalScope = "customer" | "merchant" | "rider" | "admin";
 export type ProfileEdit = Pick<Profile, "display_name" | "contact_phone">;
 
 /** Prototype form payloads below are NOT database records or authorization contracts.

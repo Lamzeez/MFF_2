@@ -26,13 +26,13 @@ isOneToOne: false
                   ]
                 },"profiles": {
                   Row: {
-                    "account_status": Database["public"]['Enums']["account_status"],"contact_phone": string | null,"created_at": string,"display_name": string,"id": string,"updated_at": string
+                    "account_status": Database["public"]['Enums']["account_status"],"cod_eligible": boolean,"cod_strikes": number,"contact_phone": string | null,"created_at": string,"default_barangay": string | null,"delivery_address": string | null,"display_name": string,"expo_push_token": string | null,"id": string,"personalization_consent": boolean,"updated_at": string
                   }
                   Insert: {
-                    "account_status"?: Database["public"]['Enums']["account_status"],"contact_phone"?: string | null,"created_at"?: string,"display_name"?: string,"id": string,"updated_at"?: string
+                    "account_status"?: Database["public"]['Enums']["account_status"],"cod_eligible"?: boolean,"cod_strikes"?: number,"contact_phone"?: string | null,"created_at"?: string,"default_barangay"?: string | null,"delivery_address"?: string | null,"display_name"?: string,"expo_push_token"?: string | null,"id": string,"personalization_consent"?: boolean,"updated_at"?: string
                   }
                   Update: {
-                    "account_status"?: Database["public"]['Enums']["account_status"],"contact_phone"?: string | null,"created_at"?: string,"display_name"?: string,"id"?: string,"updated_at"?: string
+                    "account_status"?: Database["public"]['Enums']["account_status"],"cod_eligible"?: boolean,"cod_strikes"?: number,"contact_phone"?: string | null,"created_at"?: string,"default_barangay"?: string | null,"delivery_address"?: string | null,"display_name"?: string,"expo_push_token"?: string | null,"id"?: string,"personalization_consent"?: boolean,"updated_at"?: string
                   }
                   Relationships: [
 
@@ -64,13 +64,13 @@ isOneToOne: false
                   ]
                 },"stores": {
                   Row: {
-                    "address_text": string,"approval_status": Database["public"]['Enums']["store_approval_status"],"archived_at": string | null,"barangay": string,"created_at": string,"delivery_enabled": boolean,"description": string,"id": string,"location": unknown,"name": string,"public_phone": string | null,"slug": string,"updated_at": string
+                    "address_text": string,"approval_status": Database["public"]['Enums']["store_approval_status"],"archived_at": string | null,"barangay": string,"categories"?: string[],"cover_image_url": string | null,"created_at": string,"delivery_enabled": boolean,"description": string,"id": string,"is_open": boolean,"location": unknown,"name": string,"operating_hours": string,"public_phone": string | null,"slug": string,"updated_at": string,"verification_document_url"?: string | null
                   }
                   Insert: {
-                    "address_text": string,"approval_status"?: Database["public"]['Enums']["store_approval_status"],"archived_at"?: string | null,"barangay"?: string,"created_at"?: string,"delivery_enabled"?: boolean,"description"?: string,"id"?: string,"location"?: unknown,"name": string,"public_phone"?: string | null,"slug": string,"updated_at"?: string
+                    "address_text": string,"approval_status"?: Database["public"]['Enums']["store_approval_status"],"archived_at"?: string | null,"barangay"?: string,"categories"?: string[],"cover_image_url"?: string | null,"created_at"?: string,"delivery_enabled"?: boolean,"description"?: string,"id"?: string,"is_open"?: boolean,"location"?: unknown,"name": string,"operating_hours"?: string,"public_phone"?: string | null,"slug": string,"updated_at"?: string,"verification_document_url"?: string | null
                   }
                   Update: {
-                    "address_text"?: string,"approval_status"?: Database["public"]['Enums']["store_approval_status"],"archived_at"?: string | null,"barangay"?: string,"created_at"?: string,"delivery_enabled"?: boolean,"description"?: string,"id"?: string,"location"?: unknown,"name"?: string,"public_phone"?: string | null,"slug"?: string,"updated_at"?: string
+                    "address_text"?: string,"approval_status"?: Database["public"]['Enums']["store_approval_status"],"archived_at"?: string | null,"barangay"?: string,"categories"?: string[],"cover_image_url"?: string | null,"created_at"?: string,"delivery_enabled"?: boolean,"description"?: string,"id"?: string,"is_open"?: boolean,"location"?: unknown,"name"?: string,"operating_hours"?: string,"public_phone"?: string | null,"slug"?: string,"updated_at"?: string,"verification_document_url"?: string | null
                   }
                   Relationships: [
 
@@ -84,18 +84,23 @@ isOneToOne: false
                     "customer_phone": string | null,
                     "delivery_address": string,
                     "delivery_fee_centavos": number,
+                    "discount_centavos": number,
                     "fulfillment_type": "delivery" | "pickup",
                     "handshake_pin": string,
                     "id": string,
                     "notes": string,
                     "order_number": string,
                     "payment_method": "cod" | "gcash",
+                    "pod_image_url": string | null,
+                    "pod_timestamp": string | null,
                     "rider_id": string | null,
                     "status": Database["public"]['Enums']["order_status"],
                     "store_id": string,
                     "subtotal_centavos": number,
                     "total_centavos": number,
-                    "updated_at": string
+                    "updated_at": string,
+                    "voucher_code": string | null,
+                    "voucher_id": string | null
                   },
                   Insert: {
                     "barangay": string,
@@ -104,18 +109,23 @@ isOneToOne: false
                     "customer_phone"?: string | null,
                     "delivery_address": string,
                     "delivery_fee_centavos"?: number,
+                    "discount_centavos"?: number,
                     "fulfillment_type"?: "delivery" | "pickup",
                     "handshake_pin": string,
                     "id"?: string,
                     "notes"?: string,
                     "order_number"?: string,
                     "payment_method"?: "cod" | "gcash",
+                    "pod_image_url"?: string | null,
+                    "pod_timestamp"?: string | null,
                     "rider_id"?: string | null,
                     "status"?: Database["public"]['Enums']["order_status"],
                     "store_id": string,
                     "subtotal_centavos": number,
                     "total_centavos": number,
-                    "updated_at"?: string
+                    "updated_at"?: string,
+                    "voucher_code"?: string | null,
+                    "voucher_id"?: string | null
                   },
                   Update: {
                     "barangay"?: string,
@@ -124,18 +134,23 @@ isOneToOne: false
                     "customer_phone"?: string | null,
                     "delivery_address"?: string,
                     "delivery_fee_centavos"?: number,
+                    "discount_centavos"?: number,
                     "fulfillment_type"?: "delivery" | "pickup",
                     "handshake_pin"?: string,
                     "id"?: string,
                     "notes"?: string,
                     "order_number"?: string,
                     "payment_method"?: "cod" | "gcash",
+                    "pod_image_url"?: string | null,
+                    "pod_timestamp"?: string | null,
                     "rider_id"?: string | null,
                     "status"?: Database["public"]['Enums']["order_status"],
                     "store_id"?: string,
                     "subtotal_centavos"?: number,
                     "total_centavos"?: number,
-                    "updated_at"?: string
+                    "updated_at"?: string,
+                    "voucher_code"?: string | null,
+                    "voucher_id"?: string | null
                   },
                   Relationships: [
                     {
@@ -363,6 +378,7 @@ isOneToOne: false
                     "created_at": string,
                     "id": string,
                     "image_url": string | null,
+                    "is_hidden": boolean,
                     "likes_count": number,
                     "rating": number,
                     "tagged_dish": string,
@@ -376,6 +392,7 @@ isOneToOne: false
                     "created_at"?: string,
                     "id"?: string,
                     "image_url"?: string | null,
+                    "is_hidden"?: boolean,
                     "likes_count"?: number,
                     "rating"?: number,
                     "tagged_dish"?: string,
@@ -389,6 +406,7 @@ isOneToOne: false
                     "created_at"?: string,
                     "id"?: string,
                     "image_url"?: string | null,
+                    "is_hidden"?: boolean,
                     "likes_count"?: number,
                     "rating"?: number,
                     "tagged_dish"?: string,
@@ -479,6 +497,275 @@ isOneToOne: false
                       referencedColumns: ["id"]
                     }
                   ]
+                },
+            "vouchers": {
+                  Row: {
+                    "code": string,
+                    "created_at": string,
+                    "description": string | null,
+                    "discount_type": Database["public"]['Enums']["discount_type"],
+                    "id": string,
+                    "is_active": boolean,
+                    "min_spend": number,
+                    "times_used": number,
+                    "updated_at": string,
+                    "usage_limit": number | null,
+                    "valid_until": string | null,
+                    "value": number
+                  },
+                  Insert: {
+                    "code": string,
+                    "created_at"?: string,
+                    "description"?: string | null,
+                    "discount_type": Database["public"]['Enums']["discount_type"],
+                    "id"?: string,
+                    "is_active"?: boolean,
+                    "min_spend"?: number,
+                    "times_used"?: number,
+                    "updated_at"?: string,
+                    "usage_limit"?: number | null,
+                    "valid_until"?: string | null,
+                    "value"?: number
+                  },
+                  Update: {
+                    "code"?: string,
+                    "created_at"?: string,
+                    "description"?: string | null,
+                    "discount_type"?: Database["public"]['Enums']["discount_type"],
+                    "id"?: string,
+                    "is_active"?: boolean,
+                    "min_spend"?: number,
+                    "times_used"?: number,
+                    "updated_at"?: string,
+                    "usage_limit"?: number | null,
+                    "valid_until"?: string | null,
+                    "value"?: number
+                  },
+                  Relationships: []
+                },
+            "voucher_redemptions": {
+                  Row: {
+                    "created_at": string,
+                    "discount_applied": number,
+                    "id": string,
+                    "order_id": string | null,
+                    "redeemed_at": string,
+                    "user_id": string,
+                    "voucher_id": string
+                  },
+                  Insert: {
+                    "created_at"?: string,
+                    "discount_applied"?: number,
+                    "id"?: string,
+                    "order_id"?: string | null,
+                    "redeemed_at"?: string,
+                    "user_id": string,
+                    "voucher_id": string
+                  },
+                  Update: {
+                    "created_at"?: string,
+                    "discount_applied"?: number,
+                    "id"?: string,
+                    "order_id"?: string | null,
+                    "redeemed_at"?: string,
+                    "user_id"?: string,
+                    "voucher_id"?: string
+                  },
+                  Relationships: [
+                    {
+                      foreignKeyName: "voucher_redemptions_order_id_fkey",
+                      columns: ["order_id"],
+                      isOneToOne: false,
+                      referencedRelation: "orders",
+                      referencedColumns: ["id"]
+                    },
+                    {
+                      foreignKeyName: "voucher_redemptions_user_id_fkey",
+                      columns: ["user_id"],
+                      isOneToOne: false,
+                      referencedRelation: "profiles",
+                      referencedColumns: ["id"]
+                    },
+                    {
+                      foreignKeyName: "voucher_redemptions_voucher_id_fkey",
+                      columns: ["voucher_id"],
+                      isOneToOne: false,
+                      referencedRelation: "vouchers",
+                      referencedColumns: ["id"]
+                    }
+                  ]
+                },
+            "order_reviews": {
+                  Row: {
+                    "created_at": string,
+                    "customer_id": string,
+                    "food_rating": number,
+                    "id": string,
+                    "order_id": string,
+                    "posted_to_community": boolean,
+                    "review_text": string | null,
+                    "rider_compliments": string[],
+                    "rider_id": string | null,
+                    "rider_rating": number | null,
+                    "store_id": string,
+                    "updated_at": string
+                  },
+                  Insert: {
+                    "created_at"?: string,
+                    "customer_id": string,
+                    "food_rating": number,
+                    "id"?: string,
+                    "order_id": string,
+                    "posted_to_community"?: boolean,
+                    "review_text"?: string | null,
+                    "rider_compliments"?: string[],
+                    "rider_id"?: string | null,
+                    "rider_rating"?: number | null,
+                    "store_id": string,
+                    "updated_at"?: string
+                  },
+                  Update: {
+                    "created_at"?: string,
+                    "customer_id"?: string,
+                    "food_rating"?: number,
+                    "id"?: string,
+                    "order_id"?: string,
+                    "posted_to_community"?: boolean,
+                    "review_text"?: string | null,
+                    "rider_compliments"?: string[],
+                    "rider_id"?: string | null,
+                    "rider_rating"?: number | null,
+                    "store_id"?: string,
+                    "updated_at"?: string
+                  },
+                  Relationships: [
+                    {
+                      foreignKeyName: "order_reviews_order_id_fkey",
+                      columns: ["order_id"],
+                      isOneToOne: true,
+                      referencedRelation: "orders",
+                      referencedColumns: ["id"]
+                    },
+                    {
+                      foreignKeyName: "order_reviews_customer_id_fkey",
+                      columns: ["customer_id"],
+                      isOneToOne: false,
+                      referencedRelation: "profiles",
+                      referencedColumns: ["id"]
+                    },
+                    {
+                      foreignKeyName: "order_reviews_store_id_fkey",
+                      columns: ["store_id"],
+                      isOneToOne: false,
+                      referencedRelation: "stores",
+                      referencedColumns: ["id"]
+                    },
+                    {
+                      foreignKeyName: "order_reviews_rider_id_fkey",
+                      columns: ["rider_id"],
+                      isOneToOne: false,
+                      referencedRelation: "profiles",
+                      referencedColumns: ["id"]
+                    }
+                  ]
+                },
+            "post_reports": {
+                  Row: {
+                    "action_taken": string | null,
+                    "created_at": string,
+                    "details": string | null,
+                    "id": string,
+                    "post_id": string,
+                    "reason": string,
+                    "reporter_id": string | null,
+                    "resolved_at": string | null,
+                    "resolved_by": string | null,
+                    "status": "pending" | "resolved" | "dismissed"
+                  },
+                  Insert: {
+                    "action_taken"?: string | null,
+                    "created_at"?: string,
+                    "details"?: string | null,
+                    "id"?: string,
+                    "post_id": string,
+                    "reason": string,
+                    "reporter_id"?: string | null,
+                    "resolved_at"?: string | null,
+                    "resolved_by"?: string | null,
+                    "status"?: "pending" | "resolved" | "dismissed"
+                  },
+                  Update: {
+                    "action_taken"?: string | null,
+                    "created_at"?: string,
+                    "details"?: string | null,
+                    "id"?: string,
+                    "post_id"?: string,
+                    "reason"?: string,
+                    "reporter_id"?: string | null,
+                    "resolved_at"?: string | null,
+                    "resolved_by"?: string | null,
+                    "status"?: "pending" | "resolved" | "dismissed"
+                  },
+                  Relationships: [
+                    {
+                      foreignKeyName: "post_reports_post_id_fkey",
+                      columns: ["post_id"],
+                      isOneToOne: false,
+                      referencedRelation: "community_posts",
+                      referencedColumns: ["id"]
+                    },
+                    {
+                      foreignKeyName: "post_reports_reporter_id_fkey",
+                      columns: ["reporter_id"],
+                      isOneToOne: false,
+                      referencedRelation: "profiles",
+                      referencedColumns: ["id"]
+                    }
+                  ]
+                },
+            "remote_push_queue": {
+                  Row: {
+                    "body": string,
+                    "created_at": string,
+                    "data": Json | null,
+                    "error_message": string | null,
+                    "id": string,
+                    "recipient_id": string,
+                    "sent_at": string | null,
+                    "status": "pending" | "sent" | "failed",
+                    "title": string
+                  },
+                  Insert: {
+                    "body": string,
+                    "created_at"?: string,
+                    "data"?: Json | null,
+                    "error_message"?: string | null,
+                    "id"?: string,
+                    "recipient_id": string,
+                    "sent_at"?: string | null,
+                    "status"?: "pending" | "sent" | "failed",
+                    "title": string
+                  },
+                  Update: {
+                    "body"?: string,
+                    "created_at"?: string,
+                    "data"?: Json | null,
+                    "error_message"?: string | null,
+                    "id"?: string,
+                    "recipient_id"?: string,
+                    "sent_at"?: string | null,
+                    "status"?: "pending" | "sent" | "failed",
+                    "title"?: string
+                  },
+                  Relationships: [
+                    {
+                      foreignKeyName: "remote_push_queue_recipient_id_fkey",
+                      columns: ["recipient_id"],
+                      isOneToOne: false,
+                      referencedRelation: "profiles",
+                      referencedColumns: ["id"]
+                    }
+                  ]
                 }
           }
           Views: {
@@ -524,6 +811,8 @@ isOneToOne: false
     created_at: string;
     email: string;
     role: string;
+    cod_strikes?: number;
+    cod_eligible?: boolean;
   }[]
                            },
 "admin_get_platform_metrics":
@@ -536,6 +825,12 @@ isOneToOne: false
     gross_sales_centavos: number;
   }
                            },
+"admin_get_monthly_gmv":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"admin_get_discovery_channels":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
 "merchant_get_store_metrics":
 { Args: { "p_store_id": string }; Returns: {
     orders_today: number;
@@ -544,10 +839,68 @@ isOneToOne: false
     reservations_today: number;
     pending_reservations: number;
   }
+                           },
+"merchant_submit_store_application":
+{ Args: {
+    "p_name": string;
+    "p_address_text": string;
+    "p_barangay"?: string;
+    "p_public_phone"?: string | null;
+    "p_description"?: string;
+    "p_operating_hours"?: string;
+    "p_delivery_enabled"?: boolean;
+    "p_latitude"?: number | null;
+    "p_longitude"?: number | null;
+    "p_verification_document_url"?: string | null;
+    "p_categories"?: string[];
+  }; Returns: {
+    id: string;
+    name: string;
+    slug: string;
+    categories: string[];
+    approval_status: Database["public"]['Enums']["store_approval_status"];
+  }
+                           },
+"get_rider_rating_summary":
+{ Args: { "p_rider_id": string }; Returns: {
+    average_rating: number;
+    total_reviews: number;
+  }
+                           },
+"get_store_rating_summary":
+{ Args: { "p_store_id": string }; Returns: {
+    average_rating: number;
+    total_reviews: number;
+  }
+                           },
+"record_customer_no_show_strike":
+{ Args: { "p_customer_id": string }; Returns: {
+    customer_id: string;
+    cod_strikes: number;
+    cod_eligible: boolean;
+  }
+                           },
+"merchant_rebroadcast_order":
+{ Args: { "p_order_id": string; "p_reason"?: string }; Returns: Database["public"]['Tables']['orders']['Row']
+                           },
+"accept_delivery_job":
+{ Args: { "p_order_id": string }; Returns: Database["public"]['Tables']['orders']['Row']
+                           },
+"report_community_post":
+{ Args: { "p_post_id": string; "p_reason": string; "p_details"?: string | null }; Returns: Database["public"]['Tables']['post_reports']['Row']
+                           },
+"moderate_community_post":
+{ Args: { "p_report_id": string; "p_action": string }; Returns: Database["public"]['Tables']['post_reports']['Row']
+                           },
+"set_store_open_status":
+{ Args: { "p_store_id": string; "p_is_open": boolean }; Returns: { success: boolean; store_id: string; is_open: boolean }
+                           },
+"admin_reset_customer_cod_strikes":
+{ Args: { "target_user": string }; Returns: { success: boolean; user_id: string; cod_strikes: number; cod_eligible: boolean }
                            }
           }
           Enums: {
-            "account_status": "active"|"suspended","order_status": "placed"|"accepted"|"preparing"|"ready_for_pickup"|"out_for_delivery"|"delivered"|"cancelled","platform_role": "admin"|"rider","reservation_status": "pending"|"confirmed"|"declined"|"cancelled"|"completed"|"no_show","store_approval_status": "pending"|"approved"|"rejected","store_role": "owner"|"manager"|"staff"
+            "account_status": "active"|"suspended","discount_type": "free_delivery"|"fixed"|"percentage","order_status": "placed"|"accepted"|"preparing"|"ready_for_pickup"|"out_for_delivery"|"delivered"|"cancelled","platform_role": "admin"|"rider","reservation_status": "pending"|"confirmed"|"declined"|"cancelled"|"completed"|"no_show","store_approval_status": "pending"|"approved"|"rejected","store_role": "owner"|"manager"|"staff"
           }
           CompositeTypes: {
             [_ in never]: never

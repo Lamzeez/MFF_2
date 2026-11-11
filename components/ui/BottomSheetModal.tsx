@@ -4,7 +4,7 @@ import {
   View,
   Pressable,
   Animated,
-  Dimensions,
+  useWindowDimensions,
   StyleSheet,
   BackHandler,
 } from "react-native";
@@ -22,8 +22,9 @@ export function BottomSheetModal({
   heightPercent = 0.88,
   children,
 }: BottomSheetModalProps) {
-  const screenHeight = Dimensions.get("window").height;
+  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const sheetHeight = Math.round(screenHeight * heightPercent);
+  const isWideViewport = screenWidth >= 768;
 
   // Animated values
   const slideAnim = useRef(new Animated.Value(sheetHeight)).current;
@@ -138,6 +139,7 @@ export function BottomSheetModal({
         <Animated.View
           style={[
             styles.sheet,
+            isWideViewport && styles.sheetWide,
             {
               height: sheetHeight,
               transform: [{ translateY: slideAnim }],
@@ -170,5 +172,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 16,
     elevation: 24,
+  },
+  sheetWide: {
+    maxWidth: 600,
+    alignSelf: "center",
   },
 });

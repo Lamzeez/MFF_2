@@ -9,6 +9,7 @@ import {
   Alert,
   RefreshControl,
   Platform,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -30,16 +31,19 @@ import {
 } from "../../../services/notifications";
 import { recordStoreVisit } from "../../../services/visits";
 import { NotificationsSheet } from "../../../components/notifications/NotificationsSheet";
-import { CheckoutSheet } from "../../../components/checkout/CheckoutSheet";
+import { CheckoutSheet, CheckoutConfirmedPayload } from "../../../components/checkout/CheckoutSheet";
 import { ReservationSheet } from "../../../components/reservation/ReservationSheet";
 import { RestaurantProfileSheet } from "../../../components/restaurant/RestaurantProfileSheet";
 import { GuestGateModal } from "../../../components/auth/GuestGateModal";
 import { StoreQrScannerModal } from "../../../components/qr/StoreQrScannerModal";
+import { FloatingCartBar } from "../../../components/cart/FloatingCartBar";
 
 export default function MobileHomeScreen() {
   const { isLoggedIn, user } = useAuth();
   const router = useRouter();
   const { category } = useLocalSearchParams<{ category?: string }>();
+  const { width: windowWidth } = useWindowDimensions();
+  const isTwoCol = windowWidth >= 768;
 
   // Filter & Search
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -248,42 +252,43 @@ export default function MobileHomeScreen() {
   };
 
   // Submit Order from Checkout Sheet
-  const handlePlaceOrderFromSheet = async (orderPayload: {
-    dish: FoodItem;
-    qty: number;
-    barangay: string;
-    address: string;
-    notes: string;
-    fulfillment: "delivery" | "pickup";
-    total: number;
-  }) => {
-    // Resolve store ID from dish or store name
-    let storeId = orderPayload.dish.storeId;
-    if (!storeId) {
+  const handlePlaceOrderFromSheet = async (orderPayload: CheckoutConfirmedPayload) => {
+    // Resolve store ID from storeId, dish, or storeName
+    let targetStoreId = orderPayload.storeId || orderPayload.dish?.storeId;
+    const targetStoreName = orderPayload.storeName || orderPayload.dish?.store || "";
+    if (!targetStoreId) {
       const match = Object.values(restaurants).find(
         (r: any) =>
-          r.name === orderPayload.dish.store ||
-          (r.id && r.name.toLowerCase().includes((orderPayload.dish.store || "").toLowerCase()))
+          r.name === targetStoreName ||
+          (r.id && r.name.toLowerCase().includes(targetStoreName.toLowerCase()))
       ) as any;
-      storeId = match?.id || "11111111-1111-1111-1111-111111111111"; // Fallback to Mama Letty's Karenderia
+      targetStoreId = match?.id || "11111111-1111-1111-1111-111111111111"; // Fallback to Mama Letty's Karenderia
     }
+
+    const itemsToOrder =
+      orderPayload.items && orderPayload.items.length > 0
+        ? orderPayload.items
+        : [
+            {
+              menuItemId: orderPayload.dish?.menuItemId,
+              name: orderPayload.dish?.name || "Mati Special",
+              price: orderPayload.dish?.price || orderPayload.total,
+              quantity: orderPayload.qty || 1,
+            },
+          ];
 
     try {
       const createdOrder = await createOrder({
-        storeId: storeId || "11111111-1111-1111-1111-111111111111",
-        items: [
-          {
-            menuItemId: orderPayload.dish.menuItemId,
-            name: orderPayload.dish.name,
-            price: orderPayload.dish.price,
-            quantity: orderPayload.qty,
-          },
-        ],
+        storeId: targetStoreId || "11111111-1111-1111-1111-111111111111",
+        items: itemsToOrder,
         fulfillmentType: orderPayload.fulfillment,
         paymentMethod: "cod",
         deliveryAddress: orderPayload.address || "Mati City",
         barangay: orderPayload.barangay,
         notes: orderPayload.notes,
+        voucherCode: orderPayload.voucherCode,
+        voucherId: orderPayload.voucherId,
+        discount: orderPayload.discount,
       });
 
       setShowCheckoutModal(false);
@@ -335,11 +340,21 @@ export default function MobileHomeScreen() {
   const restaurantList = Object.values(matiRestaurantsData).filter((r) => {
     const matchesCat =
       selectedCategory === "All" ||
+      Boolean(
+        r.categories?.some(
+          (cat) => cat.toLowerCase() === selectedCategory.toLowerCase()
+        )
+      ) ||
       r.category.toLowerCase().includes(selectedCategory.toLowerCase());
     const matchesQuery =
       searchQuery === "" ||
       r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.category.toLowerCase().includes(searchQuery.toLowerCase());
+      r.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      Boolean(
+        r.categories?.some((cat) =>
+          cat.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      );
     return matchesCat && matchesQuery;
   });
 
@@ -349,58 +364,60 @@ export default function MobileHomeScreen() {
   return (
     <SafeAreaView edges={["top"]} className="flex-1 bg-[#F8FAFC]">
       {/* 1. TOP APP BAR: Brand, Delivery Location, Quick Auth / Profile */}
-      <View className="px-4 pt-2 pb-3 flex-row items-center justify-between bg-white border-b border-gray-100">
-        <View className="flex-1 mr-3">
-          <Text className="text-[10px] font-bold text-gray-400 tracking-wider uppercase">
-            DELIVER TO
-          </Text>
-          <Pressable
-            onPress={() => router.push("/(mobile)/(tabs)/map")}
-            className="flex-row items-center gap-1.5 mt-0.5"
-          >
-            <Ionicons name="location-sharp" size={16} color="#EA5410" />
-            <Text className="text-sm font-black text-gray-900 tracking-tight" numberOfLines={1}>
-              Mati City, Davao Oriental
+      <View className="px-4 pt-2 pb-3 bg-white border-b border-gray-100">
+        <View className="w-full max-w-5xl self-center flex-row items-center justify-between">
+          <View className="flex-1 mr-3 min-w-0">
+            <Text className="text-[10px] font-bold text-gray-400 tracking-wider uppercase">
+              DELIVER TO
             </Text>
-            <Ionicons name="chevron-down" size={14} color="#6B7280" />
-          </Pressable>
-        </View>
-
-        {/* Right Action Icons */}
-        <View className="flex-row items-center gap-2">
-          {/* QR Scan Button */}
-          <Pressable
-            accessibilityLabel="Scan Store QR Code"
-            onPress={handleOpenScanner}
-            className="w-9 h-9 rounded-full bg-gray-50 border border-gray-200 items-center justify-center active:bg-gray-100"
-          >
-            <Ionicons name="qr-code-outline" size={17} color="#374151" />
-          </Pressable>
-
-          {/* If Logged In: Notifications Bell */}
-          {isLoggedIn ? (
             <Pressable
-              accessibilityLabel="View Notifications"
-              onPress={() => setShowNotificationsModal(true)}
-              className="w-9 h-9 rounded-full bg-gray-50 border border-gray-200 items-center justify-center relative active:bg-gray-100"
+              onPress={() => router.push("/(mobile)/(tabs)/map")}
+              className="flex-row items-center gap-1.5 mt-0.5"
             >
-              <Ionicons name="notifications-outline" size={17} color="#374151" />
-              {displayUnreadCount > 0 && (
-                <View className="absolute -top-1 -right-1 bg-red-600 rounded-full min-w-[17px] h-[17px] items-center justify-center px-1 border-2 border-white">
-                  <Text className="text-white text-[9px] font-black">{displayUnreadCount}</Text>
-                </View>
-              )}
+              <Ionicons name="location-sharp" size={16} color="#EA5410" />
+              <Text className="text-sm font-black text-gray-900 tracking-tight flex-shrink" numberOfLines={1}>
+                Mati City, Davao Oriental
+              </Text>
+              <Ionicons name="chevron-down" size={14} color="#6B7280" />
             </Pressable>
-          ) : (
-            /* If Guest: Prominent One-Tap Sign In Pill */
+          </View>
+
+          {/* Right Action Icons */}
+          <View className="flex-row items-center gap-2 shrink-0">
+            {/* QR Scan Button */}
             <Pressable
-              onPress={() => router.push("/(mobile)/auth/customer-login")}
-              className="bg-[#EA5410] px-3.5 py-1.5 rounded-full flex-row items-center gap-1 shadow-sm active:opacity-90"
+              accessibilityLabel="Scan Store QR Code"
+              onPress={handleOpenScanner}
+              className="w-9 h-9 rounded-full bg-gray-50 border border-gray-200 items-center justify-center active:bg-gray-100"
             >
-              <Ionicons name="log-in-outline" size={14} color="white" />
-              <Text className="text-white text-xs font-black">Sign In</Text>
+              <Ionicons name="qr-code-outline" size={17} color="#374151" />
             </Pressable>
-          )}
+
+            {/* If Logged In: Notifications Bell */}
+            {isLoggedIn ? (
+              <Pressable
+                accessibilityLabel="View Notifications"
+                onPress={() => setShowNotificationsModal(true)}
+                className="w-9 h-9 rounded-full bg-gray-50 border border-gray-200 items-center justify-center relative active:bg-gray-100"
+              >
+                <Ionicons name="notifications-outline" size={17} color="#374151" />
+                {displayUnreadCount > 0 && (
+                  <View className="absolute -top-1 -right-1 bg-red-600 rounded-full min-w-[17px] h-[17px] items-center justify-center px-1 border-2 border-white">
+                    <Text className="text-white text-[9px] font-black">{displayUnreadCount}</Text>
+                  </View>
+                )}
+              </Pressable>
+            ) : (
+              /* If Guest: Prominent One-Tap Sign In Pill */
+              <Pressable
+                onPress={() => router.push("/(mobile)/auth/customer-login")}
+                className="bg-[#EA5410] px-3.5 py-1.5 rounded-full flex-row items-center gap-1 shadow-sm active:opacity-90"
+              >
+                <Ionicons name="log-in-outline" size={14} color="white" />
+                <Text className="text-white text-xs font-black">Sign In</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
       </View>
 
@@ -417,11 +434,12 @@ export default function MobileHomeScreen() {
           />
         }
       >
+        <View className="w-full max-w-5xl self-center">
         {/* 2. GUEST WELCOME BANNER OR REGISTERED USER GREETING */}
         {!isLoggedIn ? (
-          <View className="mx-4 mt-3 p-4 bg-gradient-to-r bg-orange-50 border border-orange-200 rounded-2xl">
-            <View className="flex-row items-center justify-between mb-1.5">
-              <View className="flex-row items-center gap-1.5">
+          <View className="mx-4 mt-3 p-4 bg-orange-50 border border-orange-200 rounded-2xl">
+            <View className="flex-row items-center justify-between flex-wrap gap-2 mb-1.5">
+              <View className="flex-row items-center gap-1.5 flex-1 min-w-[180px]">
                 <Ionicons name="sparkles" size={15} color="#EA5410" />
                 <Text className="text-sm font-black text-gray-900">
                   Welcome to Mati FoodFinder! 👋
@@ -434,10 +452,10 @@ export default function MobileHomeScreen() {
             <Text className="text-xs text-gray-600 leading-relaxed mb-3">
               Explore authentic local menus and secret food spots freely. Sign in when you're ready to order COD or book dining tables.
             </Text>
-            <View className="flex-row items-center gap-2">
+            <View className="flex-row flex-wrap items-center gap-2">
               <Pressable
                 onPress={() => router.push("/(mobile)/auth/customer-login")}
-                className="flex-1 py-2.5 bg-[#EA5410] rounded-xl items-center shadow-sm active:opacity-90"
+                className="flex-1 min-w-[160px] py-2.5 px-3 bg-[#EA5410] rounded-xl items-center shadow-sm active:opacity-90"
               >
                 <Text className="text-white font-extrabold text-xs">Create Account / Sign In</Text>
               </Pressable>
@@ -561,11 +579,12 @@ export default function MobileHomeScreen() {
             </Pressable>
           </View>
 
-          <View className="px-4 gap-4">
+          <View className="px-4 flex-row flex-wrap gap-4">
             {restaurantList.map((resto) => (
               <Pressable
                 key={resto.name}
                 onPress={() => handleOpenRestaurant(resto.name)}
+                style={isTwoCol ? { width: "48.8%" } : { width: "100%" }}
                 className="bg-white rounded-3xl border border-gray-200 overflow-hidden shadow-sm active:scale-[0.99] transition-transform"
               >
                 {/* Hero Food Photography Banner */}
@@ -580,15 +599,15 @@ export default function MobileHomeScreen() {
                   <View className="absolute inset-0 bg-black/15" />
 
                   {/* Top Badges */}
-                  <View className="absolute top-3 left-3 right-3 flex-row items-center justify-between">
-                    <View className="bg-white/95 px-2.5 py-1 rounded-full shadow-sm flex-row items-center gap-1">
+                  <View className="absolute top-3 left-3 right-3 flex-row items-center justify-between gap-2">
+                    <View className="bg-white/95 px-2.5 py-1 rounded-full shadow-sm flex-row items-center gap-1 max-w-[58%]">
                       <Ionicons name="bicycle" size={12} color="#EA5410" />
-                      <Text className="text-[10px] font-black text-gray-900">
+                      <Text className="text-[10px] font-black text-gray-900" numberOfLines={1}>
                         {resto.promo || "Fast Mati delivery"}
                       </Text>
                     </View>
 
-                    <View className="bg-emerald-600/95 px-2.5 py-1 rounded-full shadow-sm flex-row items-center gap-1">
+                    <View className="bg-emerald-600/95 px-2.5 py-1 rounded-full shadow-sm flex-row items-center gap-1 shrink-0">
                       <Ionicons name="restaurant-outline" size={11} color="white" />
                       <Text className="text-[10px] font-black text-white">
                         {resto.availableTables} tables open
@@ -704,6 +723,7 @@ export default function MobileHomeScreen() {
             ))}
           </ScrollView>
         </View>
+        </View>
       </ScrollView>
 
       {/* 8. MODALS & SHEETS */}
@@ -763,6 +783,10 @@ export default function MobileHomeScreen() {
           setShowRestaurantModal(false);
           handleOpenCheckout(dish);
         }}
+        onOpenBasket={() => {
+          setShowRestaurantModal(false);
+          setShowCheckoutModal(true);
+        }}
       />
 
       <ReservationSheet
@@ -786,6 +810,9 @@ export default function MobileHomeScreen() {
           router.push("/(mobile)/(tabs)/profile");
         }}
       />
+
+      {/* Floating Bottom Basket Pill */}
+      <FloatingCartBar onPress={() => setShowCheckoutModal(true)} />
     </SafeAreaView>
   );
 }

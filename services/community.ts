@@ -192,7 +192,7 @@ export async function fetchCommunityPosts(
   const from = Math.max(0, (page - 1) * pageSize);
   const to = from + pageSize - 1;
 
-  let postsQuery = supabase.from("community_posts").select("*");
+  let postsQuery = supabase.from("community_posts").select("*").neq("is_hidden", true);
 
   // In "recent" mode: order strictly by created_at desc with database range
   // In "trending" mode: fetch generous candidate window to score and rank intelligently
@@ -436,3 +436,149 @@ export function subscribeToCommunityFeed(onChange: () => void) {
     supabase.removeChannel(channel);
   };
 }
+
+export interface ModerationReport {
+  id: string;
+  postId: string;
+  reporterId?: string | null;
+  reporterName?: string;
+  reason: string;
+  details?: string | null;
+  status: "pending" | "resolved" | "dismissed";
+  actionTaken?: string | null;
+  postAuthor?: string;
+  postContent?: string;
+  postTaggedRestaurant?: string;
+  createdAt: string;
+}
+
+export const COMMUNITY_REPORT_REASONS = [
+  "Spam / Commercial Bot",
+  "Inappropriate / Offensive Content",
+  "Misleading / Fake Food Review",
+  "Harassment / Abusive Language",
+] as const;
+
+export type CommunityReportReason = (typeof COMMUNITY_REPORT_REASONS)[number];
+
+/**
+ * Customer reports an offensive, inappropriate, or spam community post.
+ */
+export async function reportCommunityPost(
+  postId: string,
+  reason: string,
+  details?: string
+): Promise<void> {
+  const supabase = getSupabaseClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) {
+    throw new Error("You must be signed in to report a post.");
+  }
+
+  const { error } = await supabase.rpc("report_community_post", {
+    p_post_id: postId,
+    p_reason: reason.trim(),
+    p_details: details?.trim() || null,
+  });
+
+  if (error) {
+    // Graceful fallback to direct insert if RPC pending
+    const { error: insertError } = await supabase.from("post_reports").insert({
+      post_id: postId,
+      reporter_id: session.user.id,
+      reason: reason.trim(),
+      details: details?.trim() || null,
+      status: "pending",
+    });
+    if (insertError) {
+      throw new Error(insertError.message || error.message);
+    }
+  }
+}
+
+/**
+ * Superadmin fetches pending and recent moderation reports.
+ */
+export async function fetchAdminModerationReportsWithStatus(): Promise<{
+  reports: ModerationReport[];
+  error?: string;
+}> {
+  try {
+    const supabase = getSupabaseClient("admin");
+    const { data, error } = await (supabase
+      .from("post_reports") as any)
+      .select(`
+        id,
+        post_id,
+        reporter_id,
+        reason,
+        details,
+        status,
+        action_taken,
+        created_at,
+        community_posts:post_id (
+          author_name,
+          content,
+          tagged_restaurant
+        ),
+        reporter:reporter_id (
+          display_name
+        )
+      `)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.warn("[services/community] fetchAdminModerationReports notice:", error);
+      return {
+        reports: [],
+        error: error.message || "Could not load moderation reports.",
+      };
+    }
+
+    const mapped: ModerationReport[] = (data || []).map((row: any) => ({
+      id: row.id,
+      postId: row.post_id,
+      reporterId: row.reporter_id,
+      reporterName: row.reporter?.display_name || "Mati Diner",
+      reason: row.reason,
+      details: row.details,
+      status: row.status,
+      actionTaken: row.action_taken,
+      postAuthor: row.community_posts?.author_name || "Unknown Author",
+      postContent: row.community_posts?.content || "[Post content removed]",
+      postTaggedRestaurant: row.community_posts?.tagged_restaurant || undefined,
+      createdAt: row.created_at,
+    }));
+
+    return { reports: mapped };
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "Could not load moderation reports.";
+    console.warn("[services/community] fetchAdminModerationReports exception:", err);
+    return { reports: [], error: message };
+  }
+}
+
+export async function fetchAdminModerationReports(): Promise<ModerationReport[]> {
+  const { reports } = await fetchAdminModerationReportsWithStatus();
+  return reports;
+}
+
+/**
+ * Superadmin resolves a moderation report with 1-tap action ('hide', 'delete', or 'dismiss').
+ */
+export async function moderateReportedPost(
+  reportId: string,
+  action: "hide" | "delete" | "dismiss"
+): Promise<void> {
+  const supabase = getSupabaseClient("admin");
+  const { error } = await supabase.rpc("moderate_community_post", {
+    p_report_id: reportId,
+    p_action: action,
+  });
+
+  if (error) {
+    throw new Error(error.message || `Failed to execute ${action} on report.`);
+  }
+}
+

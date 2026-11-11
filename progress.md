@@ -2,7 +2,635 @@
 
 > Living project memory for Codex/agents. Update after meaningful
 > development sessions. Last repository review used for this snapshot:
-> 2026-10-09.
+> 2026-11-11.
+
+## Phase 19: Landing Page Overhaul, Facebook-Style Auth Redirect & Public Exposure Cleanup (2026-11-11)
+
+### Completed Work
+- **Guest-Only Root Landing Page & Signed-In Redirect (`components/portal/LandingPage.tsx`, `app/index.tsx`, `app/(mobile)/portal.tsx`)**:
+  - Updated `app/index.tsx` and `app/(mobile)/portal.tsx` with `useSession()` gating: while `status === "loading"` renders a clean spinner (no landing flash); once authenticated (`status === "authenticated" || identity`), **every user role** (Customer, Merchant, Rider, Admin) automatically redirects to `/(mobile)/(tabs)/discover` (`/discover`) so signed-in sessions never sit on the marketing Landing Page and Admin stays safely out of `/system-admin` unless opened manually.
+  - Kept `LandingPage` strictly neutral and onboarding-focused for signed-out / guest visitors (`useAuth` removed — zero personalized `"Hi, <Name>"` header/hero state).
+  - Removed all public `System Admin` links from the landing page and moved canonical URLs into `credentials.txt` (removing stale `mff-admin` passphrase copy).
+  - Eliminated top-bar `"Store Admin"` duplication and bloated marketing blocks: header now shows clean `Get App`, `Log in`, and `Sign up` actions; upgraded hero to a centered intro above a **full-width Showcase `HighlightCarousel`** (`460–560px` photo height on desktop, `400px` tablet, `300–380px` mobile) with the Mati City catchphrase + compact quick category pills (`Karenderias`, `Seafood`, `BBQ & Grill` filter-aligned with `CATEGORIES`); a single 3-column role section (`Customers`, `Store Owners`, `Delivery Riders`) links directly to every login/signup flow without hidden tabs, and the Android modal details $0/free Expo Go & local build options.
+  - Wired **Option B** navigation on `LandingPage`: customer food browsing (`Explore Restaurants`, `Browse Now`, category chips, carousel) navigates in the same tab for smooth Back behavior, while Partner/Auth flows (`Log in`, `Sign up`, `Merchant Sign In`, `Add Your Store`, `Kitchen Queue App`, `Rider Sign In`, `Sign Up to Deliver`) open in a new web tab (`window.open(..., "_blank", "noopener,noreferrer")`); hardened `canGoBack()` -> `/` fallback across `AccountScreen.tsx` and mobile rider/merchant auth screens for fresh-tab launches.
+- **Role Sign-Out Alignment & Exit Button Cleanup (`profile.tsx`, `merchant/index.tsx`, `rider/index.tsx`, `dashboard/_layout.tsx`, `system-admin/_layout.tsx`)**:
+  - Removed non-logout `"Switch Role / Return to Portal"` and `"Exit to Portal"` shortcuts across `profile.tsx`, `merchant/index.tsx`, and `rider/index.tsx` so signed-in users exit cleanly via Sign Out (`await logoutToGuest()`, navigating web Sign Out to `/`).
+- **Non-Colliding Customer Discovery URL (`app/(mobile)/(tabs)/discover.tsx`, `_layout.tsx`, `orders.tsx`, `AccountScreen.tsx`, `app/(mobile)/index.tsx`)**:
+  - Moved customer discovery home screen from `(mobile)/(tabs)/index.tsx` to `(mobile)/(tabs)/discover.tsx` (`http://localhost:8081/discover`) with `initialRouteName="discover"` in `(tabs)/_layout.tsx` so refreshing `/` never bounces customers away from the discovery feed.
+- **Web Bundle Splitting & Fast Initial Load (`app.json`, `app/_layout.tsx`, `lib/setup-animations*.ts`, `app/index.tsx`, `assets/*`)**:
+  - Enabled Expo Router web route code splitting in `app.json` (`"asyncRoutes": { "web": true, "android": false, "ios": false }`) so Landing Page and Login/Signup tabs load lazy per-route chunks instead of parsing all 29 screens upfront.
+  - Platform-split Reanimated setup (`lib/setup-animations.ts` for native, no-op `lib/setup-animations.web.ts` for web) so `react-native-reanimated` runtime is excluded from web bundles.
+  - Added synchronous `hasBrowserSessionHint()` check in `app/index.tsx` so signed-out visitors paint `<LandingPage />` immediately without waiting for initial `"loading"` auth hydration.
+  - Resized & compressed the 4 Landing images (`logo.jpg` 261KB->15KB, `welcome-feast.jpg` 263KB->129KB, `grill.jpg` 460KB->172KB, `dining.jpg` 193KB->119KB).
+- **System Admin Login Gate Redesign (`components/admin/SystemAdminGate.tsx`, `assets/admin-bg.jpg`)**:
+  - Generated dark obsidian-and-orange editorial 3D security shield/vault artwork (`assets/admin-bg.jpg`, optimized `810x1080` at ~67KB) replacing the coastal map illustration.
+  - Redesigned `SystemAdminGate` on a full-bleed dark `#141413` canvas with an asymmetric two-column layout: narrow left brand header + centered dark bordered login form (`#EA5410` `Log In` button + `Back to Home` pill) paired with a wide `flex-1` right-side rounded artwork showcase card; removed `/system-admin/gate` as a standalone route.
+  - Fixed web logo visibility by passing explicit pixel `style={{ width: 28, height: 28, borderRadius: 6 }}` to override `react-native-web` intrinsic `imageSizeStyle` dimensions (`256x256`) and similarly constrained `adminBackdrop` with explicit `absolute` `100%` dimensions.
+  - Standardized UI terminology (`System Admin`, `Sign in to access platform administration.`, `Email`, `Log In`, `Back to Home` -> `/`) and removed the hardcoded `admin@mati-foodfinder.com` placeholder from the input.
+- **4-Role Session Isolation & Navigation Unlock Fix (`lib/supabase/*`, `services/*`, `context/*`, `app/**`)**:
+  - Added role-scoped Supabase clients (`"customer"` default vs `"merchant"`, `"rider"`, `"admin"` using separate storage keys `mff-merchant-auth`, `mff-rider-auth`, `mff-system-admin-auth`) and multi-scope lazy session management in `SessionContext.tsx`.
+  - Enforced exclusive role validation across all 4 portals in `services/auth.ts` (`isRoleAllowedForScope`) and `AuthContext.tsx` (`isExclusiveCustomerIdentity`) so Merchant, Rider, and System Admin sessions can never sign into `/discover`, `/` greetings, or place customer delivery orders (and stale cross-role customer tokens are cleared cleanly on restore).
+  - Replaced ephemeral `useState(false)` lock state in `app/(web)/system-admin/_layout.tsx` with verified `"admin"` session unlock so Back navigation/reloads keep System Admin open until explicit `Sign Out`; added matching `"merchant"` auth guard in `app/(web)/dashboard/_layout.tsx` and already-authenticated partner redirects on login routes.
+  - Routed admin/merchant/rider service calls in `services/admin.ts`, `services/catalog.ts`, `services/orders.ts`, `services/reservations.ts`, `services/community.ts`, `services/storage.ts`, and `services/reviews.ts` to their corresponding scoped Supabase clients.
+- **System Admin Copy Standardization, Active Nav Highlight & CSV Export (`app/(web)/system-admin/*`, `components/admin/SystemAdminGate.tsx`, `lib/admin-report.ts`)**:
+  - Fixed active sidebar highlighting across all System Admin routes using `isAdminNavItemActive()` in `lib/admin-report.ts` (stripping `(web)` route group prefixes when comparing against runtime `usePathname()`) with a calm slate surface fill (`#1B2230` with `border-white/10`, `#FB923C` icon, no dot indicator).
+  - Standardized sidebar navigation labels (`Dashboard`, `Store Approvals`, `Users`, `Moderation`, `Analytics`), changed `Lock & Sign Out` to `Sign Out`, and removed internal stack/AI-template copy (`LIVE SUPABASE`, `MATI CITY PLATFORM OVERSIGHT`, `IDENTITY & ACCESS`, `GoTrue`, `RLS Policies`, `get_my_application_roles RPC`, `PostGIS`, `Seoul Pooler`, and emoji button suffixes) across all 6 System Admin files.
+  - Scaled typography, icons, containers, and spacing across the System Admin login gate (`components/admin/SystemAdminGate.tsx`) and console routes (`_layout.tsx`, `index.tsx`, `approvals.tsx`, `users.tsx`, `moderation.tsx`, `metrics.tsx`), and fixed overlapping Analytics `Order Volume` labels by placing bars inside an inner bounded `flex-1` plot track with separate top value and bottom month rows.
+  - Replaced placeholder `Export Audit Report` banner with working web CSV export (`buildAdminCsvReport` in `lib/admin-report.ts`) downloading live platform metrics and store application rows.
+- **System Admin Live Data & Mock Removal (`app/(web)/system-admin/*`, `services/admin.ts`, `services/community.ts`, `supabase/migrations/20261013000300_*`, `20261014000200_*`)**:
+  - Eliminated synthetic `₱95k–₱195k` 9-month GMV and hardcoded `QR Check-ins (42)` / `55% / 30% / 15%` fallback data in `services/admin.ts` and `app/(web)/system-admin/metrics.tsx`; queries now aggregate live `public.orders`, `public.store_visits`, and `public.community_posts` rows via admin RLS whenever the `admin_get_monthly_gmv` / `admin_get_discovery_channels` RPCs are not yet deployed, and return real `0`s + error banners when offline or failing.
+  - Updated `calculateMonthlyGmvBarHeights` (`0%` bar height for `₱0` months, exact compact formatting like `₱1,020` under `₱10k`), aligned the `Last 9 Months` card headline with the 9-month dataset in `Asia/Manila`, and renamed `Order Sources` to `Activity Breakdown` using real `Orders`, `QR Check-ins`, and `Community Posts` counts.
+  - Removed hardcoded `14` resolved count, `REP-001` / `REP-002` mock reports, and catch-block error swallowing in `app/(web)/system-admin/moderation.tsx` (`fetchAdminModerationReportsWithStatus` in `services/community.ts`). Added explicit load error banners and non-spinning `—` error states across `index.tsx`, `approvals.tsx`, `users.tsx`, `moderation.tsx`, and `metrics.tsx`.
+  - Fixed `public.platform_roles` -> `private.platform_roles` in `20261011000100_vouchers_and_discounts.sql` and `20261013000300_pod_merchant_parity_and_admin_controls.sql`, aligned `20261014000200_admin_metrics_and_telemetry.sql` (`Asia/Manila` monthly bucketing, exact `Activity Breakdown` counts, and `admin_list_users()` returning `cod_strikes`/`cod_eligible`), repaired remote history for the 9 previously applied Sept 30–Oct 2 migrations, and pushed all 9 October 11–14 migrations via `supabase db push` (all 23 local & remote migrations now synced on `tqztlckmeznbsjcszzyg`).
+- **Store Merchant Auth & Registration Overhaul (`app/(web)/auth/store-login.tsx`, `app/(web)/auth/store-register.tsx`, `app/(web)/auth/verification.tsx`, `app/(web)/dashboard/_layout.tsx`, `components/auth/StoreMapPicker*.tsx`, `services/merchant-registration.ts`, `services/storage.ts`, `assets/merchant-bg.jpg`, `supabase/migrations/20261112000100_merchant_store_registration.sql`)**:
+  - Redesigned `store-login.tsx` to match the asymmetric two-column layout of `SystemAdminGate.tsx` on a bright `#F8FAFC` / white merchant surface theme paired with lively Mati Karenderia showcase art (`assets/merchant-bg.jpg`, `810x1080`), top-left `Back to Home`, `Merchant Portal` header above the `Log In` card, and store approval gating (`pending` → `verification.tsx`, `rejected` → signed out with notice) mirrored in `app/(web)/dashboard/_layout.tsx`.
+  - Replaced the non-functional `store-register.tsx` shell with a light-themed Store Registration flow (`Back to Home` top-left, dismissible `NotificationBanner`) collecting store details (`name`, `Meals`/`Karenderias`/`Seafood`/`BBQ & Grill`/`Merienda`/`Beverages` category, `description`, `public_phone`, `operating_hours`), `barangay`, `address_text`, an interactive **OpenStreetMap + Leaflet** map pinpoint picker (`components/auth/StoreMapPicker.web.tsx` with draggable `#EA5410` pin, click-to-pin, Barangay centroid snap, and `"Use Current Location"` two-stage GPS fallback + stale-request/error clearing), owner account fields, storefront/permit upload (`uploadStoreVerificationDocument`), and automatic 6-digit email OTP verification.
+  - Added and pushed migrations `20261112000100_merchant_store_registration.sql` (`stores.verification_document_url` + `public.merchant_submit_store_application`) and `20261112000200_store_categories_and_strict_registration.sql` (`stores.categories text[]` multi-category storage + strict backend validation for name, Mati barangay, street address, PH mobile/(087) landline, structured hours/`Open 24 Hours`, Mati coordinate bounds, and HTTPS storage URL) with `types/database.ts`, `services/catalog.ts`, `mock/restaurants.ts`, and `app/(mobile)/(tabs)/discover.tsx` synced for multi-category Discovery filtering.
+  - Upgraded `app/(web)/auth/store-register.tsx` with top-left `Back to Home` + top-right `Mati FoodFinder` branding (removing the redundant top-right `Log In`), multi-select **Choose Store Categories** (`categories: string[]`), curated 30-min AM/PM dropdown selectors (`05:00 AM`–`11:30 PM`, default `07:00 AM – 08:00 PM`) plus `Open 24 Hours` toggle, strict field character masking/sanitization (`filterOwnerNameInput`, `filterPhoneInput`, `filterEmailInput`, `filterOtpInput`), `0912 345 6789` phone placeholders, inline per-field validation, a Confirm Password field with live match status, and an animated per-requirement inline password strength sentence (`12+ characters`, `uppercase`, `lowercase`, `a number.`).
+  - Consolidated legacy mobile Kitchen Queue / partner routes (`app/(mobile)/merchant/index.tsx`, `app/(mobile)/auth/merchant-login.tsx`, `app/(mobile)/auth/merchant-register.tsx`) into the responsive Store Admin Dashboard (`app/(web)/dashboard/*`) and `store-login` / `store-register`, removed the broken `"Kitchen Queue App (Phone/Tablet)"` link from `components/portal/LandingPage.tsx`, eliminated the conditional-`Redirect`-before-hooks crash, and ported `PrintableTableQrModal` (`app/(web)/dashboard/index.tsx`) and live `calculateCodSettlement` / `confirmCodRemittance` reconciliation (`app/(web)/dashboard/billing.tsx`).
+- **Updated Regression Coverage (`tests/foundation/responsive-layout.test.ts`, `tests/foundation/role-session-isolation.test.ts`, `tests/foundation/phaseE-analytics-offline-nav.test.ts`, `tests/foundation/phaseF-system-remediation.test.ts`)**:
+  - Verified guest-only `LandingPage` (without `Kitchen Queue App`), `app/index.tsx` & `portal.tsx` exclusive customer redirects, System Admin dark editorial gate + Store Merchant light auth/registration + interactive Leaflet map picker + GPS fallback + validation helpers, consolidated `/dashboard` Table QR & COD settlement reconciliation + legacy `/merchant` redirect bridges, Admin active tabs/CSV export + dotless nav, non-overlapping metrics plot, mockless admin services & moderation page, and 4-role storage/scope isolation.
+
+## Phase 18: Cross-Platform Responsive UI & Layout Overhaul (2026-11-10)
+
+### Completed Work
+- **Welcome Portal / Landing Architecture (`components/portal/LandingPage.tsx`, formerly `app/(mobile)/portal.tsx`)**:
+  - Updated `HighlightCarousel` so `slideWidth = containerWidth` across all viewports (eliminating mid-word horizontal peeking/clipping of adjacent slides on wide desktop browsers), synced scroll index on resize/arrows/dots/swipe, and added desktop left/right carousel controls.
+- **Shared Modals, Sheets & Auth (`components/**`)**:
+  - Replaced static `Dimensions.get("window").height` in `components/ui/BottomSheetModal.tsx` with reactive `useWindowDimensions()` and added `sheetWide` (`maxWidth: 600, alignSelf: "center"`) on viewports `>= 768px`.
+  - Constrained desktop widths across `OfflineBanner.tsx`, `FloatingCartBar.tsx`, `AccountScreen.tsx`, `PostDeliveryRatingModal.tsx`, `QuickDispatchModal.tsx`, and inner customization modal in `RestaurantProfileSheet.tsx`.
+  - Made 6-digit OTP inputs in `components/auth/AccountForm.tsx` flex-based (`flex-1 max-w-[48px]`) so they fit `< 360px` phones cleanly.
+- **Customer Tabs, Mobile Merchant & Rider Consoles (`app/(mobile)/**`)**:
+  - Centered desktop tab bar items (`width >= 900`) in `(mobile)/(tabs)/_layout.tsx` while preserving native safe-area clearance.
+  - Constrained desktop reading/grid containers across `(mobile)/(tabs)/discover.tsx` (`max-w-5xl`, 2-column grid at `>= 768px`), `community.tsx` (`max-w-2xl`, `min-w-0` overflow guards), `orders.tsx` (`max-w-3xl`), and `profile.tsx` (`max-w-2xl`); avoided CSS `calc()` for React Native compatibility.
+  - Added side-by-side desktop Map Canvas + Detail Panel (`width >= 900`) and 2-column List grid (`>= 768px`) in `(mobile)/(tabs)/map.tsx`, with bottom-anchored bay/beach landmarks so short screens do not clip labels.
+  - Centered role auth forms (`merchant-login`, `merchant-register`, `rider-login`, `rider-register`), widened/scrollable tab strip and constrained Kiosk QR (`max-w-[280px] aspect-square`) and modals in `(mobile)/merchant/index.tsx`, and constrained/wrapped `(mobile)/rider/index.tsx`.
+- **Web Merchant Dashboard & System Admin Console (`app/(web)/**`)**:
+  - Added mobile horizontal sub-navigation (`md:hidden`) in `app/(web)/dashboard/_layout.tsx` linking Overview, Menu Manager, Store Profile, and Billing & Plans, plus responsive phone paddings, stacking upload controls, scrollable Add Dish modal, and `lg:` table breakpoints across `dashboard/*.tsx` and `(web)/auth/*.tsx`.
+  - Switched multi-column Data Tables in `system-admin/approvals.tsx` and `users.tsx` to `lg:` alongside the persistent sidebar, updated KPI grids (`index.tsx`, `users.tsx`), and tightened `metrics.tsx` 9-bar GMV chart labels for tablet widths.
+- **Regression Coverage (`tests/foundation/responsive-layout.test.ts`)**:
+  - Added automated breakpoint assertions (`320`, `390`, `768`, `900`, `1024`, `1440` across web/iOS/Android) and structural regression checks across landing, tabs, modals, and dashboard layouts.
+
+## Phase 17: Phase F — Quality Gates & System Remediation Goal Finalization (2026-10-14)
+
+- **Consolidated Automated Regression Suite (`tests/foundation/phaseF-system-remediation.test.ts`)**:
+  - Implemented 5 targeted regression tests verifying:
+    1. Composite cart item keys (`${dishStore}-${dish.id}${modKey}`) ensuring variation collision resistance across dishes and custom modifier permutations.
+    2. Consecutive 14-day reservation date serialization formatting valid ISO `YYYY-MM-DD` strings for PostgreSQL `table_reservations`.
+    3. Status design token contract immutability across all 5 token maps (`getOrderStatusTheme`, `getReservationStatusTheme`, `getStoreApprovalTheme`, `getUserAccountStatusTheme`, `getUserRoleTheme`).
+    4. Telemetry bar height clamping (15% to 95%) and currency scaling.
+    5. Discovery channel traffic ratios sum invariance (always sums to 100%).
+
+- **Remediation Milestone Summary (Phases A–F Complete)**:
+  - **Phase A**: Multi-item cart unique composite item ID variation isolation & interactive 14-day ISO date selector pills for table reservations.
+  - **Phase B**: Customer community post reporting modal with canonical categories & live courier and store star ratings and compliments wiring.
+  - **Phase C**: Merchant cover photo uploads via Supabase Storage, live operating hours persistence, and customer personalization consent.
+  - **Phase D**: Canonical design token unification (`lib/status-tokens.ts`), brand primary `#EA5410`, modal backdrop `bg-black/60`, and replacement of browser `alert()` popups with styled `NotificationBanner`.
+  - **Phase E**: Time-series monthly GMV chart aggregation RPC, real QR stand check-in discovery channel ratios, global cross-platform `OfflineBanner`, and in-app map navigation for confirmed reservations.
+  - **Phase F**: Automated regression suite, full verification suite execution, zero-error typecheck, and durable project memory synchronization.
+
+- **Verification**:
+  - `npm test`: **99/99 passing unit tests** (0 failed, 0 skipped).
+  - `npm run typecheck`: **0 TypeScript errors** (`tsc --noEmit`).
+  - `npm run check:client-bundle`: Android (919 modules) and iOS (1062 modules) Metro client bundling verified.
+
+## Phase 16: Phase E — Admin Analytics Aggregation & Offline Banner (2026-10-14)
+
+- **Supabase RPC Migration (`supabase/migrations/20261014000200_admin_metrics_and_telemetry.sql`)**:
+  - Implemented `public.admin_get_monthly_gmv()` aggregating live order sums grouped by month over the past 9 months.
+  - Implemented `public.admin_get_discovery_channels()` querying `store_visits` for QR scans vs live orders to calculate real platform traffic channel ratios.
+  - Aligned database types in `types/database.ts`.
+
+- **System Admin Telemetry & Live GMV Chart (`services/admin.ts` & `app/(web)/system-admin/metrics.tsx`)**:
+  - Added `MonthlyGmvItem`, `DiscoveryChannelsData`, `calculateMonthlyGmvBarHeights`, `calculateDiscoveryChannelRatios`, `fetchMonthlyGmv`, and `fetchDiscoveryChannels`.
+  - Replaced hardcoded 9-bar simulation in `app/(web)/system-admin/metrics.tsx` with dynamic monthly GMV bars with real height percentages and currency labels.
+  - Replaced hardcoded discovery channels with real ratios from QR stand check-ins, direct word-of-mouth, and social media.
+
+- **Global Cross-Platform Offline Detector & Banner (`hooks/useNetworkStatus.ts` & `components/ui/OfflineBanner.tsx`)**:
+  - Implemented `useNetworkStatus()` hook supporting web `navigator.onLine` window listeners and native network probe with timeout.
+  - Implemented `OfflineBanner` displaying a subtle amber warning banner during network dropouts with a manual retry button, and a brief green reconnection toast upon recovery.
+  - Mounted `<OfflineBanner />` at the root layout in `app/_layout.tsx` protecting all mobile and web routes.
+
+- **In-App Interactive Map Navigation for Confirmed Reservations (`app/(mobile)/(tabs)/map.tsx` & `app/(mobile)/(tabs)/orders.tsx`)**:
+  - Extended `MobileMapScreen` with `useLocalSearchParams<{ storeId?: string; storeName?: string }>()` to automatically select and highlight a restaurant pin upon deep link.
+  - Replaced placeholder `Alert.alert("Directions", ...)` in `app/(mobile)/(tabs)/orders.tsx` with seamless in-app navigation (`router.push`) to the Map tab, honoring user preference for in-app map guidance without bouncing out to external map apps.
+
+- **Verification**:
+  - `npm test`: **94/94 passing unit tests** (added `tests/foundation/phaseE-analytics-offline-nav.test.ts` with 6 targeted tests).
+  - `npm run typecheck`: **0 TypeScript errors** (`tsc --noEmit`).
+  - `npm run check:client-bundle`: Android (919 modules) and iOS (928 modules) Metro client bundling verified.
+
+## Phase 15: Phase D — Design Token Unification & Web Alert Modernization (2026-10-14)
+
+- **Canonical Design Token Expansion (`lib/status-tokens.ts`)**:
+  - Exported `getStoreApprovalTheme(status: string)` for `"pending" | "approved" | "rejected"`.
+  - Exported `getUserAccountStatusTheme(status: string)` for `"active" | "suspended"`.
+  - Exported `getUserRoleTheme(role: string)` for `"Superadmin" | "Store Admin" | "Rider" | "Customer"`.
+  - Standardized Brand Primary to `#EA5410` and preserved static color class strings for NativeWind CSS purging safety.
+  - Ensured `ready_for_pickup` explicitly maps to violet/purple (`bg-purple-100`, `text-purple-800`), completely distinct from `delivered` emerald green.
+
+- **Unified Inline Notification Banner (`components/ui/NotificationBanner.tsx`)**:
+  - Implemented non-blocking inline feedback banner component supporting `success`, `error`, `warning`, and `info` types with auto-dismiss timers and explicit dismissal buttons.
+  - Replaced disruptive browser `alert()` popups across Web Dashboard and System Admin portals:
+    - `app/(web)/dashboard/index.tsx`: overview quick actions.
+    - `app/(web)/dashboard/menu.tsx`: menu category/item management and modal error banners.
+    - `app/(web)/dashboard/profile.tsx`: cover photo updates and profile saves.
+    - `app/(web)/dashboard/billing.tsx`: subscription plan upgrades and payout account additions.
+    - `app/(web)/system-admin/approvals.tsx`: store approval/rejection feedback.
+    - `app/(web)/system-admin/users.tsx`: user creation, suspension, reactivation, and password resets.
+    - `app/(web)/system-admin/index.tsx`: live audit log exports and store approvals.
+    - `app/(web)/system-admin/moderation.tsx`: post hiding, permanent deletion, and report dismissals.
+
+- **Mobile Merchant & Admin Status Unification**:
+  - `app/(mobile)/merchant/index.tsx`: refactored order card borders, badges, and labels from raw nested ternaries to `getOrderStatusTheme(order.status)`; refactored reservation cards to `getReservationStatusTheme(res.status)`.
+  - `app/(web)/system-admin/approvals.tsx`: refactored store approval status badges to `getStoreApprovalTheme(app.approval_status)`.
+  - `app/(web)/system-admin/users.tsx`: refactored user role badges to `getUserRoleTheme(user.role)` and account status pills to `getUserAccountStatusTheme(user.account_status)`.
+  - `app/(mobile)/auth/merchant-register.tsx`: standardized modal backdrop dimming from `bg-black/70` to `bg-black/60`.
+
+- **Verification**:
+  - `npm test`: **88/88 passing unit tests** (added `tests/foundation/phaseD-design-tokens.test.ts` with 5 targeted token tests).
+  - `npm run typecheck`: **0 TypeScript errors** (`tsc --noEmit`).
+  - `npm run check:client-bundle`: Android and iOS client bundle verification passing cleanly (903 and 956 modules).
+
+## Phase 14: Phase C — Web Merchant Profile Persistence & Storage (2026-10-14)
+
+- **Database Schema Migration (`supabase/migrations/20261014000100_store_branding_and_personalization.sql`)**:
+  - Added `operating_hours` (default `'7:00 AM - 8:30 PM Daily'`) and `cover_image_url` columns to `public.stores`.
+  - Granted column-level UPDATE permissions on `operating_hours` and `cover_image_url` to authenticated users.
+  - Added `personalization_consent` boolean (default `true`) to `public.profiles` with authenticated UPDATE grants.
+  - Provisioned public Supabase Storage bucket `store-branding` (10MB limit, JPEG/PNG/WebP) with RLS policies: public read, authenticated insert, and owner update.
+  - Aligned TypeScript definitions in `types/database.ts` and `types/restaurant.ts`.
+
+- **Supabase Storage Cover Photo Uploads (`services/storage.ts`)**:
+  - Implemented `uploadStoreCoverPhoto(fileOrUri, storeId, options)` supporting both web File/Blob instances and mobile URI strings.
+  - Targets `store-branding` bucket under `covers/{storeId}_{timestamp}.ext` with automated fallback to `foodie-uploads` if the branding bucket is unreachable.
+
+- **Web Store Profile & Operating Hours Persistence (`app/(web)/dashboard/profile.tsx` & `services/catalog.ts`)**:
+  - Replaced prototype alert stub with an interactive file picker and image preview component for store cover photos.
+  - Persists `operating_hours` (`${openTime} - ${closeTime} Daily`) and `cover_image_url` to `public.stores` via `updateStoreProfile`.
+  - Parses operating hours strings on profile load to initialize `openTime` and `closeTime` input fields dynamically.
+  - Integrated `mapStoreToProfile` in `services/catalog.ts` to output `cover_image_url` and custom `operating_hours` with standard fallbacks.
+
+- **Mobile Merchant Settings & Personalization Consent (`app/(mobile)/merchant/index.tsx` & `app/(mobile)/(tabs)/profile.tsx`)**:
+  - Mobile Merchant Settings tab displays dynamic `storeHours` loaded from `fetchStoreById(targetStoreId)`.
+  - Customer Profile screen initializes `personalizationEnabled` from `identity.profile.personalization_consent` and persists toggle changes to Supabase via `updateProfile({ personalization_consent: nextVal })`.
+
+- **Verification**:
+  - `npm test`: **83/83 passing unit tests** (added `tests/foundation/phaseC-storage-persistence.test.ts` with 4 targeted tests).
+  - `npm run typecheck`: **0 TypeScript errors** (`tsc --noEmit`).
+  - `npm run check:client-bundle`: Android and iOS client bundle verification passing cleanly.
+
+## Phase 13: Phase B — Community Moderation Trigger & Rider/Store Rating Wiring (2026-10-14)
+
+- **Customer-Facing Community Post Reporting (`app/(mobile)/(tabs)/community.tsx` & `services/community.ts`)**:
+  - Exported canonical `COMMUNITY_REPORT_REASONS` with 4 agreed categories: `"Spam / Commercial Bot"`, `"Inappropriate / Offensive Content"`, `"Misleading / Fake Food Review"`, `"Harassment / Abusive Language"`.
+  - Added modern report flag action button (`Ionicons flag-outline`) on each post card header in the mobile community feed.
+  - Built interactive `BottomSheetModal` for post reporting: shows post snippet preview, single-select reason radio list, optional details `TextInput`, and direct integration with `reportCommunityPost(postId, reason, details)`.
+  - Enforced registered user check (`verifyRegisteredUser`) prompting `GuestGateModal` when unauthenticated diners tap report.
+  - Displays user-safe confirmation notification upon submission.
+
+- **Rider Profile Rating & Compliments Integration (`app/(mobile)/rider/index.tsx` & `services/reviews.ts`)**:
+  - Enhanced `fetchRiderRatingSummary` to return `RiderRatingSummary` including aggregated `compliments: Record<string, number>` computed via pure helper `aggregateCompliments`.
+  - Connected Rider Profile modal in `app/(mobile)/rider/index.tsx` to query live courier star ratings and customer compliments via `fetchRiderRatingSummary(identity.id)`.
+  - Rendered live courier star rating badge (`⭐ X.X · Y reviews` with fallback for new couriers) and customer compliment badges (`⚡ Fast Delivery`, `🍲 Handled with Care`, etc.) with real-time feedback counts.
+
+- **Store Rating Parity in Catalog Discovery (`services/catalog.ts`)**:
+  - Updated `mapStoreToProfile(store, ratingSummary)`: when `ratingSummary` is provided, dynamically outputs live average rating and review counts.
+  - In `fetchLiveStores()`, batch-queries `order_reviews` for approved stores and computes average food ratings and review counts without N+1 queries.
+  - In `fetchStoreById(storeId)`, queries `fetchStoreRatingSummary` for live store presentation in `RestaurantProfileSheet`.
+
+- **Verification**:
+  - `npm test`: **79/79 passing unit tests** (added `tests/foundation/phaseB-reviews-moderation.test.ts` with 5 targeted tests).
+  - `npm run typecheck`: **0 TypeScript errors** (`tsc --noEmit`).
+  - `npm run check:client-bundle`: Android and iOS client bundles verified cleanly via Metro.
+
+## Phase 12: Phase A — Critical Multi-Item Cart & Booking Bugfixes (2026-10-14)
+
+- **Cart Item Modifier Isolation (`context/CartContext.tsx` & `components/checkout/CheckoutSheet.tsx`)**:
+  - Upgraded `CartContextType` to support polymorphic `target: string | number` for `updateQuantity`, `removeItem`, and `getItemQuantity`.
+  - Resolved modifier variation collision bug: when a customer has multiple customized variations of the same dish (e.g., *Grilled Tuna Belly with Regular Spice* vs *Grilled Tuna Belly with Extra Spicy + Extra Rice*), `CheckoutSheet.tsx` now passes unique composite `item.id`.
+  - Updating or removing one dish variation strictly modifies or removes that specific item without touching sister variations of the same `dishId`.
+  - Preserved backward compatibility: passing `dishId` (number) continues to function as expected for legacy screens and tests.
+
+- **14-Day Dine-In Reservation Booking Horizon (`lib/reservation-dates.ts` & `components/reservation/ReservationSheet.tsx`)**:
+  - Created pure domain date utility `lib/reservation-dates.ts` defining `ReservationDateOption`, `generateUpcomingReservationDates(14)`, and `formatReservationDate`.
+  - Replaced hardcoded `"Tonight"` text with interactive horizontal pill selector offering a 14-day booking horizon (*"Today"*, *"Tomorrow"*, up to 14 days ahead).
+  - Serializes canonical ISO `YYYY-MM-DD` strings into `table_reservations.reservation_date` for PostgreSQL consistency.
+  - Submit action dynamically displays selected day and time (e.g., `Confirm Reservation (4 Guests · Tomorrow · 7:30 PM)`).
+  - Updated Customer Orders tab (`app/(mobile)/(tabs)/orders.tsx`) and Web Kitchen Queue (`app/(web)/dashboard/index.tsx`) to format dates via `formatReservationDate`.
+
+- **Verification**:
+  - `npm test`: **74/74 passing unit tests** (added `tests/foundation/phaseA-cart-reservation.test.ts` with 5 targeted tests).
+  - `npm run typecheck`: **0 TypeScript errors** (`tsc --noEmit`).
+  - `npm run check:client-bundle`: Android and iOS client bundles verified cleanly.
+
+## Phase 11: Web Merchant Parity, Proof of Delivery (POD), Admin Controls & Customizations (2026-10-13)
+
+- **Phase 4A: Web Merchant Parity & Real-Time Controls**:
+  - Web Store Dashboard (`app/(web)/dashboard/index.tsx`):
+    - Real-time kitchen queue operations wired to `updateOrderStatus` (`Accept Order`, `Start Cooking 🍳`, `Mark Ready for Pickup 📦`, `Hand to Rider 🛵`, and `Decline`).
+    - Integrated `merchantRebroadcastOrder` (`Re-broadcast Courier 📢`) allowing merchants to re-release orders to the courier pool if an assigned rider is delayed.
+    - Operating Status Toggle: Real-time open/closed toggle now persists to Supabase `stores.is_open` via `updateStoreOpenStatus` and RPC `set_store_open_status`.
+    - Real-time Table Reservations: Live bookings feed with table capacity badge (`X of 6 Tables Free`), `Approve Table`, `Decline`, `Complete Dining`, and `No-Show` actions.
+    - Unified with canonical semantic tokens from `lib/status-tokens.ts`.
+  - Web Menu Catalog Management (`app/(web)/dashboard/menu.tsx`):
+    - Replaced prototype alert with interactive Add Dish Modal wired to `createStoreMenuItem`, supporting dish name, category, price in ₱ PHP, and descriptions.
+  - Customer Restaurant Profile (`components/restaurant/RestaurantProfileSheet.tsx`):
+    - Dynamic "Open Now" / "Closed" badge computed from both operational `isStoreCurrentlyOpen` schedule and merchant `restaurant.isOpen` switch.
+
+- **Phase 4B: Courier Proof of Delivery (POD) Photo Capture**:
+  - Database Schema & Storage (`supabase/migrations/20261013000300_pod_merchant_parity_and_admin_controls.sql`):
+    - Added `pod_image_url` and `pod_timestamp` columns to `public.orders`.
+    - Created dedicated public-read, authenticated-upload Supabase Storage bucket `delivery-proofs`.
+  - Backend Services (`services/orders.ts`):
+    - Added `uploadProofOfDeliveryPhoto(orderId, imageUri)` with Supabase Storage upload and local URI fallback.
+    - Updated `completeDeliveryWithPin` to persist `pod_image_url` and `pod_timestamp` upon order completion.
+  - Rider App Flow (`app/(mobile)/rider/index.tsx`):
+    - Added drop-off camera capture via `expo-image-picker` inside the PIN verification modal (`Take Drop-off Photo 📸`, with thumbnail preview and retake).
+  - Customer Order Tracking (`app/(mobile)/(tabs)/orders.tsx`):
+    - Renders verified POD photo thumbnail (`Proof of Delivery (POD) Verified 📸`) with delivery timestamp for delivered orders.
+
+- **Phase 4D: System Admin Controls, Saved Addresses & Dish Modifiers**:
+  - Database Schema (`supabase/migrations/20261013000300_pod_merchant_parity_and_admin_controls.sql`):
+    - Added `default_barangay` and `delivery_address` to `public.profiles`.
+    - Created administrative RPC `admin_reset_customer_cod_strikes(target_user)` resetting COD strikes to 0 and restoring COD ordering eligibility.
+  - Admin Identity & Moderation (`app/(web)/system-admin/users.tsx`):
+    - Added 1-tap "Reset Strikes" button for customers with no-show flags to resolve disputes.
+    - Added "Grant Rider" / "Revoke Rider" role toggles via `setAdminUserPlatformRole`.
+    - Added audit summary cards for total identities, active riders, and COD strike flags.
+  - Customer Profile & Checkout (`app/(mobile)/(tabs)/profile.tsx` & `components/checkout/CheckoutSheet.tsx`):
+    - Customers can set and persist their preferred Mati Barangay and delivery landmark in Profile, auto-populating Checkout fields.
+  - Dish Customization & Modifiers:
+    - Extended `types/restaurant.ts` with `DishModifierGroup` and `DishModifierOption`.
+    - Customization modal in `components/restaurant/RestaurantProfileSheet.tsx` supports spice levels and add-ons.
+    - Multi-modifier pricing and unique composite item keys supported in `context/CartContext.tsx`.
+
+- **Verification**:
+  - `npm test`: 69/69 unit tests passing (`tests/foundation/phase4-parity-pod-controls.test.ts` added).
+  - `npm run typecheck`: 0 TypeScript errors (`tsc --noEmit`).
+  - `npm run check:client-bundle`: Android and iOS client bundles verified cleanly.
+
+## Phase 10: System-Wide Assessment Remediation (Phases 1–3) (2026-10-13)
+
+- **Phase 1: UI & Design Token Standardization**:
+  - Centralized Semantic Status Tokens (`lib/status-tokens.ts`):
+    - Standardized order lifecycle palette: `placed` (blue), `accepted` (amber), `preparing` (orange), `ready_for_pickup` (purple/violet), `out_for_delivery` (sky), `delivered` (emerald), `cancelled` (rose).
+    - **Eliminated status color collision**: `ready_for_pickup` now renders in canonical purple (`bg-purple-100 text-purple-800`), completely distinguishing kitchen packaging readiness from completed emerald delivery.
+    - Standardized table reservation palette: `pending` (amber), `confirmed` (emerald), `completed` (sky), `no_show` (rose), `declined`/`cancelled` (gray).
+  - Customer Order & Booking Tracking (`app/(mobile)/(tabs)/orders.tsx`):
+    - Header badges and delivery status progress utilize canonical `getOrderStatusTheme` and `getReservationStatusTheme`.
+  - Store Merchant Mode (`app/(mobile)/merchant/index.tsx`):
+    - Replaced emerald border/badge on `ready_for_pickup` with canonical purple palette.
+    - Updated exit portal button to clean slate styling.
+  - Foodie Community Feed (`app/(mobile)/(tabs)/community.tsx`):
+    - Added branded `ListEmptyComponent` with recovery CTA ("Be the first to share a review of your favorite Mati City dish! 🍽️") when the foodie feed has no posts, matching discovery and orders quality standards.
+
+- **Phase 2: Operational & Concurrency Guards**:
+  - Atomic Rider Claim RPC (`supabase/migrations/20261013000100_atomic_rider_claim_and_guards.sql`):
+    - Created `accept_delivery_job(p_order_id uuid)` with `SELECT ... FOR UPDATE` row-level locking.
+    - Eliminates race conditions when multiple couriers tap "Accept Job" simultaneously; throws code `40001` if already claimed.
+    - Aliased `claim_delivery_job` for backwards compatibility.
+  - Store Operating Hours Enforcement (`lib/geo-serviceability.ts` & `services/orders.ts`):
+    - Implemented `isStoreCurrentlyOpen(hoursString, refDate)`: parses opening/closing windows into minutes from midnight (default: 7:00 AM – 9:00 PM Daily).
+    - `createOrder` validates store operating hours prior to order insertion; throws user-actionable error if store is closed.
+  - Spatial PostGIS Delivery Boundary Enforcement (`services/orders.ts`):
+    - Evaluates customer delivery coordinates and barangay against store PostGIS location and serviceability radius (`evaluateStoreDeliveryServiceability`).
+    - Rejects orders outside delivery boundaries or when store has disabled motorcycle delivery.
+  - Rider App Drop-Off Flow (`app/(mobile)/rider/index.tsx`):
+    - Handled claim concurrency conflicts with immediate refresh and user-friendly alert (*"Another active Mati courier just claimed this delivery job! Refreshing available deliveries..."*).
+
+- **Phase 3: In-System Push Notifications & Admin Moderation**:
+  - Remote Push Notification Outbox (`supabase/migrations/20261013000200_notification_webhooks_and_admin_moderation.sql`):
+    - Created `remote_push_queue` table with status tracking (`pending`, `sent`, `failed`).
+    - Services (`services/device-notifications.ts`): Added `sendExpoPushNotification` (direct dispatch to `https://exp.host/--/api/v2/push/send` with high-importance channels) and `dispatchRemotePushToRecipient` (looks up recipient's `expo_push_token` and queues outbox record).
+    - Connected into `notifyCustomerOrderLifecycle` so locked/backgrounded mobile devices receive push notifications over the wire.
+  - Community Social Moderation Workflow (`supabase/migrations/20261013000200_notification_webhooks_and_admin_moderation.sql`):
+    - Added `is_hidden` column to `community_posts` and updated SELECT RLS to hide suppressed posts from non-admins.
+    - Created `post_reports` table with full audit trail (`reason`, `details`, `status`, `action_taken`, `resolved_by`).
+    - Created RPCs `report_community_post` and `moderate_community_post` ('delete', 'hide', 'dismiss').
+    - Services (`services/community.ts`): Implemented `reportCommunityPost`, `fetchAdminModerationReports`, and `moderateReportedPost`.
+    - Admin Portal (`app/(web)/system-admin/moderation.tsx`): Wired live report queries with 1-tap Delete Post 🗑️, Hide from Feed 👁️, and Dismiss/Safe ✓ actions.
+
+- **Verification**:
+  - `npm test`: 65/65 unit tests passing (added `tests/foundation/phase1-3-guards.test.ts`).
+  - `npm run typecheck`: 0 TypeScript errors (`tsc --noEmit`).
+  - `npm run check:client-bundle`: Android and iOS client bundle verification passing cleanly.
+
+## Phase 9: Customer & Rider No-Show Safeguards, Dine-In Completion & Re-Broadcast (Steps 1–3) (2026-10-11)
+
+- **Step 1: Delivery Customer No-Show Safeguards & COD Strike Tracking**:
+  - Database schema (`supabase/migrations/20261011000400_no_show_and_cod_eligibility.sql`):
+    - Added `cod_strikes` (default 0) and `cod_eligible` (default true) to `public.profiles`.
+    - Created RPC `record_customer_no_show_strike(p_customer_id)` that increments strikes and automatically sets `cod_eligible = false` upon reaching 2 strikes.
+  - Services (`services/orders.ts`):
+    - `checkCustomerCodEligibility(customerId)`: Queries customer strike count and COD eligibility.
+    - `reportCustomerNoShow(orderId, gps, reason, customerId)`: Records verified GPS coordinates and logs a strike against the customer's account.
+  - Checkout UI (`components/checkout/CheckoutSheet.tsx`):
+    - Proactively checks `checkCustomerCodEligibility(identity.id)` on checkout mount.
+    - If customer has 2+ strikes (`!cod_eligible`), disables COD delivery, presents a rose-tinted warning card explaining the suspension, and guides the customer to Self-Pickup.
+  - Rider App Drop-Off Flow (`app/(mobile)/rider/index.tsx`):
+    - 5-Minute Grace Period Timer: Drop-off countdown (`waitRemainingSeconds`) initiates at 300s upon arrival at customer location.
+    - Contact Verification Enforcement: Rider must attempt contact (`hasAttemptedContact`) via phone call or in-app message before reporting a no-show.
+    - No-Show Report Button: Guarded until 5 minutes elapse and contact is attempted; fetches GPS coordinates via `expo-location` and logs verified coordinates.
+  - Customer Order Tracking (`app/(mobile)/(tabs)/orders.tsx`):
+    - Cancelled orders show a clear cancellation alert explaining that courier GPS coordinates were verified and warning that repeated no-shows suspend COD privileges.
+
+- **Step 2: Dine-In Reservation No-Show & Completion**:
+  - Merchant App (`app/(mobile)/merchant/index.tsx`):
+    - Dynamic Table Capacity: Tracks occupied tables from active confirmed reservations against total capacity (`TOTAL_STORE_TABLES = 6`).
+    - Added "Mark No-Show ❌" button on confirmed bookings with confirmation dialog to release table capacity back into inventory (`status: "no_show"`).
+    - Added "Dining Completed ✓" button on confirmed bookings to clear the table after dining (`status: "completed"`).
+    - Status badges support `"no_show"` (rose) and `"completed"` (sky/emerald).
+    - Store Profile displays dynamic table inventory (`X Dining Tables (Y available)`).
+  - Customer Orders & Bookings Tab (`app/(mobile)/(tabs)/orders.tsx`):
+    - Reservation status badges handle `"completed"` (sky) and `"no_show"` (rose).
+    - Footer cards render clear closure notices: "Dining Completed ✓ Thank you for dining with us!" or "Table Released (No-Show) • Grace period elapsed".
+
+- **Step 3: Rider Inactivity & Merchant Re-Broadcast**:
+  - Backend & Orders Service (`services/orders.ts`):
+    - Implemented `merchantRebroadcastOrder(orderId, reason)` which clears `rider_id = null`, returns order to `ready_for_pickup`, and appends an audit note (`[Merchant Re-broadcast: ...]`).
+    - Updated `isRebroadcast` detection in `mapDatabaseOrderToLiveOrder` to recognize `Merchant Re-broadcast`.
+  - Merchant Kitchen KDS (`app/(mobile)/merchant/index.tsx`):
+    - In `ready_for_pickup` orders, if an assigned courier is delayed, merchant can tap "Re-broadcast 📢".
+    - Confirmation alert prompts store staff, releases the delayed courier, and re-opens the order to all active couriers across Mati City.
+  - Customer Order Tracking (`app/(mobile)/(tabs)/orders.tsx`):
+    - Displays amber notice banner: *"Courier Re-assignment in Progress 📢 The restaurant re-broadcasted your order to dispatch a faster courier nearby."*
+    - Rider status card reflects *"Re-broadcasting Courier 📢"* and *"Looking for a closer Mati courier"*.
+
+- **Verification**:
+  - `npm test`: 58/58 foundation tests passing (added tests in `tests/foundation/orders-edge-cases.test.ts` for Merchant Re-broadcast tag, COD strike policy thresholds, and table capacity calculation).
+  - `npm run typecheck`: 0 TypeScript errors across the entire codebase (`tsc --noEmit`).
+  - `npm run check:client-bundle`: Android and iOS client bundle verification passing cleanly.
+
+## Phase 8: Post-Delivery Food & Courier Rating (2026-10-11)
+
+- **Separated Rating Architecture (`services/reviews.ts`)**:
+  - Distinct evaluation for Kitchen Quality (1–5 stars) vs Courier Logistics (1–5 stars):
+    - Food ratings measure dish flavor, packaging, and portion accuracy for the store.
+    - Courier ratings measure punctuality, vehicle handling, and courtesy for the independent rider.
+  - Implemented `COURIER_COMPLIMENT_OPTIONS` chips (`⚡ Fast Delivery`, `🍲 Handled with Care`, `😊 Polite & Friendly`, `📞 Great Communication`, `🛵 Safe Driving`).
+  - Added pure validators `validateStarRating` and mathematical averager `computeRatingSummary`.
+  - Added service methods:
+    - `submitOrderReview`: Inserts into `order_reviews` with single-review enforcement per order.
+    - `fetchOrderReview`: Checks if a delivered order is already reviewed.
+    - `fetchRiderRatingSummary`: Fetches or computes courier average stars and review count.
+    - `fetchStoreRatingSummary`: Fetches or computes restaurant average stars and review count.
+
+- **1-Tap Foodie Community Feed Sharing (`services/reviews.ts` & `components/orders/PostDeliveryRatingModal.tsx`)**:
+  - Customers can toggle *"Share to Mati Foodie Feed 🌟"* upon rating submission.
+  - Automatically invokes `createCommunityPost` from `services/community.ts`, publishing a verified review tagging the restaurant and dish rating directly to the public community feed.
+  - Foodie feed posts include a "Verified Order ✓" indicator, giving diners trusted recommendations without requiring manual post creation.
+
+- **Customer UI Integration (`components/orders/PostDeliveryRatingModal.tsx` & `app/(mobile)/(tabs)/orders.tsx`)**:
+  - Designed interactive rating bottom sheet with star selectors, courier compliment chips, optional comments input, and 1-tap community share switch.
+  - In `orders.tsx`, delivered orders display a prominent `Rate Food & Courier ⭐` button if unrated, or a `Rated X ⭐ · Foodie Feed ✓` confirmation card once submitted.
+  - Automatically presents the rating sheet once per newly delivered order upon viewing the Orders tab.
+
+- **Rider Profile & Reputation (`app/(mobile)/rider/index.tsx`)**:
+  - Courier Identity Card displays the rider's average star rating and review count (e.g., `⭐ 4.9 Rating · Top Courier`).
+  - Courier Details section features a dedicated `Courier Rating` row showing cumulative customer feedback.
+
+- **Database Migration (`supabase/migrations/20261011000300_order_reviews.sql`)**:
+  - Created `order_reviews` table with foreign keys to `orders`, `profiles` (customer & rider), and `stores`.
+  - Added Unique constraint `unique(order_id)` ensuring 1 review per delivery.
+  - Configured RLS policies: Customer insert for own orders, public read for aggregate scores.
+  - Added RPC functions: `get_rider_rating_summary` and `get_store_rating_summary`.
+  - Updated `types/database.ts` aligned with schema and RPCs.
+
+- **Automated Verification (`tests/foundation/reviews.test.ts`)**:
+  - Unit tests verifying:
+    1. Discrete 1–5 star integer validation with out-of-bounds rejection.
+    2. Accurate average rating computation rounded to 1 decimal place with empty list fallback.
+    3. Canonical courier compliment tags presence.
+    4. Independent payload structure for delivery vs pickup fulfillment.
+  - `npm test`: 55 tests passed (100%).
+  - `npm run typecheck`: 0 TypeScript errors.
+  - `npm run check:client-bundle`: Android and iOS production bundles verified.
+
+## Phase 7: In-System Automated Lifecycle Notifications (2026-10-11)
+
+- **System-Level OS Notifications Architecture (`services/device-notifications.ts`)**:
+  - Implemented real-time system notifications that trigger native lock-screen banners, vibration (`[0, 250, 250, 250]`), sound, and status bar alerts on Android and iOS even when the phone is on the home screen or app is backgrounded.
+  - Initialized Android high-priority channel (`orders-channel`) with `importance: MAX`, custom orange lighting (`#EA5410`), sound, and badges.
+  - Implemented `registerForPushNotificationsAsync`: checks device permissions, generates `ExpoPushToken`, and saves it to remote Supabase (`profiles.expo_push_token`).
+  - Implemented `sendSystemNotification`: dispatches immediate native notification banner with high priority and sound.
+  - Implemented `setupNotificationResponseListener`: deep links customers straight to live order tracking in `/(mobile)/(tabs)/orders` when tapping the notification banner.
+
+- **Automated Lifecycle Order Triggers (`services/orders.ts`)**:
+  - Automatically generates rich customer notification copy and dispatches in-system notifications during all order transitions:
+    - `placed`: *"Order Placed! 🛵 Order #{orderNumber} sent to {StoreName}. Waiting for store confirmation."*
+    - `accepted`: *"Order Confirmed! 👨‍🍳 {StoreName} has accepted your order and started food preparation."*
+    - `preparing`: *"Cooking in Progress! 🔥 Your meal is being freshly prepared in {StoreName}'s kitchen."*
+    - `ready_for_pickup`: *"Order Ready! 📦 Your food is freshly packed! A Mati rider is on their way to pick it up."*
+    - `out_for_delivery`: *"Out for Delivery! 🚀 Your rider is on the way! Prepare exact cash and your Handshake PIN: [{handshakePin}]."*
+    - `delivered`: *"Delivered! 🍽️ Your order from {StoreName} has arrived. Enjoy your meal in Mati City!"*
+    - `cancelled`: *"Order Cancelled ❌ Your order #{orderNumber} from {StoreName} was cancelled."*
+  - Synchronized two-way alerts: Every transition triggers both the in-system OS banner AND persists the in-app notification record in remote Supabase `notifications` table for unread bell badge history.
+
+- **Realtime Customer Order Listener (`app/(mobile)/(tabs)/orders.tsx`)**:
+  - Integrated `previousStatusesRef` tracker: whenever an active order advances via Supabase Realtime, dispatches the native in-system banner alert on the customer's device.
+  - Configured in `app/(mobile)/(tabs)/_layout.tsx` to automatically register push tokens on authenticated user mount and listen for lock-screen notification interactions.
+
+- **Database Migration (`supabase/migrations/20261011000200_expo_push_tokens.sql`)**:
+  - Added `expo_push_token text` column to `public.profiles` with index `idx_profiles_expo_push_token`.
+
+- **Automated Verification (`tests/foundation/lifecycle-notifications.test.ts`)**:
+  - Unit tests verifying:
+    1. Accurate copy generation for all 7 lifecycle transitions.
+    2. Handshake PIN inclusion during `out_for_delivery`.
+    3. Expo Push Token format validation.
+    4. Channel specifications meeting Android MAX importance standards.
+  - `npm test`: 51 tests passed (100%).
+  - `npm run typecheck`: 0 TypeScript errors.
+  - `npm run check:client-bundle`: Android and iOS production client bundles verified.
+
+## Phase 6: Multi-Item Restaurant Cart (2026-10-11)
+
+- **Cart State Management Architecture (`context/CartContext.tsx`)**:
+  - Implemented canonical `CartItem` model: `dishId`, `name`, `price`, `quantity`, `imageUrl`, `category`, `storeName`, `storeId`, `menuItemId`.
+  - Global `CartProvider` embedded in `context/AuthContext.tsx` providing reactive state across screens:
+    - `items`: Array of items currently in the customer's basket.
+    - `storeName`, `storeId`: Tracks the active restaurant.
+    - `totalCount`: Aggregate sum of quantities across all basket items.
+    - `foodSubtotal`: Sum of `item.price * item.quantity`.
+    - `addItem(dish, quantity, forceReplace)`: Automatically checks single-restaurant constraints. If the user tries adding a dish from Restaurant B while holding items from Restaurant A, it returns a conflict prompt. If confirmed, smoothly replaces the basket.
+    - `updateQuantity(dishId, newQty)`: Adjusts line item quantity; removes item if quantity reaches 0.
+    - `removeItem(dishId)`: Directly removes line item; resets store metadata if basket is emptied.
+    - `clearCart()`: Flushes basket state upon order confirmation.
+    - `getItemQuantity(dishId)`: Fast selector for quantity steppers on menu items.
+
+- **Persistent Floating Basket Bar (`components/cart/FloatingCartBar.tsx`)**:
+  - Rendered dynamically whenever `totalCount > 0` on home discovery (`app/(mobile)/(tabs)/index.tsx`) and map exploration (`app/(mobile)/(tabs)/map.tsx`).
+  - Displays item count badge (`🛍️ X items`), active store name (`From StoreName`), and current food subtotal (`₱XXX.00`) with a "View Basket ➔" CTA.
+  - Tapping immediately opens the multi-item checkout sheet.
+
+- **Interactive Restaurant Menu Experience (`components/restaurant/RestaurantProfileSheet.tsx`)**:
+  - On every dish card in the restaurant menu, displays an item stepper `[-] [quantity] [+]` if the item is in the basket, or an `+ Add` button if not yet added.
+  - Tapping `+ Add` from another restaurant triggers an alert prompt: *"Start New Order? Your basket currently contains items from... Adding items will clear your previous basket."*
+  - Bottom sticky basket footer appears inside the sheet when items from this restaurant are in the basket: shows total items, food subtotal, and one-tap access to checkout.
+
+- **Multi-Item Checkout Sheet (`components/checkout/CheckoutSheet.tsx`)**:
+  - Step 1: Displays full basket list of line items with image thumbnails, categories, unit prices, quantity steppers, item subtotal, and trash removal buttons.
+  - Fulfillment options: COD Delivery (₱35) vs Self-Pickup (Free).
+  - Promo code / voucher validation dynamically calculated against basket food subtotal.
+  - Multi-item checkout formula prominently displayed:
+    - Formula: `(Food Subtotal + Delivery Fee - Discount = Total)`
+    - Clear visual breakdown with individual line components and mathematical total.
+  - Step 2: Delivery address, Mati barangay selection chips, rider notes, and cash reminder box showing exact COD amount.
+  - Order placement: Dispatches all line items into Supabase `order_items` via `createOrder`, clears the basket, and provides live tracking.
+
+- **Automated Verification (`tests/foundation/cart.test.ts`)**:
+  - Unit tests verifying:
+    1. Multi-item basket accumulation across dishes and drinks in 1 order.
+    2. Exact checkout summary formula: `(Food Subtotal + Delivery Fee - Discount = Total)`.
+    3. Self-pickup zero delivery fee deduction.
+    4. Free delivery voucher waiving.
+    5. Single-store conflict detection and replacement.
+  - `npm test`: 47 tests passed (100%).
+  - `npm run typecheck`: 0 TypeScript errors.
+  - `npm run check:client-bundle`: Android and iOS production client bundles verified.
+
+## Phase 5: Discounts and Promo Vouchers (2026-10-11)
+
+- **Database Architecture & Migration (`supabase/migrations/20261011000100_vouchers_and_discounts.sql`)**:
+  - Implemented `public.vouchers`:
+    - Columns: `id`, `code`, `description`, `discount_type ('free_delivery' | 'fixed' | 'percentage')`, `value`, `min_spend`, `valid_until`, `usage_limit`, `times_used`, `is_active`, `created_at`, `updated_at`.
+    - Indexed on `code` and `(is_active, valid_until)`.
+    - RLS enabled with public select for active unexpired vouchers and administrative full management.
+  - Implemented `public.voucher_redemptions`:
+    - Columns: `id`, `voucher_id`, `user_id`, `order_id`, `discount_applied`, `redeemed_at`.
+    - Unique constraint on `(voucher_id, user_id)` strictly enforcing single-use per customer.
+    - Indexed on `user_id`, `voucher_id`, `order_id`.
+    - RLS policies allowing authenticated users to select and insert their own redemptions.
+  - Altered `public.orders`:
+    - Added `discount_centavos integer not null default 0`.
+    - Added `voucher_code text` and `voucher_id uuid references public.vouchers(id) on delete set null`.
+  - Seeded canonical Mati vouchers:
+    - `MATIFIRST`: `free_delivery` (waives ₱35 delivery fee across Mati City, 0 min spend).
+    - `MATI50`: `fixed` (₱50 discount on orders ₱200 and above).
+    - `HALAHALA10`: `percentage` (10% discount on orders ₱150 and above).
+
+- **Domain Types & Services (`services/vouchers.ts`)**:
+  - Implemented `calculateVoucherDiscount(voucher, subtotal, deliveryFee)`:
+    - Pure calculation engine supporting `free_delivery`, `fixed`, and `percentage` discounts.
+    - Strictly enforces `min_spend` threshold and delivery method (free delivery only applies when delivery fee is charged).
+  - Implemented `validateVoucherCode(code, subtotal, deliveryFee, userId)`:
+    - Case-insensitive trimming (`MATIFIRST`, `matifirst`).
+    - Validates against remote Supabase table with instant zero-latency local fallback for canonical Mati vouchers.
+    - Checks expiration dates, usage limits, minimum order spend requirements, and single-use redemption history.
+  - Implemented `recordVoucherRedemption(voucherId, userId, orderId, discountApplied)`:
+    - Persists redemptions to `public.voucher_redemptions` and increments voucher usage counters.
+
+- **Orders Service Integration (`services/orders.ts`)**:
+  - Updated `CreateOrderPayload` and `LiveOrder` with `voucherCode`, `voucherId`, and `discount`.
+  - Updated `createOrder`:
+    - Computes `discountCentavos = Math.round(discount * 100)`.
+    - Computes `totalCentavos = Math.max(0, subtotalCentavos + deliveryFeeCentavos - discountCentavos)`.
+    - Persists discount metadata and records voucher redemption upon order creation.
+  - Updated `mapDatabaseOrderToLiveOrder` to surface discount amounts and voucher codes in live order feeds.
+
+- **CheckoutSheet Interactive UI (`components/checkout/CheckoutSheet.tsx`)**:
+  - Integrated Promo Code section with instant validation:
+    - One-tap quick suggestion discovery chips (`🏷️ MATIFIRST (Free Delivery)`, `🏷️ MATI50 (₱50 Off)`).
+    - Text input with auto-capitalization and Apply/Remove toggle buttons.
+    - Loading feedback indicator and user-friendly success/error alert banners in Bisaya.
+    - Auto-removes voucher if cart subtotal drops below required `min_spend`.
+  - Dynamic Price Breakdown:
+    - Displays raw subtotal, delivery fee, green discount row (`-₱X.00`), and final estimated total.
+  - Step 2 COD box dynamically updates to reflect exact discounted payment total.
+  - Connected in `app/(mobile)/(tabs)/index.tsx` and `app/(mobile)/(tabs)/map.tsx`.
+
+- **Multi-Role Discount Visibility Across App Roles**:
+  - **Customer Order History (`app/(mobile)/(tabs)/orders.tsx`)**:
+    - Order header shows green `Saved ₱XX.00` tag under final price.
+    - Order items summary renders dedicated green `🏷️ Voucher Discount (CODE) -₱XX.00` pill.
+  - **Merchant Kitchen KDS (`app/(mobile)/merchant/index.tsx`)**:
+    - `KitchenOrder` captures `discount` and `voucherCode`.
+    - Kitchen prep card displays `🏷️ Voucher Applied: -₱XX.00 (CODE)` so store staff knows the promo was applied.
+  - **Rider Active Delivery (`app/(mobile)/rider/index.tsx`)**:
+    - `RiderJob` captures `discount` and `voucherCode`.
+    - Active COD cash collection box displays `🏷️ Discount applied: -₱XX.00 (CODE)` so couriers know the exact cash to collect without confusion.
+  - **Schema Fallback Handling (`services/orders.ts`)**:
+    - If remote Supabase schema has not yet executed `20261011000100_vouchers_and_discounts.sql`, `createOrder` automatically falls back to embedding promo metadata into `notes` (`[Promo: CODE -₱XX]`) and persists the exact discounted `total_centavos` without failing.
+
+- **Verification**:
+  - `npm test`: 43/43 foundation unit tests passing cleanly (8 tests in `tests/foundation/vouchers.test.ts`).
+  - `npm run typecheck`: 0 TypeScript errors across the entire codebase.
+  - `npm run check`: Combined typecheck and unit tests passing.
+  - `npm run check:client-bundle`: Android (995 modules) and iOS (938 modules) bundling verified.
+
+## Phase 4: Real Cellular Phone Dialing & Pre-Defined One-Tap Quick Messages (2026-10-11)
+
+- **Isomorphic Native Cellular Phone Calling Engine (`lib/phone.ts`)**:
+  - Implemented `callPhoneNumber(phone?: string | null, recipientName?: string)`:
+    - Launches real device dialer using `Linking.openURL('tel:${cleanNumber}')` on native iOS and Android.
+    - Handles web browser telephone URI delegation (`window.location.href = tel:...`).
+    - Eliminates mock `Alert.alert("Calling ...")` placeholders across all customer, courier, and merchant flows.
+    - Leverages riders' and customers' local unlimited call telco promos in Mati City, ensuring 100% free, latency-free voice communication without external VoIP SDK bloat (Twilio/Agora).
+  - Implemented `sanitizePhoneNumber(phone)` and `isValidPhoneNumber(phone)`:
+    - Normalizes Philippine mobile numbers (+63, 09xx, spaces, hyphens, and parentheses).
+    - Validates 7–15 digit lengths with user-friendly error alerts if unlisted or invalid.
+  - Comprehensive unit test coverage in `tests/foundation/phone.test.ts`.
+
+- **Pre-Defined One-Tap Quick Dispatch Messaging Service (`services/quick-dispatch.ts`)**:
+  - Zero typing required for couriers on motorcycles and waiting customers.
+  - Implemented curated, high-efficiency message pills:
+    - **Courier Status Updates (Bisaya)**:
+      - 🛵 "Padulong na ko sa inyong drop-off location"
+      - 📍 "Naa na ko sa gawas / gate"
+      - 🔔 "Palihug i-andam ang 4-digit PIN ug COD cash"
+      - 💵 "Naa koy sukli sa ₱500 / ₱1,000"
+      - ⏳ "Kadiyot lang, medyo trapik / naay gamayng aberya"
+    - **Customer Dispatch Instructions (Bisaya)**:
+      - 📍 "Naa na ko sa gawas / gate naghulat"
+      - 💵 "Naa kay sukli sa ₱1,000 / ₱500?"
+      - 🔔 "Palihug tawag o busina pag-abot"
+      - 🚪 "Palihug ibilin lang sa guard house / reception"
+      - 🏠 "Tapad ra sa tindahan / landmark ang balay"
+  - Real-time peer delivery via Supabase Realtime WebSocket broadcast (`order-dispatch-${orderId}`) with sub-50ms latency and 0 DB table lock overhead.
+  - Automatic fallback logging into `public.notifications` for in-app history.
+  - Realtime subscription helper `subscribeToQuickDispatch(orderId, onMessage)`.
+  - Comprehensive unit test coverage in `tests/foundation/quick-dispatch.test.ts`.
+
+- **Reusable Quick Dispatch UI Modal (`components/orders/QuickDispatchModal.tsx`)**:
+  - Displays one-tap quick message pill cards with instant send buttons.
+  - Direct cellular phone call action card with dialer button.
+  - Safety protocol banner reminding drivers and customers never to text while actively driving.
+
+- **Customer Tracking & Reservations Screen Integration (`app/(mobile)/(tabs)/orders.tsx`)**:
+  - Replaced mock alert with real device cellular call `callPhoneNumber(order.riderPhone, order.riderName)`.
+  - Added "Call Store" button beside restaurant title on active orders (`callPhoneNumber(order.storePhone, restaurantTitle)`).
+  - Added "Call Store" action on pending and confirmed table reservations (`callPhoneNumber(res.storePhone, restoName)`).
+  - Added `"Message"` button opening the `QuickDispatchModal`.
+  - Real-time listener banner displaying incoming rider updates (`🛵 Courier Update: ...`).
+
+- **Restaurant Discovery & Profile Sheet (`components/restaurant/RestaurantProfileSheet.tsx`)**:
+  - Wired Contact / Inquiries phone row with interactive `Pressable` and `"Tap to Call"` badge.
+  - Triggers `callPhoneNumber(restaurant.phone, restaurant.name)` for direct phone inquiries without booking.
+
+- **Rider Delivery Screen Integration (`app/(mobile)/rider/index.tsx`)**:
+  - Replaced mock alert with real device cellular call `callPhoneNumber(activeJob.customerPhone, activeJob.customerName)`.
+  - Added `storePhone` to `RiderJob` interface mapped from Supabase `LiveOrder`.
+  - Added "Call Store" action button in the route section under `1. Pickup at Restaurant`.
+  - Dynamically features "Call Store" button in the bottom communication bar when heading to store.
+  - Added prominent `"Quick Message 💬"` button on active delivery cards.
+  - Real-time listener banner displaying incoming customer dispatch instructions (`👤 Customer Message: ...`).
+
+- **Merchant Kitchen & Reservation Integration (`app/(mobile)/merchant/index.tsx`)**:
+  - Added call customer action to incoming unconfirmed orders (`isPlaced`) for instant recipe/availability clarification.
+  - Added call customer action on kitchen order preparation cards (`isPreparing`) with `callPhoneNumber(order.phone, order.customer)`.
+  - Added call courier action to `isReadyForPickup` and `isOutForDelivery` cards (`callPhoneNumber(order.riderPhone, order.riderName)`).
+  - Replaced mock alerts on confirmed table reservation cards with `callPhoneNumber(guestPhone, guestName)`.
+
+- **Reservations Service (`services/reservations.ts`)**:
+  - Added `storePhone?: string` to `CustomerReservation` interface.
+  - Included `address_text, public_phone` in `stores` select query and mapped `storePhone` in `fetchCustomerReservations`.
+
+- **Verification**:
+  - `npm test`: 41/41 foundation unit tests passing cleanly.
+  - `npm run typecheck`: 0 TypeScript errors across the entire codebase.
+  - `npm run check`: Combined typecheck and unit tests passing.
+  - `npm run check:client-bundle`: Android and iOS Metro bundling verified (1028 and 910 modules).
 
 ## Phase 3: Automated Rider COD Remittance & Settlement Log (2026-10-09)
 

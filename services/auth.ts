@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../types/database";
-import type { ApplicationRole, Profile } from "../types/auth";
+import type { ApplicationRole, AuthPortalScope, Profile } from "../types/auth";
 
 export interface AccountIdentity {
   id: string;
@@ -10,6 +10,62 @@ export interface AccountIdentity {
 }
 
 export class AccountError extends Error {}
+export class ScopeMismatchError extends AccountError {}
+
+export function hasAdminApplicationRole(roles: readonly string[]): boolean {
+  return roles.includes("admin") || roles.includes("superadmin") || roles.includes("staff");
+}
+
+export function isRoleAllowedForScope(
+  scope: AuthPortalScope,
+  rawRoles: readonly string[],
+): boolean {
+  const isAdmin = hasAdminApplicationRole(rawRoles);
+  const isMerchant = rawRoles.includes("merchant");
+  const isRider = rawRoles.includes("rider");
+
+  switch (scope) {
+    case "customer":
+      return rawRoles.includes("customer") && !isMerchant && !isRider && !isAdmin;
+    case "merchant":
+      return isMerchant && !isAdmin;
+    case "rider":
+      return isRider && !isAdmin;
+    case "admin":
+      return isAdmin;
+  }
+}
+
+export function isExclusiveCustomerIdentity(
+  identity: Pick<AccountIdentity, "roles"> | null | undefined,
+): boolean {
+  return !!identity && isRoleAllowedForScope("customer", identity.roles);
+}
+
+export function getScopeMismatchMessage(
+  scope: AuthPortalScope,
+  rawRoles: readonly string[],
+): string {
+  if (scope === "customer") {
+    if (hasAdminApplicationRole(rawRoles)) {
+      return "System Administrator accounts cannot sign in as customers. Use the System Admin portal.";
+    }
+    if (rawRoles.includes("merchant")) {
+      return "Store Merchant accounts cannot sign in as customers. Use Store Login or register a separate customer account.";
+    }
+    if (rawRoles.includes("rider")) {
+      return "Delivery Rider accounts cannot sign in as customers. Use Rider Login or register a separate customer account.";
+    }
+    return "This account cannot access customer features. Contact support.";
+  }
+  if (scope === "merchant") {
+    return "This account does not have an active store merchant role.";
+  }
+  if (scope === "rider") {
+    return "This account is not authorized as an active delivery rider in Mati City.";
+  }
+  return "Access Denied: This account does not have administrator permissions.";
+}
 
 export function authMessage(error: unknown): string {
   if (error instanceof AccountError) return error.message;
@@ -64,12 +120,49 @@ function strongPassword(value: string) {
   if (value.length < 12) throw new AccountError("Use a password with at least 12 characters.");
 }
 
-export function createAuthService(client: SupabaseClient<Database>) {
+export function createAuthService(
+  client: SupabaseClient<Database>,
+  scope: AuthPortalScope = "customer",
+) {
+  async function loadIdentityForToken(accessToken?: string): Promise<AccountIdentity> {
+    // Validate against Auth, then load authority from RLS-protected database objects.
+    const { data: { user }, error: userError } = accessToken
+      ? await client.auth.getUser(accessToken)
+      : await client.auth.getUser();
+    if (userError) throw userError;
+    if (!user || user.is_anonymous || !user.email_confirmed_at) {
+      throw new AccountError("Please confirm your email and sign in again.");
+    }
+    const [profileResult, rolesResult] = await Promise.all([
+      client.from("profiles").select("*").eq("id", user.id).single(),
+      client.rpc("get_my_application_roles"),
+    ]);
+    if (profileResult.error) throw profileResult.error;
+    if (rolesResult.error) throw rolesResult.error;
+    if (profileResult.data.account_status !== "active") {
+      throw new AccountError("This account cannot access signed-in features. Contact support.");
+    }
+    if (!isRoleAllowedForScope(scope, rolesResult.data)) {
+      throw new ScopeMismatchError(getScopeMismatchMessage(scope, rolesResult.data));
+    }
+    const roles = rolesResult.data.filter((role): role is ApplicationRole =>
+      role === "customer" || role === "merchant" || role === "rider" || role === "admin");
+    return { id: user.id, email: user.email ?? "", profile: profileResult.data, roles };
+  }
+
   return {
     async signIn(email: string, password: string) {
       if (!password) throw new AccountError("Enter your password.");
-      const { error } = await client.auth.signInWithPassword({ email: emailAddress(email), password });
+      const { data, error } = await client.auth.signInWithPassword({ email: emailAddress(email), password });
       if (error) throw error;
+      try {
+        await loadIdentityForToken(data.session?.access_token);
+      } catch (err) {
+        if (err instanceof ScopeMismatchError) {
+          await client.auth.signOut({ scope: "local" });
+        }
+        throw err;
+      }
     },
     async signUp(name: string, email: string, password: string, phone: string) {
       if (!name.trim() || name.trim().length > 120) throw new AccountError("Enter your name (up to 120 characters).");
@@ -116,7 +209,13 @@ export function createAuthService(client: SupabaseClient<Database>) {
       const { error } = await client.auth.signOut({ scope: "local" });
       if (error) throw error;
     },
-    async updateProfile(updates: { display_name?: string; contact_phone?: string }) {
+    async updateProfile(updates: {
+      display_name?: string;
+      contact_phone?: string;
+      default_barangay?: string;
+      delivery_address?: string;
+      personalization_consent?: boolean;
+    }) {
       if (updates.display_name !== undefined) {
         if (!updates.display_name.trim() || updates.display_name.trim().length > 120) {
           throw new AccountError("Enter your name (up to 120 characters).");
@@ -127,29 +226,23 @@ export function createAuthService(client: SupabaseClient<Database>) {
       }
       const { data: { user }, error: userError } = await client.auth.getUser();
       if (userError || !user) throw new AccountError("You must be signed in to update your profile.");
-      const payload: { display_name?: string; contact_phone?: string | null } = {};
+      const payload: {
+        display_name?: string;
+        contact_phone?: string | null;
+        default_barangay?: string | null;
+        delivery_address?: string | null;
+        personalization_consent?: boolean;
+      } = {};
       if (updates.display_name !== undefined) payload.display_name = updates.display_name.trim();
       if (updates.contact_phone !== undefined) payload.contact_phone = updates.contact_phone.trim() || null;
+      if (updates.default_barangay !== undefined) payload.default_barangay = updates.default_barangay.trim() || null;
+      if (updates.delivery_address !== undefined) payload.delivery_address = updates.delivery_address.trim() || null;
+      if (updates.personalization_consent !== undefined) payload.personalization_consent = updates.personalization_consent;
       const { error } = await client.from("profiles").update(payload).eq("id", user.id);
       if (error) throw error;
     },
     async loadIdentity(accessToken: string): Promise<AccountIdentity> {
-      // Validate against Auth, then load authority from RLS-protected database objects.
-      const { data: { user }, error: userError } = await client.auth.getUser(accessToken);
-      if (userError) throw userError;
-      if (!user || user.is_anonymous || !user.email_confirmed_at) throw new AccountError("Please confirm your email and sign in again.");
-      const [profileResult, rolesResult] = await Promise.all([
-        client.from("profiles").select("*").eq("id", user.id).single(),
-        client.rpc("get_my_application_roles"),
-      ]);
-      if (profileResult.error) throw profileResult.error;
-      if (rolesResult.error) throw rolesResult.error;
-      if (profileResult.data.account_status !== "active" || !rolesResult.data.includes("customer")) {
-        throw new AccountError("This account cannot access signed-in features. Contact support.");
-      }
-      const roles = rolesResult.data.filter((role): role is ApplicationRole =>
-        role === "customer" || role === "merchant" || role === "rider" || role === "admin");
-      return { id: user.id, email: user.email ?? "", profile: profileResult.data, roles };
+      return loadIdentityForToken(accessToken);
     },
   };
 }

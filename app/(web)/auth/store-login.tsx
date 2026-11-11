@@ -1,153 +1,288 @@
-import React, { useState } from "react";
-import { View, Text, TextInput, Pressable, ActivityIndicator } from "react-native";
-import { Link, useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { Link, Redirect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSession } from "../../../context/SessionContext";
 import { authMessage } from "../../../services/auth";
 import { getSupabaseClient } from "../../../lib/supabase/client";
+import { fetchMerchantMembershipStatus } from "../../../services/merchant-registration";
+
+const merchantBackdrop = require("../../../assets/merchant-bg.jpg");
+const mffLogo = require("../../../assets/logo.jpg");
 
 export default function StoreLogin() {
   const router = useRouter();
-  const { signIn, logoutToGuest } = useSession();
+  const { status, identity, signIn, logoutToGuest } = useSession("merchant");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [redirectHref, setRedirectHref] = useState<
+    "/(web)/dashboard" | "/(web)/auth/verification" | null
+  >(null);
+
+  useEffect(() => {
+    let active = true;
+    if (status !== "authenticated" || !identity?.roles.includes("merchant")) {
+      setRedirectHref(null);
+      return;
+    }
+
+    fetchMerchantMembershipStatus(identity.id)
+      .then((membership) => {
+        if (!active) return;
+        if (!membership.hasMembership) {
+          setRedirectHref(null);
+          return;
+        }
+        if (membership.approvalStatus === "pending") {
+          setRedirectHref("/(web)/auth/verification");
+        } else if (membership.approvalStatus === "rejected") {
+          void logoutToGuest();
+          setErrorMessage("Your store application was declined. Contact support for assistance.");
+          setRedirectHref(null);
+        } else {
+          setRedirectHref("/(web)/dashboard");
+        }
+      })
+      .catch(() => {
+        if (active) setRedirectHref(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [status, identity?.id, identity?.roles, logoutToGuest]);
+
+  if (redirectHref) {
+    return <Redirect href={redirectHref} />;
+  }
 
   const handleSignIn = async () => {
     setErrorMessage(null);
     if (!email.trim() || !password.trim()) {
-      setErrorMessage("Enter your store merchant email and password.");
+      setErrorMessage("Enter your merchant email and password.");
       return;
     }
+
     setLoading(true);
     try {
       await signIn(email.trim(), password);
-      const client = getSupabaseClient();
-      const { data: { user } } = await client.auth.getUser();
+      const client = getSupabaseClient("merchant");
+      const {
+        data: { user },
+      } = await client.auth.getUser();
       if (!user) throw new Error("Authentication failed.");
 
-      const { data: memberships, error: memError } = await client
-        .from("store_memberships")
-        .select("role, store_id, is_active")
-        .eq("user_id", user.id)
-        .eq("is_active", true);
-
-      if (memError || !memberships || memberships.length === 0) {
+      const membership = await fetchMerchantMembershipStatus(user.id);
+      if (!membership.hasMembership) {
         await logoutToGuest();
         setErrorMessage("This account does not have an active store merchant role.");
         return;
       }
 
+      if (membership.approvalStatus === "pending") {
+        router.replace("/(web)/auth/verification");
+        return;
+      }
+
+      if (membership.approvalStatus === "rejected") {
+        await logoutToGuest();
+        setErrorMessage("Your store application was declined. Contact support for assistance.");
+        return;
+      }
+
       router.replace("/(web)/dashboard");
-    } catch (err: any) {
+    } catch (err: unknown) {
       const msg = authMessage(err);
-      setErrorMessage(err.message && !err.code ? err.message : msg);
+      const errMessage =
+        typeof err === "object" &&
+        err !== null &&
+        "message" in err &&
+        typeof (err as { message: unknown }).message === "string"
+          ? (err as { message: string }).message
+          : "";
+      const hasCode = typeof err === "object" && err !== null && "code" in err;
+      setErrorMessage(errMessage && !hasCode ? errMessage : msg);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <View className="flex-1 bg-[#F8FAFC] items-center justify-center p-6">
-      <View className="w-full max-w-md bg-white p-8 md:p-10 rounded-3xl shadow-xl border border-gray-200/80">
-        {/* Back Link */}
-        <Link href="/portal" asChild>
-          <Pressable className="flex-row items-center gap-1.5 mb-6 self-start opacity-70 hover:opacity-100 transition-opacity">
-            <Ionicons name="arrow-back" size={16} color="#4B5563" />
-            <Text className="text-xs font-bold text-gray-600">Back to Portal</Text>
-          </Pressable>
-        </Link>
+    <View className="flex-1 bg-[#F8FAFC]">
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
+        <View className="flex-1 w-full max-w-[1160px] self-center px-5 sm:px-6 lg:px-8 py-5 md:py-6 flex-col md:flex-row gap-6 lg:gap-10 items-stretch">
+          {/* Left Column: Top-Left Back + Compact Light Login Card */}
+          <View className="w-full md:w-[320px] lg:w-[350px] shrink-0 flex-col justify-between">
+            {/* Top-Left Back to Home + Brand Mark */}
+            <View className="flex-row items-center justify-between gap-2">
+              <Link href="/" asChild>
+                <Pressable className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-gray-200 hover:bg-gray-100 transition-colors shadow-2xs">
+                  <Ionicons name="arrow-back" size={12} color="#374151" />
+                  <Text className="text-[11px] font-semibold text-gray-700">Back to Home</Text>
+                </Pressable>
+              </Link>
 
-        <View className="items-center mb-8">
-          <View className="w-16 h-16 bg-[#EA5410]/10 rounded-2xl items-center justify-center mb-4 border border-[#EA5410]/20">
-            <Text className="text-3xl">🏪</Text>
-          </View>
-          <Text className="text-2xl font-black text-gray-900 tracking-tight">Store Merchant Login</Text>
-          <Text className="text-gray-500 text-center text-xs mt-2 leading-relaxed">
-            Manage your Mati City Karenderia or Restaurant menu, live availability, and table bookings.
-          </Text>
-        </View>
-
-        {errorMessage ? (
-          <View className="bg-red-50 border border-red-200 rounded-2xl p-3.5 mb-5 flex-row items-center gap-2">
-            <Ionicons name="alert-circle" size={18} color="#DC2626" />
-            <Text className="text-red-700 text-xs font-semibold flex-1">{errorMessage}</Text>
-          </View>
-        ) : null}
-
-        <View className="gap-4">
-          <View>
-            <Text className="text-xs font-bold text-gray-700 mb-1.5 ml-1">Store Admin Email</Text>
-            <View className="relative flex-row items-center">
-              <View className="absolute left-3.5 z-10">
-                <Ionicons name="mail-outline" size={18} color="#9CA3AF" />
+              <View className="flex-row items-center gap-2">
+                <View className="w-7 h-7 rounded-lg bg-white border border-gray-200 p-0.5 items-center justify-center overflow-hidden shadow-2xs">
+                  <Image
+                    source={mffLogo}
+                    style={{ width: 22, height: 22, borderRadius: 4 }}
+                    resizeMode="contain"
+                    accessibilityLabel="Mati FoodFinder logo"
+                  />
+                </View>
+                <Text className="text-gray-900 text-xs font-bold tracking-tight">
+                  Mati FoodFinder
+                </Text>
               </View>
-              <TextInput
-                placeholder="e.g. merchant.letty@mati-foodfinder.com"
-                value={email}
-                onChangeText={setEmail}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-3 text-sm text-gray-900 focus:border-[#EA5410] focus:bg-white transition-colors"
-                placeholderTextColor="#9ca3af"
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
             </View>
-          </View>
 
-          <View>
-            <Text className="text-xs font-bold text-gray-700 mb-1.5 ml-1">Password</Text>
-            <View className="relative flex-row items-center">
-              <View className="absolute left-3.5 z-10">
-                <Ionicons name="lock-closed-outline" size={18} color="#9CA3AF" />
+            {/* Centered Auth Section */}
+            <View className="flex-1 justify-center items-center py-6">
+              <View className="w-full max-w-[320px]">
+                <View className="mb-5 items-center">
+                  <Text className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight text-center">
+                    Merchant Portal
+                  </Text>
+                  <Text className="text-gray-500 text-xs mt-1 text-center leading-relaxed">
+                    Sign in to manage your kitchen menu, orders, and reservations.
+                  </Text>
+                </View>
+
+                <View className="bg-white border border-gray-200/90 rounded-2xl p-5 shadow-sm">
+                  {errorMessage ? (
+                    <View
+                      accessibilityRole="alert"
+                      className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 flex-row items-center gap-2"
+                    >
+                      <Ionicons name="alert-circle" size={15} color="#DC2626" />
+                      <Text className="text-red-700 text-[11px] font-semibold flex-1 leading-snug">
+                        {errorMessage}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  <View className="gap-3.5">
+                    <View>
+                      <Text className="text-[11px] font-semibold text-gray-700 mb-1 ml-0.5">
+                        Email
+                      </Text>
+                      <View className="relative flex-row items-center">
+                        <View className="absolute left-3 z-10">
+                          <Ionicons name="mail-outline" size={15} color="#9CA3AF" />
+                        </View>
+                        <TextInput
+                          value={email}
+                          onChangeText={setEmail}
+                          placeholder="merchant@example.com"
+                          accessibilityLabel="Store merchant email"
+                          className="w-full bg-gray-50 border border-gray-200 rounded-lg pl-9 pr-3 py-2.5 text-xs text-gray-900 focus:border-[#EA5410] focus:bg-white"
+                          placeholderTextColor="#9CA3AF"
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                          autoComplete="email"
+                        />
+                      </View>
+                    </View>
+
+                    <View>
+                      <Text className="text-[11px] font-semibold text-gray-700 mb-1 ml-0.5">
+                        Password
+                      </Text>
+                      <View className="relative flex-row items-center">
+                        <View className="absolute left-3 z-10">
+                          <Ionicons name="lock-closed-outline" size={15} color="#9CA3AF" />
+                        </View>
+                        <TextInput
+                          value={password}
+                          onChangeText={setPassword}
+                          placeholder="••••••••••••"
+                          accessibilityLabel="Store merchant password"
+                          secureTextEntry={!showPassword}
+                          onSubmitEditing={handleSignIn}
+                          className="w-full bg-gray-50 border border-gray-200 rounded-lg pl-9 pr-10 py-2.5 text-xs text-gray-900 focus:border-[#EA5410] focus:bg-white"
+                          placeholderTextColor="#9CA3AF"
+                          autoComplete="password"
+                        />
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                          onPress={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 z-10"
+                        >
+                          <Ionicons
+                            name={showPassword ? "eye-off-outline" : "eye-outline"}
+                            size={15}
+                            color="#6B7280"
+                          />
+                        </Pressable>
+                      </View>
+                    </View>
+
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Log in to Merchant Portal"
+                      onPress={handleSignIn}
+                      disabled={loading}
+                      className="mt-1.5 bg-[#EA5410] rounded-lg py-2.5 items-center shadow-sm hover:bg-[#D04508] active:opacity-90 transition-colors"
+                    >
+                      {loading ? (
+                        <ActivityIndicator size="small" color="white" />
+                      ) : (
+                        <Text className="text-white font-bold text-xs tracking-wide">
+                          Log In
+                        </Text>
+                      )}
+                    </Pressable>
+                  </View>
+
+                  <View className="flex-row flex-wrap justify-center mt-4 pt-3.5 border-t border-gray-100 gap-1">
+                    <Text className="text-[11px] text-gray-500">New partner store?</Text>
+                    <Link href="/(web)/auth/store-register" asChild>
+                      <Pressable>
+                        <Text className="text-[11px] text-[#EA5410] font-semibold hover:underline">
+                          Register store
+                        </Text>
+                      </Pressable>
+                    </Link>
+                  </View>
+                </View>
               </View>
-              <TextInput
-                placeholder="••••••••••••"
-                value={password}
-                onChangeText={setPassword}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-11 py-3 text-sm text-gray-900 focus:border-[#EA5410] focus:bg-white transition-colors"
-                placeholderTextColor="#9ca3af"
-                secureTextEntry={!showPassword}
-              />
-              <Pressable
-                onPress={() => setShowPassword(!showPassword)}
-                className="absolute right-3.5 z-10"
-              >
-                <Ionicons
-                  name={showPassword ? "eye-off-outline" : "eye-outline"}
-                  size={18}
-                  color="#6B7280"
-                />
-              </Pressable>
             </View>
+
+            <View className="h-3 hidden md:flex" />
           </View>
 
-          <Pressable
-            onPress={handleSignIn}
-            disabled={loading}
-            className="w-full bg-[#EA5410] py-4 rounded-2xl items-center shadow-sm hover:bg-[#D04508] transition-colors mt-2"
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text className="text-white font-extrabold text-sm tracking-wide">
-                Sign In to Store Dashboard
-              </Text>
-            )}
-          </Pressable>
+          {/* Right Column: Lively Mati Karenderia Showcase */}
+          <View className="flex-1 min-h-[340px] md:min-h-[460px] relative rounded-2xl overflow-hidden border border-gray-200/80 bg-orange-50 shadow-md">
+            <Image
+              source={merchantBackdrop}
+              style={{
+                position: "absolute",
+                top: 0,
+                right: 0,
+                bottom: 0,
+                left: 0,
+                width: "100%",
+                height: "100%",
+              }}
+              resizeMode="cover"
+              accessibilityLabel="Lively Mati City karenderia kitchen and dining showcase"
+            />
+          </View>
         </View>
-
-
-        <View className="flex-row justify-center mt-6 gap-1">
-          <Text className="text-xs text-gray-500">Need to partner your restaurant?</Text>
-          <Link href="/(web)/auth/store-register" asChild>
-            <Pressable>
-              <Text className="text-xs text-[#EA5410] font-bold hover:underline">Register store here</Text>
-            </Pressable>
-          </Link>
-        </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }

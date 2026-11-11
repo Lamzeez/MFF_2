@@ -26,7 +26,11 @@ export default function RiderLoginScreen() {
   }
 
   const router = useRouter();
-  const { signIn, logoutToGuest } = useSession();
+  const { status, identity, signIn, logoutToGuest } = useSession("rider");
+
+  if (status === "authenticated" && identity?.roles.includes("rider")) {
+    return <Redirect href="/(mobile)/rider" />;
+  }
 
   const [riderEmail, setRiderEmail] = useState("");
   const [riderPassword, setRiderPassword] = useState("");
@@ -42,7 +46,7 @@ export default function RiderLoginScreen() {
     setLoading(true);
     try {
       await signIn(riderEmail.trim(), riderPassword);
-      const client = getSupabaseClient();
+      const client = getSupabaseClient("rider");
       const { data: roles, error: rolesError } = await client.rpc("get_my_application_roles");
       if (rolesError || !roles || !roles.includes("rider")) {
         await logoutToGuest();
@@ -63,20 +67,22 @@ export default function RiderLoginScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-white md:bg-[#F8FAFC]">
       {/* HEADER */}
-      <View className="flex-row items-center justify-between px-5 py-4 border-b border-gray-100">
-        <Pressable
-          onPress={() => router.back()}
-          className="w-10 h-10 rounded-full bg-gray-100 items-center justify-center"
-        >
-          <Ionicons name="arrow-back" size={20} color="#1f2937" />
-        </Pressable>
-        <View className="items-center">
-          <Text className="text-base font-black text-gray-900">Delivery Rider Login</Text>
-          <Text className="text-xs text-sky-700 font-bold">Mati City Express Dispatch</Text>
+      <View className="px-4 sm:px-5 py-4 bg-white border-b border-gray-100">
+        <View className="w-full max-w-lg self-center flex-row items-center justify-between">
+          <Pressable
+            onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
+            className="w-10 h-10 rounded-full bg-gray-100 items-center justify-center"
+          >
+            <Ionicons name="arrow-back" size={20} color="#1f2937" />
+          </Pressable>
+          <View className="items-center">
+            <Text className="text-base font-black text-gray-900">Delivery Rider Login</Text>
+            <Text className="text-xs text-sky-700 font-bold">Mati City Express Dispatch</Text>
+          </View>
+          <View className="w-10" />
         </View>
-        <View className="w-10" />
       </View>
 
       <KeyboardAvoidingView
@@ -84,11 +90,12 @@ export default function RiderLoginScreen() {
         className="flex-1"
       >
         <ScrollView
-          className="flex-1 px-6 pt-6"
+          className="flex-1 px-4 sm:px-6 pt-6"
           contentContainerStyle={{ paddingBottom: 40 }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          <View className="w-full max-w-md self-center md:bg-white md:border md:border-gray-200/80 md:rounded-3xl md:p-8 md:my-4 md:shadow-sm">
           <View className="items-center mb-6">
             <View className="w-16 h-16 bg-sky-100 rounded-3xl items-center justify-center mb-3">
               <Text className="text-3xl">🛵</Text>
@@ -163,6 +170,7 @@ export default function RiderLoginScreen() {
               New rider in Mati? Apply to deliver here →
             </Text>
           </Pressable>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

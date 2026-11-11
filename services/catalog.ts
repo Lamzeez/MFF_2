@@ -1,9 +1,12 @@
 import { getSupabaseClient } from "../lib/supabase/client";
+import type { AuthPortalScope } from "../types/auth";
 import type { FoodItem, RestaurantProfile, Store, MenuItem } from "../types/restaurant";
 import { parsePostGisPoint, MATI_CITY_HALL_COORDS } from "../lib/geo-serviceability";
+import { RatingSummary, fetchStoreRatingSummary } from "./reviews";
 
 export const CATEGORIES = [
   "All",
+  "Meals",
   "Karenderias",
   "Seafood",
   "BBQ & Grill",
@@ -14,12 +17,16 @@ export const CATEGORIES = [
 export interface LiveStoreProfile extends RestaurantProfile {
   id: string;
   slug: string;
+  categories: string[];
   barangay: string;
   approvalStatus: string;
   deliveryEnabled: boolean;
   latitude: number;
   longitude: number;
   deliveryRadiusKm: number;
+  isOpen: boolean;
+  cover_image_url?: string;
+  operating_hours?: string;
 }
 
 const STORE_IMAGES: Record<string, string> = {
@@ -47,31 +54,45 @@ function getDishImage(name: string, category: string): string {
 }
 
 /** Map database Store row into consumer presentation model */
-export function mapStoreToProfile(store: Store): LiveStoreProfile {
-  let category = "Karenderias";
+export function mapStoreToProfile(
+  store: Store,
+  ratingSummary?: RatingSummary
+): LiveStoreProfile {
+  const explicitCategories = Array.isArray(store.categories)
+    ? store.categories.filter((c) => typeof c === "string" && c.trim().length > 0)
+    : [];
+
+  let fallbackCategory = "Karenderias";
   const desc = (store.description + " " + store.name).toLowerCase();
   if (desc.includes("seafood") || desc.includes("tuna") || desc.includes("fish")) {
-    category = "Seafood";
+    fallbackCategory = "Seafood";
   } else if (desc.includes("grill") || desc.includes("bbq") || desc.includes("skewer")) {
-    category = "BBQ & Grill";
+    fallbackCategory = "BBQ & Grill";
   } else if (desc.includes("beach") || desc.includes("shake") || desc.includes("smoothie")) {
-    category = "Merienda";
+    fallbackCategory = "Merienda";
   }
+
+  const categories = explicitCategories.length > 0 ? explicitCategories : [fallbackCategory];
+  const primaryCategory = categories[0];
+  const category = categories.join(" · ");
 
   let emoji = "🍲";
   let bgColor = "#FED7AA";
-  if (category === "Seafood") {
+  if (primaryCategory === "Seafood") {
     emoji = "🐟";
     bgColor = "#BAE6FD";
-  } else if (category === "BBQ & Grill") {
+  } else if (primaryCategory === "BBQ & Grill") {
     emoji = "🍢";
     bgColor = "#FECDD3";
-  } else if (category === "Merienda") {
+  } else if (primaryCategory === "Merienda") {
     emoji = "🏖️";
     bgColor = "#DDD6FE";
+  } else if (primaryCategory === "Beverages") {
+    emoji = "🥤";
+    bgColor = "#CFFAFE";
   }
 
-  const imageUrl = STORE_IMAGES[store.slug] || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop&q=80";
+  const imageUrl = store.cover_image_url || STORE_IMAGES[store.slug] || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop&q=80";
 
   const parsedCoords = parsePostGisPoint(store.location);
   const latitude = parsedCoords?.latitude ?? MATI_CITY_HALL_COORDS.latitude;
@@ -80,19 +101,32 @@ export function mapStoreToProfile(store: Store): LiveStoreProfile {
     (store.name || "").toLowerCase().includes("dahican");
   const deliveryRadiusKm = isCoastal ? 12.0 : 6.0;
 
+  let ratingStr = "4.8";
+  let reviewsCount = 120;
+  if (ratingSummary) {
+    if (ratingSummary.totalReviews > 0) {
+      ratingStr = ratingSummary.averageRating.toFixed(1);
+      reviewsCount = ratingSummary.totalReviews;
+    } else {
+      ratingStr = "5.0";
+      reviewsCount = 0;
+    }
+  }
+
   return {
     id: store.id,
     name: store.name,
     slug: store.slug,
     category,
-    rating: "4.8",
+    categories,
+    rating: ratingStr,
     address: store.address_text,
     phone: store.public_phone || "Mati City",
-    hours: "7:30 AM - 9:00 PM Daily",
+    hours: store.operating_hours || "7:30 AM - 9:00 PM Daily",
     availableTables: 4,
     emoji,
     description: store.description,
-    reviews: 120,
+    reviews: reviewsCount,
     deliveryFee: store.delivery_enabled ? 35 : 0,
     deliveryTime: "20-30 min",
     promo: store.delivery_enabled ? "Fast Mati delivery" : undefined,
@@ -104,6 +138,9 @@ export function mapStoreToProfile(store: Store): LiveStoreProfile {
     latitude,
     longitude,
     deliveryRadiusKm,
+    isOpen: store.is_open ?? true,
+    cover_image_url: store.cover_image_url || undefined,
+    operating_hours: store.operating_hours || undefined,
   };
 }
 
@@ -158,15 +195,43 @@ export function mapMenuItemToFoodItem(
 export async function fetchLiveStores(): Promise<LiveStoreProfile[]> {
   try {
     const client = getSupabaseClient();
-    const { data, error } = await client
+    const { data: stores, error } = await client
       .from("stores")
       .select("*")
       .eq("approval_status", "approved")
       .is("archived_at", null)
       .order("name");
 
-    if (error || !data) return [];
-    return data.map(mapStoreToProfile);
+    if (error || !stores) return [];
+
+    // Query aggregate ratings from order_reviews
+    const ratingMap = new Map<string, { count: number; sum: number }>();
+    try {
+      const { data: reviewsData } = await client
+        .from("order_reviews")
+        .select("store_id, food_rating");
+
+      if (reviewsData && Array.isArray(reviewsData)) {
+        for (const rev of reviewsData) {
+          if (rev.store_id && typeof rev.food_rating === "number") {
+            const curr = ratingMap.get(rev.store_id) || { count: 0, sum: 0 };
+            curr.count += 1;
+            curr.sum += rev.food_rating;
+            ratingMap.set(rev.store_id, curr);
+          }
+        }
+      }
+    } catch (revErr) {
+      console.warn("[services/catalog] order_reviews lookup notice:", revErr);
+    }
+
+    return stores.map((store) => {
+      const stats = ratingMap.get(store.id);
+      const summary: RatingSummary | undefined = stats && stats.count > 0
+        ? { averageRating: Number((stats.sum / stats.count).toFixed(1)), totalReviews: stats.count }
+        : undefined;
+      return mapStoreToProfile(store, summary);
+    });
   } catch {
     return [];
   }
@@ -192,9 +257,12 @@ export async function fetchLiveMenuItems(): Promise<FoodItem[]> {
   }
 }
 
-export async function fetchStoreMenuItems(storeId: string): Promise<FoodItem[]> {
+export async function fetchStoreMenuItems(
+  storeId: string,
+  scope: AuthPortalScope = "merchant",
+): Promise<FoodItem[]> {
   try {
-    const client = getSupabaseClient();
+    const client = getSupabaseClient(scope);
     const { data, error } = await client
       .from("menu_items")
       .select("*, stores(name)")
@@ -212,9 +280,12 @@ export async function fetchStoreMenuItems(storeId: string): Promise<FoodItem[]> 
   }
 }
 
-export async function fetchStoreById(storeId: string): Promise<LiveStoreProfile | null> {
+export async function fetchStoreById(
+  storeId: string,
+  scope: AuthPortalScope = "merchant",
+): Promise<LiveStoreProfile | null> {
   try {
-    const client = getSupabaseClient();
+    const client = getSupabaseClient(scope);
     const { data, error } = await client
       .from("stores")
       .select("*")
@@ -222,7 +293,13 @@ export async function fetchStoreById(storeId: string): Promise<LiveStoreProfile 
       .single();
 
     if (error || !data) return null;
-    return mapStoreToProfile(data);
+
+    let summary: RatingSummary | undefined;
+    try {
+      summary = await fetchStoreRatingSummary(storeId);
+    } catch {}
+
+    return mapStoreToProfile(data, summary);
   } catch {
     return null;
   }
@@ -233,7 +310,7 @@ export async function updateMenuItemAvailability(
   isAvailable: boolean
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const client = getSupabaseClient();
+    const client = getSupabaseClient("merchant");
     const { error } = await client
       .from("menu_items")
       .update({ is_available: isAvailable })
@@ -253,10 +330,12 @@ export async function updateStoreProfile(
     description?: string;
     public_phone?: string;
     address_text?: string;
+    operating_hours?: string;
+    cover_image_url?: string;
   }
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const client = getSupabaseClient();
+    const client = getSupabaseClient("merchant");
     const { error } = await client
       .from("stores")
       .update(updates)
@@ -272,7 +351,7 @@ export async function updateStoreProfile(
 export async function fetchUserStoreId(userId?: string): Promise<string | null> {
   if (!userId) return null;
   try {
-    const client = getSupabaseClient();
+    const client = getSupabaseClient("merchant");
     const { data } = await client
       .from("store_memberships")
       .select("store_id")
@@ -296,7 +375,7 @@ export async function createStoreMenuItem(
   }
 ): Promise<{ success: boolean; data?: FoodItem; error?: string }> {
   try {
-    const client = getSupabaseClient();
+    const client = getSupabaseClient("merchant");
     const priceCentavos = Math.round(item.price * 100);
     const { data, error } = await client
       .from("menu_items")
@@ -323,7 +402,7 @@ export function subscribeToStoreMenuItems(
   storeId: string,
   onChange: () => void
 ): () => void {
-  const client = getSupabaseClient();
+  const client = getSupabaseClient("merchant");
   const channel = client
     .channel(`store_menu_items_${storeId}_${Date.now()}`)
     .on(
@@ -343,6 +422,34 @@ export function subscribeToStoreMenuItems(
   return () => {
     client.removeChannel(channel);
   };
+}
+
+/**
+ * Toggles whether the store is open for kitchen orders in Mati City.
+ * Persists to Supabase stores.is_open with RPC fallback.
+ */
+export async function updateStoreOpenStatus(
+  storeId: string,
+  isOpen: boolean
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const client = getSupabaseClient("merchant");
+    const { error } = await client
+      .from("stores")
+      .update({ is_open: isOpen })
+      .eq("id", storeId);
+
+    if (error) {
+      const { error: rpcError } = await client.rpc("set_store_open_status", {
+        p_store_id: storeId,
+        p_is_open: isOpen,
+      });
+      if (rpcError) return { success: false, error: rpcError.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
 }
 
 

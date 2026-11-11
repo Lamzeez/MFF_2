@@ -2,6 +2,7 @@ import { RestaurantProfile } from "../types/restaurant";
 
 export const CATEGORIES = [
   "All",
+  "Meals",
   "Karenderias",
   "Seafood",
   "BBQ & Grill",

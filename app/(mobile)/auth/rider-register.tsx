@@ -26,7 +26,7 @@ export default function RiderRegisterScreen() {
   }
 
   const router = useRouter();
-  const { signUp } = useSession();
+  const { signUp } = useSession("rider");
 
   const [riderName, setRiderName] = useState("");
   const [riderEmail, setRiderEmail] = useState("");
@@ -77,20 +77,22 @@ export default function RiderRegisterScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-white md:bg-[#F8FAFC]">
       {/* HEADER */}
-      <View className="flex-row items-center justify-between px-5 py-4 border-b border-gray-100">
-        <Pressable
-          onPress={() => router.back()}
-          className="w-10 h-10 rounded-full bg-gray-100 items-center justify-center"
-        >
-          <Ionicons name="arrow-back" size={20} color="#1f2937" />
-        </Pressable>
-        <View className="items-center">
-          <Text className="text-base font-black text-gray-900">Apply as Delivery Rider</Text>
-          <Text className="text-xs text-sky-700 font-bold">Earn ₱65 - ₱120 per trip</Text>
+      <View className="px-4 sm:px-5 py-4 bg-white border-b border-gray-100">
+        <View className="w-full max-w-xl self-center flex-row items-center justify-between">
+          <Pressable
+            onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
+            className="w-10 h-10 rounded-full bg-gray-100 items-center justify-center"
+          >
+            <Ionicons name="arrow-back" size={20} color="#1f2937" />
+          </Pressable>
+          <View className="items-center">
+            <Text className="text-base font-black text-gray-900">Apply as Delivery Rider</Text>
+            <Text className="text-xs text-sky-700 font-bold">Earn ₱65 - ₱120 per trip</Text>
+          </View>
+          <View className="w-10" />
         </View>
-        <View className="w-10" />
       </View>
 
       <KeyboardAvoidingView
@@ -98,11 +100,12 @@ export default function RiderRegisterScreen() {
         className="flex-1"
       >
         <ScrollView
-          className="flex-1 px-5 pt-4"
+          className="flex-1 px-4 sm:px-5 pt-4"
           contentContainerStyle={{ paddingBottom: 40 }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          <View className="w-full max-w-lg self-center md:bg-white md:border md:border-gray-200/80 md:rounded-3xl md:p-8 md:my-4 md:shadow-sm">
           <Text className="text-xs font-bold text-gray-700 mb-1.5">Full Legal Name *</Text>
           <TextInput
             placeholder="e.g. Roberto D. Tan"
@@ -234,6 +237,7 @@ export default function RiderRegisterScreen() {
               <Text className="text-white font-bold text-sm">Submit Rider Application</Text>
             )}
           </Pressable>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

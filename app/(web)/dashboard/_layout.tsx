@@ -1,13 +1,61 @@
-import { Slot, Link, usePathname, useRouter } from "expo-router";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import { useEffect, useState } from "react";
+import { Slot, Link, Redirect, usePathname, useRouter } from "expo-router";
+import { ActivityIndicator, View, Text, Pressable, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useSession } from "../../../context/SessionContext";
+import { fetchMerchantMembershipStatus } from "../../../services/merchant-registration";
 
 export default function StoreAdminLayout() {
   const pathname = usePathname();
   const router = useRouter();
-  const { identity, logoutToGuest } = useSession();
+  const { status, identity, logoutToGuest } = useSession("merchant");
+  const [approvalGate, setApprovalGate] = useState<"checking" | "approved" | "pending" | "rejected">(
+    "checking"
+  );
+
+  useEffect(() => {
+    let active = true;
+    if (status !== "authenticated" || !identity || !identity.roles.includes("merchant")) {
+      return;
+    }
+
+    setApprovalGate("checking");
+    fetchMerchantMembershipStatus(identity.id)
+      .then((membership) => {
+        if (!active) return;
+        if (!membership.hasMembership || membership.approvalStatus === "rejected") {
+          setApprovalGate("rejected");
+        } else if (membership.approvalStatus === "pending") {
+          setApprovalGate("pending");
+        } else {
+          setApprovalGate("approved");
+        }
+      })
+      .catch(() => {
+        if (active) setApprovalGate("approved");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [status, identity?.id, identity?.roles]);
+
+  if (status === "loading" || (status === "authenticated" && identity?.roles.includes("merchant") && approvalGate === "checking")) {
+    return (
+      <View className="flex-1 bg-[#F8FAFC] items-center justify-center">
+        <ActivityIndicator size="large" color="#EA5410" />
+      </View>
+    );
+  }
+
+  if (status !== "authenticated" || !identity || !identity.roles.includes("merchant") || approvalGate === "rejected") {
+    return <Redirect href="/(web)/auth/store-login" />;
+  }
+
+  if (approvalGate === "pending") {
+    return <Redirect href="/(web)/auth/verification" />;
+  }
 
   const navItems = [
     { label: "Overview", href: "/(web)/dashboard", icon: "grid-outline" as const },
@@ -18,13 +66,13 @@ export default function StoreAdminLayout() {
 
   const handleSignOut = async () => {
     await logoutToGuest();
-    router.replace("/portal");
+    router.replace("/");
   };
 
   return (
     <View className="flex-1 flex-row bg-[#F8FAFC] h-screen w-full">
       {/* Sidebar Navigation (Desktop) */}
-      <View className="w-72 bg-white border-r border-gray-200/90 h-full flex-col justify-between hidden md:flex shadow-xs">
+      <View className="w-64 lg:w-72 bg-white border-r border-gray-200/90 h-full flex-col justify-between hidden md:flex shadow-xs">
         <View>
           {/* Logo & Store Branding */}
           <View className="p-6 border-b border-gray-100 flex-row items-center gap-3">
@@ -98,24 +146,61 @@ export default function StoreAdminLayout() {
             className="px-4 py-2.5 rounded-xl hover:bg-red-50 flex-row items-center justify-center gap-2 border border-transparent hover:border-red-100 transition-colors"
           >
             <Ionicons name="log-out-outline" size={16} color="#DC2626" />
-            <Text className="text-red-600 font-bold text-xs">Sign Out to Portal</Text>
+            <Text className="text-red-600 font-bold text-xs">Sign Out</Text>
           </Pressable>
         </View>
       </View>
 
       {/* Main Content Area */}
-      <View className="flex-1 h-screen overflow-hidden flex-col">
+      <View className="flex-1 min-w-0 h-screen overflow-hidden flex-col">
         {/* Mobile Header (Only visible on small screens) */}
-        <View className="md:hidden bg-white px-5 py-3.5 flex-row justify-between items-center z-20 border-b border-gray-200 shadow-xs">
-          <View className="flex-row items-center gap-2">
-            <View className="w-8 h-8 rounded-lg bg-[#EA5410]/10 items-center justify-center">
-              <Ionicons name="storefront" size={16} color="#EA5410" />
+        <View className="md:hidden bg-white z-20 border-b border-gray-200 shadow-xs">
+          <View className="px-4 py-3 flex-row justify-between items-center">
+            <View className="flex-row items-center gap-2">
+              <View className="w-8 h-8 rounded-lg bg-[#EA5410]/10 items-center justify-center">
+                <Ionicons name="storefront" size={16} color="#EA5410" />
+              </View>
+              <Text className="text-gray-900 font-black text-base">MFF Merchant</Text>
             </View>
-            <Text className="text-gray-900 font-black text-base">MFF Merchant</Text>
+            <Pressable onPress={handleSignOut} className="px-3 py-1.5 bg-gray-100 rounded-lg active:bg-gray-200">
+              <Text className="text-gray-600 text-xs font-bold">Sign Out</Text>
+            </Pressable>
           </View>
-          <Pressable onPress={handleSignOut} className="px-3 py-1.5 bg-gray-100 rounded-lg">
-            <Text className="text-gray-600 text-xs font-bold">Sign Out</Text>
-          </Pressable>
+
+          {/* Mobile Sub-Navigation Pills */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 10, gap: 8 }}
+          >
+            {navItems.map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <Link key={item.label} href={item.href as any} asChild>
+                  <Pressable
+                    className={`px-3.5 py-2 rounded-xl flex-row items-center gap-1.5 border ${
+                      isActive
+                        ? "bg-[#EA5410] border-[#EA5410]"
+                        : "bg-gray-50 border-gray-200"
+                    }`}
+                  >
+                    <Ionicons
+                      name={item.icon}
+                      size={14}
+                      color={isActive ? "white" : "#4B5563"}
+                    />
+                    <Text
+                      className={`text-xs font-extrabold ${
+                        isActive ? "text-white" : "text-gray-700"
+                      }`}
+                    >
+                      {item.label}
+                    </Text>
+                  </Pressable>
+                </Link>
+              );
+            })}
+          </ScrollView>
         </View>
 
         {/* Dynamic Route Content */}

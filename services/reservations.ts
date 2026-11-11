@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "../lib/supabase/client";
+import type { AuthPortalScope } from "../types/auth";
 import { Database } from "../types/database";
 
 export type ReservationRow = Database["public"]["Tables"]["table_reservations"]["Row"];
@@ -7,6 +8,7 @@ export type ReservationStatus = Database["public"]["Enums"]["reservation_status"
 export interface CustomerReservation extends ReservationRow {
   storeName?: string;
   storeAddress?: string;
+  storePhone?: string;
 }
 
 export interface CreateReservationInput {
@@ -86,7 +88,8 @@ export async function fetchCustomerReservations(): Promise<CustomerReservation[]
       *,
       stores (
         name,
-        address
+        address_text,
+        public_phone
       )
     `)
     .eq("customer_id", session.user.id)
@@ -100,7 +103,8 @@ export async function fetchCustomerReservations(): Promise<CustomerReservation[]
   return (data || []).map((row: any) => ({
     ...row,
     storeName: row.stores?.name,
-    storeAddress: row.stores?.address,
+    storeAddress: row.stores?.address_text,
+    storePhone: row.stores?.public_phone,
   }));
 }
 
@@ -108,7 +112,7 @@ export async function fetchCustomerReservations(): Promise<CustomerReservation[]
  * Fetches all reservations for a specific store (for merchants).
  */
 export async function fetchStoreReservations(storeId: string): Promise<ReservationRow[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseClient("merchant");
   const { data, error } = await supabase
     .from("table_reservations")
     .select("*")
@@ -129,9 +133,10 @@ export async function fetchStoreReservations(storeId: string): Promise<Reservati
 export async function updateReservationStatus(
   reservationId: string,
   status: ReservationStatus,
-  storeNotes?: string
+  storeNotes?: string,
+  scope: AuthPortalScope = "customer",
 ): Promise<ReservationRow> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseClient(scope);
   const updatePayload: Partial<ReservationRow> = { status };
   if (storeNotes !== undefined) {
     updatePayload.store_notes = storeNotes;
@@ -188,7 +193,7 @@ export function subscribeToStoreReservations(
   storeId: string,
   onChange: () => void
 ) {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseClient("merchant");
   const channel = supabase
     .channel(`store_reservations_${storeId}`)
     .on(

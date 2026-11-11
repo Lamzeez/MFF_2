@@ -13,17 +13,22 @@ import {
   FlatList,
   RefreshControl,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, Redirect } from "expo-router";
 import * as Location from "expo-location";
+import * as ImagePicker from "expo-image-picker";
 import { ENFORCE_STRICT_PLATFORM_GUARDS, isDesktopDevice } from "../../../lib/platform-policy";
+import { callPhoneNumber } from "../../../lib/phone";
 import {
   fetchAvailableRiderJobs,
   fetchRiderDeliveries,
   claimRiderJob,
+  acceptDeliveryJob,
   completeDeliveryWithPin,
+  uploadProofOfDeliveryPhoto,
   releaseDeliveryJob,
   reportCustomerNoShow,
   subscribeToOrders,
@@ -32,12 +37,15 @@ import {
   LiveOrder,
 } from "../../../services/orders";
 import { useSession } from "../../../context/SessionContext";
+import { fetchRiderRatingSummary, RiderRatingSummary } from "../../../services/reviews";
 
 interface RiderJob {
   id: string | number;
   rawOrderId?: string;
   orderNumber?: string;
+  customerId?: string;
   restaurant: string;
+  storePhone?: string;
   pickupArea: string;
   dropoffArea: string;
   distance: string;
@@ -59,7 +67,7 @@ export default function MobileRiderMode() {
   }
 
   const router = useRouter();
-  const { identity, status, logoutToGuest } = useSession();
+  const { identity, status, logoutToGuest } = useSession("rider");
   const isLoading = status === "loading";
 
   // Rider Role Authentication Guard
@@ -76,11 +84,91 @@ export default function MobileRiderMode() {
   const [todayEarnings, setTodayEarnings] = useState(0.0);
   const [completedTrips, setCompletedTrips] = useState(0);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [riderRatingSummary, setRiderRatingSummary] = useState<RiderRatingSummary | null>(null);
+  const [loadingRatings, setLoadingRatings] = useState(false);
   const [availableJobs, setAvailableJobs] = useState<RiderJob[]>([]);
   const [settlementData, setSettlementData] = useState<CodSettlementSummary | null>(null);
   const [showSettlementModal, setShowSettlementModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [reportingNoShow, setReportingNoShow] = useState(false);
+  const [arrivedAtTimestamp, setArrivedAtTimestamp] = useState<number | null>(null);
+  const [waitRemainingSeconds, setWaitRemainingSeconds] = useState(0);
+  const [hasAttemptedContact, setHasAttemptedContact] = useState(false);
+  const [podImageUri, setPodImageUri] = useState<string | null>(null);
+  const [uploadingPod, setUploadingPod] = useState(false);
+
+  const handlePickPodPhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      let res;
+      if (status === "granted") {
+        res = await ImagePicker.launchCameraAsync({
+          mediaTypes: ["images"],
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.7,
+        });
+      } else {
+        res = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ["images"],
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.7,
+        });
+      }
+
+      if (!res.canceled && res.assets && res.assets[0]) {
+        setPodImageUri(res.assets[0].uri);
+      }
+    } catch (err: any) {
+      console.warn("Camera error, attempting library fallback:", err);
+      try {
+        const res = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ["images"],
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.7,
+        });
+        if (!res.canceled && res.assets && res.assets[0]) {
+          setPodImageUri(res.assets[0].uri);
+        }
+      } catch (pickerErr) {
+        Alert.alert(
+          "Photo Notice",
+          "Could not open camera or gallery on this device. You can still complete delivery with PIN verification."
+        );
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (jobStage === "arrived" && arrivedAtTimestamp) {
+      const interval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - arrivedAtTimestamp) / 1000);
+        const remaining = Math.max(0, 300 - elapsed);
+        setWaitRemainingSeconds(remaining);
+      }, 1000);
+      return () => clearInterval(interval);
+    } else {
+      setWaitRemainingSeconds(0);
+    }
+  }, [jobStage, arrivedAtTimestamp]);
+
+  useEffect(() => {
+    if (identity?.id && profileModalVisible) {
+      setLoadingRatings(true);
+      fetchRiderRatingSummary(identity.id)
+        .then((summary) => setRiderRatingSummary(summary))
+        .catch((err) => console.warn("[rider] rating summary fetch notice:", err))
+        .finally(() => setLoadingRatings(false));
+    }
+  }, [identity?.id, profileModalVisible]);
+
+  const formatTimer = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -99,7 +187,9 @@ export default function MobileRiderMode() {
         id: o.orderNumber.replace("MFF-", "") || o.id.slice(0, 5),
         rawOrderId: o.id,
         orderNumber: o.orderNumber,
+        customerId: o.customerId,
         restaurant: o.storeName,
+        storePhone: o.storePhone,
         pickupArea: o.storeAddress || "Mati City",
         dropoffArea: `${o.deliveryAddress}, Brgy. ${o.barangay}`,
         distance: "2.1 km",
@@ -128,7 +218,9 @@ export default function MobileRiderMode() {
           id: activeO.orderNumber.replace("MFF-", "") || activeO.id.slice(0, 5),
           rawOrderId: activeO.id,
           orderNumber: activeO.orderNumber,
+          customerId: activeO.customerId,
           restaurant: activeO.storeName,
+          storePhone: activeO.storePhone,
           pickupArea: activeO.storeAddress || "Mati City",
           dropoffArea: `${activeO.deliveryAddress}, Brgy. ${activeO.barangay}`,
           distance: "2.1 km",
@@ -158,7 +250,7 @@ export default function MobileRiderMode() {
 
   useEffect(() => {
     loadRiderJobs();
-    const unsubscribe = subscribeToOrders(null, loadRiderJobs);
+    const unsubscribe = subscribeToOrders(null, loadRiderJobs, "rider");
     return () => unsubscribe();
   }, []);
 
@@ -168,9 +260,19 @@ export default function MobileRiderMode() {
 
     if (currentJob.rawOrderId) {
       try {
-        await claimRiderJob(currentJob.rawOrderId);
+        await acceptDeliveryJob(currentJob.rawOrderId);
       } catch (err: any) {
-        Alert.alert("Claim Job Error", err?.message || "This delivery job is no longer available.");
+        const errorMsg = err?.message || "";
+        const isConflict =
+          errorMsg.toLowerCase().includes("already been claimed") ||
+          errorMsg.includes("40001");
+
+        Alert.alert(
+          isConflict ? "Job Claimed by Another Courier ⚡" : "Claim Job Notice",
+          isConflict
+            ? "Another active Mati courier just claimed this delivery job! Refreshing available deliveries..."
+            : errorMsg || "This delivery job is no longer available."
+        );
         loadRiderJobs();
         return;
       }
@@ -203,9 +305,31 @@ export default function MobileRiderMode() {
       return;
     }
 
+    let podUrlToSave: string | undefined;
+    if (currentJob?.rawOrderId && podImageUri) {
+      setUploadingPod(true);
+      try {
+        const uploadRes = await uploadProofOfDeliveryPhoto(currentJob.rawOrderId, podImageUri);
+        if (uploadRes.success && uploadRes.url) {
+          podUrlToSave = uploadRes.url;
+        } else {
+          podUrlToSave = podImageUri;
+        }
+      } catch (uploadErr) {
+        console.warn("POD photo upload warning fallback:", uploadErr);
+        podUrlToSave = podImageUri;
+      } finally {
+        setUploadingPod(false);
+      }
+    }
+
     if (currentJob?.rawOrderId) {
       try {
-        await completeDeliveryWithPin(currentJob.rawOrderId, handshakePin.trim() || expectedPin);
+        await completeDeliveryWithPin(
+          currentJob.rawOrderId,
+          handshakePin.trim() || expectedPin,
+          podUrlToSave
+        );
       } catch (err: any) {
         Alert.alert("Delivery Completion Error", err?.message || "Failed to complete delivery in Supabase.");
         return;
@@ -216,6 +340,7 @@ export default function MobileRiderMode() {
     setTodayEarnings((prev) => prev + fee);
     setCompletedTrips((prev) => prev + 1);
     setShowHandshakeModal(false);
+    setPodImageUri(null);
     setAvailableJobs((prev) => prev.filter((j) => j.id !== activeJobId));
     setActiveJobId(null);
 
@@ -264,6 +389,22 @@ export default function MobileRiderMode() {
     const currentJob = availableJobs.find((j) => j.id === activeJobId);
     if (!currentJob?.rawOrderId) return;
 
+    if (waitRemainingSeconds > 0) {
+      Alert.alert(
+        "Drop-off Grace Period Active ⏱️",
+        `Mati FoodFinder policy requires waiting 5 minutes at the drop-off location before declaring a no-show. Please wait ${formatTimer(waitRemainingSeconds)} more.`
+      );
+      return;
+    }
+
+    if (!hasAttemptedContact) {
+      Alert.alert(
+        "Contact Verification Required 📞",
+        "Please call or send a quick message to the customer before reporting a no-show."
+      );
+      return;
+    }
+
     Alert.alert(
       "Report Customer No-Show? 📍⚠️",
       `Are you currently at the customer's delivery address (${currentJob.dropoffArea}) and unable to reach ${currentJob.customerName}? Your real-time GPS coordinates will be verified and permanently logged.`,
@@ -294,11 +435,15 @@ export default function MobileRiderMode() {
               await reportCustomerNoShow(
                 currentJob.rawOrderId!,
                 coords,
-                `Courier verified at dropoff (${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}), customer unresponsive after multiple contact attempts.`
+                `Courier verified at dropoff (${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}), customer unresponsive after waiting 5+ mins and attempting contact.`,
+                currentJob.customerId
               );
 
               setActiveJobId(null);
               setJobStage("heading_to_store");
+              setHasAttemptedContact(false);
+              setArrivedAtTimestamp(null);
+              setWaitRemainingSeconds(0);
               Alert.alert(
                 "Order Cancelled (Customer No-Show)",
                 `GPS coordinates verified (${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}). Order has been cancelled and logged for merchant and platform review.`
@@ -309,24 +454,6 @@ export default function MobileRiderMode() {
             } finally {
               setReportingNoShow(false);
             }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleExitToPortal = () => {
-    Alert.alert(
-      "Exit Rider Mode?",
-      "Are you sure you want to go offline and return to the main Mati FoodFinder access portal?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Exit to Portal",
-          style: "destructive",
-          onPress: () => {
-            setProfileModalVisible(false);
-            router.replace("/(mobile)/portal");
           },
         },
       ]
@@ -345,7 +472,7 @@ export default function MobileRiderMode() {
           onPress: async () => {
             setProfileModalVisible(false);
             await logoutToGuest();
-            router.replace("/(mobile)/portal");
+            router.replace("/");
           },
         },
       ]
@@ -366,8 +493,9 @@ export default function MobileRiderMode() {
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
       {/* Top Navigation & Status Bar */}
-      <View className="px-5 py-3.5 bg-white border-b border-gray-200 shadow-xs">
-        <View className="flex-row justify-between items-center mb-2">
+      <View className="px-4 sm:px-5 py-3.5 bg-white border-b border-gray-200 shadow-xs">
+        <View className="w-full max-w-3xl self-center">
+        <View className="flex-row flex-wrap justify-between items-center gap-2 mb-2">
           {/* Rider Profile Button */}
           <Pressable
             onPress={() => setProfileModalVisible(true)}
@@ -394,27 +522,28 @@ export default function MobileRiderMode() {
           </View>
         </View>
 
-        <View className="flex-row justify-between items-end">
-          <View>
-            <Text className="text-xl font-black text-gray-900">
+        <View className="flex-row flex-wrap justify-between items-end gap-2">
+          <View className="flex-1 min-w-[180px]">
+            <Text className="text-xl font-black text-gray-900" numberOfLines={1}>
               {identity?.profile?.display_name || "Delivery Courier"}
             </Text>
-            <Text className="text-orange-600 font-extrabold text-xs tracking-wider">
+            <Text className="text-orange-600 font-extrabold text-xs tracking-wider" numberOfLines={1}>
               INDEPENDENT RIDER #{identity?.id ? `M-${identity.id.slice(0, 4).toUpperCase()}` : "ACTIVE"} • MATI
             </Text>
           </View>
-          <View className="bg-orange-50 px-2.5 py-1 rounded-lg border border-orange-200">
+          <View className="bg-orange-50 px-2.5 py-1 rounded-lg border border-orange-200 shrink-0">
             <Text className="text-[10px] font-bold text-orange-900">
               {identity?.profile?.contact_phone ? `Phone: ${identity.profile.contact_phone}` : "Status: Active"}
             </Text>
           </View>
+        </View>
         </View>
       </View>
 
       <FlatList<RiderJob>
         data={availableJobs}
         keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={{ padding: 20, paddingBottom: 60 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 60, width: "100%", maxWidth: 768, alignSelf: "center" }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -555,8 +684,8 @@ export default function MobileRiderMode() {
                 </View>
 
                 {/* COD Cash to collect */}
-                <View className="bg-amber-50 p-3 rounded-xl border border-amber-200 mb-4 flex-row justify-between items-center">
-                  <View>
+                <View className="bg-amber-50 p-3 rounded-xl border border-amber-200 mb-4 flex-row flex-wrap justify-between items-center gap-2">
+                  <View className="flex-1 min-w-[160px]">
                     <Text className="text-[11px] font-bold text-amber-900">
                       Cash on Delivery (COD) to Collect:
                     </Text>
@@ -564,7 +693,7 @@ export default function MobileRiderMode() {
                       Collect full amount from customer upon arrival
                     </Text>
                   </View>
-                  <Text className="text-lg font-black text-amber-950">{activeJob.codAmount}</Text>
+                  <Text className="text-lg font-black text-amber-950 shrink-0">{activeJob.codAmount}</Text>
                 </View>
 
                 {/* Action Buttons based on stage */}
@@ -599,6 +728,9 @@ export default function MobileRiderMode() {
                     <Pressable
                       onPress={() => {
                         setJobStage("arrived");
+                        const now = Date.now();
+                        setArrivedAtTimestamp(now);
+                        setWaitRemainingSeconds(300);
                         Alert.alert(
                           "Arrived at Customer! 📍",
                           `You've arrived at ${activeJob.dropoffArea}. Call ${activeJob.customerName}, collect ${activeJob.codAmount} COD cash, and enter their 4-digit PIN.`
@@ -613,6 +745,34 @@ export default function MobileRiderMode() {
 
                   {jobStage === "arrived" && (
                     <>
+                      {/* 5-minute wait countdown timer & contact status notice */}
+                      <View className="bg-gray-50 border border-gray-200 p-3 rounded-xl mb-2">
+                        <View className="flex-row justify-between items-center mb-1">
+                          <View className="flex-row items-center gap-1.5">
+                            <Ionicons name="time-outline" size={14} color="#EA5410" />
+                            <Text className="text-[11px] font-bold text-gray-700">
+                              Drop-off Waiting Timer:
+                            </Text>
+                          </View>
+                          <Text
+                            className={`text-xs font-black ${
+                              waitRemainingSeconds > 0 ? "text-amber-700" : "text-emerald-700"
+                            }`}
+                          >
+                            {waitRemainingSeconds > 0
+                              ? `${formatTimer(waitRemainingSeconds)} Remaining`
+                              : "5 mins elapsed ✓"}
+                          </Text>
+                        </View>
+                        <Text className="text-[10px] text-gray-500 leading-tight">
+                          {!hasAttemptedContact
+                            ? "⚠️ Please call or message customer before reporting no-show."
+                            : waitRemainingSeconds > 0
+                            ? "Mati drop-off policy: wait 5 minutes before declaring no-show."
+                            : "Waiting period satisfied & contact attempted. No-show report unlocked."}
+                        </Text>
+                      </View>
+
                       <Pressable
                         onPress={() => setShowHandshakeModal(true)}
                         className="w-full py-3.5 bg-emerald-700 rounded-xl items-center flex-row justify-center gap-1.5 shadow-sm active:bg-emerald-800"
@@ -623,21 +783,44 @@ export default function MobileRiderMode() {
 
                       <Pressable
                         onPress={handleReportCustomerNoShow}
-                        disabled={reportingNoShow}
-                        className="w-full py-2.5 bg-rose-50 rounded-xl items-center flex-row justify-center gap-1.5 border border-rose-300"
+                        disabled={reportingNoShow || waitRemainingSeconds > 0 || !hasAttemptedContact}
+                        className={`w-full py-2.5 rounded-xl items-center flex-row justify-center gap-1.5 border ${
+                          waitRemainingSeconds > 0 || !hasAttemptedContact
+                            ? "bg-gray-100 border-gray-200 opacity-60"
+                            : "bg-rose-50 border-rose-300 active:bg-rose-100"
+                        }`}
                       >
-                        <Ionicons name="location-outline" size={15} color="#be123c" />
-                        <Text className="text-xs font-bold text-rose-800">
-                          {reportingNoShow ? "Verifying GPS..." : "Report Customer No-Show 📍⚠️"}
+                        <Ionicons
+                          name="location-outline"
+                          size={15}
+                          color={waitRemainingSeconds > 0 || !hasAttemptedContact ? "#9ca3af" : "#be123c"}
+                        />
+                        <Text
+                          className={`text-xs font-bold ${
+                            waitRemainingSeconds > 0 || !hasAttemptedContact
+                              ? "text-gray-400"
+                              : "text-rose-800"
+                          }`}
+                        >
+                          {reportingNoShow
+                            ? "Verifying GPS..."
+                            : waitRemainingSeconds > 0
+                            ? `Report No-Show (Wait ${formatTimer(waitRemainingSeconds)}) ⏱️`
+                            : !hasAttemptedContact
+                            ? "Report No-Show (Contact Customer First) 📞"
+                            : "Report Customer No-Show (GPS Verified) 📍⚠️"}
                         </Text>
                       </Pressable>
                     </>
                   )}
 
                   <Pressable
-                    onPress={() =>
-                      Alert.alert("Calling Customer", `Dialing ${activeJob.customerName} at ${activeJob.customerPhone}...`)
-                    }
+                    onPress={() => {
+                      setHasAttemptedContact(true);
+                      callPhoneNumber(activeJob.customerPhone, activeJob.customerName);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Call ${activeJob.customerName}`}
                     className="w-full py-2.5 bg-gray-100 rounded-xl items-center flex-row justify-center gap-1.5 border border-gray-200"
                   >
                     <Ionicons name="call" size={15} color="#374151" />
@@ -740,7 +923,7 @@ export default function MobileRiderMode() {
         onRequestClose={() => setProfileModalVisible(false)}
       >
         <View className="flex-1 justify-end bg-black/60">
-          <View className="bg-white rounded-t-3xl p-5 max-h-[85%]">
+          <View className="w-full max-w-xl self-center bg-white rounded-t-3xl p-5 max-h-[85%]">
             <View className="flex-row justify-between items-center pb-3 border-b border-gray-100">
               <View>
                 <Text className="text-lg font-black text-gray-900">Rider Profile & Settings</Text>
@@ -778,6 +961,58 @@ export default function MobileRiderMode() {
                 </View>
               </View>
 
+              {/* Courier Rating & Feedback Card */}
+              <View className="bg-white rounded-2xl p-4 border border-gray-200 mb-4 shadow-2xs">
+                <View className="flex-row items-center justify-between mb-2">
+                  <Text className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                    Courier Rating & Feedback
+                  </Text>
+                  {loadingRatings ? (
+                    <ActivityIndicator size="small" color="#EA5410" />
+                  ) : (
+                    <View className="flex-row items-center bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-200">
+                      <Ionicons name="star" size={13} color="#D97706" />
+                      <Text className="text-xs font-black text-amber-900 ml-1">
+                        {riderRatingSummary && riderRatingSummary.totalReviews > 0
+                          ? riderRatingSummary.averageRating.toFixed(1)
+                          : "5.0"}
+                      </Text>
+                      <Text className="text-[10px] text-amber-700 ml-1 font-bold">
+                        ({riderRatingSummary?.totalReviews || 0} reviews)
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Customer Compliments from Deliveries */}
+                <Text className="text-[11px] font-bold text-gray-500 mb-2">
+                  Courier Compliments:
+                </Text>
+
+                {riderRatingSummary && Object.keys(riderRatingSummary.compliments).length > 0 ? (
+                  <View className="flex-row flex-wrap gap-1.5">
+                    {Object.entries(riderRatingSummary.compliments).map(([comp, count]) => (
+                      <View
+                        key={comp}
+                        className="bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl flex-row items-center gap-1.5"
+                      >
+                        <Text className="text-xs font-bold text-emerald-800">{comp}</Text>
+                        <View className="bg-emerald-200/80 px-1.5 py-0.5 rounded-full">
+                          <Text className="text-[10px] font-black text-emerald-900">{count}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View className="bg-gray-50 p-2.5 rounded-xl border border-dashed border-gray-200 flex-row items-center gap-2">
+                    <Ionicons name="ribbon-outline" size={15} color="#9CA3AF" />
+                    <Text className="text-[11px] text-gray-500 font-medium">
+                      Compliments from delivered orders will appear here.
+                    </Text>
+                  </View>
+                )}
+              </View>
+
               {/* Vehicle & Logistics Details */}
               <View className="bg-gray-50 rounded-2xl p-4 border border-gray-200 gap-2 mb-4">
                 <Text className="text-xs font-black text-gray-900 uppercase tracking-wider mb-1">
@@ -805,17 +1040,6 @@ export default function MobileRiderMode() {
                 </View>
               </View>
 
-              {/* Exit / Switch Role Button */}
-              <Pressable
-                onPress={handleExitToPortal}
-                className="bg-gray-100 border border-gray-200 py-3.5 rounded-2xl items-center flex-row justify-center gap-2 mb-3 active:bg-gray-200"
-              >
-                <Ionicons name="swap-horizontal" size={16} color="#374151" />
-                <Text className="text-gray-800 font-bold text-xs">
-                  Switch Role / Return to Portal
-                </Text>
-              </Pressable>
-
               {/* Sign Out Button */}
               <Pressable
                 onPress={handleSignOutRider}
@@ -839,7 +1063,7 @@ export default function MobileRiderMode() {
         onRequestClose={() => setShowHandshakeModal(false)}
       >
         <View className="flex-1 justify-end bg-black/60">
-          <View className="bg-white rounded-t-3xl p-5 max-h-[85%]">
+          <View className="w-full max-w-xl self-center bg-white rounded-t-3xl p-5 max-h-[85%]">
             <View className="flex-row justify-between items-center pb-3 border-b border-gray-100">
               <View className="flex-row items-center gap-2">
                 <Text className="text-xl">🔐</Text>
@@ -881,6 +1105,55 @@ export default function MobileRiderMode() {
                 />
               </View>
 
+              {/* Proof of Delivery (POD) Photo Capture */}
+              <View className="mb-4 bg-gray-50 p-3.5 rounded-2xl border border-gray-200">
+                <View className="flex-row items-center justify-between mb-2">
+                  <View className="flex-row items-center gap-1.5">
+                    <Ionicons name="camera" size={16} color="#EA5410" />
+                    <Text className="text-xs font-black text-gray-900">
+                      Proof of Delivery (POD) Photo
+                    </Text>
+                  </View>
+                  <Text className="text-[10px] text-gray-500 font-bold">
+                    {podImageUri ? "Attached ✓" : "Optional"}
+                  </Text>
+                </View>
+
+                {podImageUri ? (
+                  <View className="flex-row items-center gap-3">
+                    <Image
+                      source={{ uri: podImageUri }}
+                      className="w-16 h-16 rounded-xl bg-gray-200"
+                      resizeMode="cover"
+                    />
+                    <View className="flex-1">
+                      <Text className="text-xs font-bold text-emerald-800">
+                        Drop-off photo captured ✓
+                      </Text>
+                      <Text className="text-[10px] text-gray-500 mt-0.5">
+                        Photo will be uploaded with delivery completion.
+                      </Text>
+                      <Pressable
+                        onPress={handlePickPodPhoto}
+                        className="mt-1.5 self-start py-1 px-2.5 bg-gray-200 rounded-lg active:bg-gray-300"
+                      >
+                        <Text className="text-[10px] font-bold text-gray-700">Retake Photo 🔄</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : (
+                  <Pressable
+                    onPress={handlePickPodPhoto}
+                    className="w-full py-3 bg-white border border-dashed border-gray-300 rounded-xl items-center flex-row justify-center gap-2 active:bg-gray-100"
+                  >
+                    <Ionicons name="camera-outline" size={18} color="#EA5410" />
+                    <Text className="text-xs font-bold text-gray-800">
+                      Take Drop-off Photo 📸
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+
               {/* Cash Collection Checkbox */}
               <Pressable
                 onPress={() => setCashCollectedConfirmed(!cashCollectedConfirmed)}
@@ -911,12 +1184,15 @@ export default function MobileRiderMode() {
                 className="w-full py-4 bg-orange-500 rounded-xl items-center shadow-md mb-4 active:bg-orange-600"
               >
                 <Text className="text-white font-black text-sm">
-                  Confirm Cash Received & Complete Delivery ✓
+                  {uploadingPod ? "Uploading Proof & Completing..." : "Confirm Cash Received & Complete Delivery ✓"}
                 </Text>
               </Pressable>
 
               <Pressable
-                onPress={() => setShowHandshakeModal(false)}
+                onPress={() => {
+                  setShowHandshakeModal(false);
+                  setPodImageUri(null);
+                }}
                 className="py-2 items-center"
               >
                 <Text className="text-xs font-bold text-gray-400">Cancel</Text>
@@ -934,7 +1210,7 @@ export default function MobileRiderMode() {
         onRequestClose={() => setShowSettlementModal(false)}
       >
         <View className="flex-1 justify-end bg-black/60">
-          <View className="bg-white rounded-t-3xl p-5 max-h-[90%]">
+          <View className="w-full max-w-xl self-center bg-white rounded-t-3xl p-5 max-h-[90%]">
             <View className="flex-row justify-between items-center pb-3 border-b border-gray-100">
               <View className="flex-row items-center gap-2">
                 <View className="w-8 h-8 rounded-full bg-orange-100 items-center justify-center">

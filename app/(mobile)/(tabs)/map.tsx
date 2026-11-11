@@ -7,10 +7,11 @@ import {
   ActivityIndicator,
   Image,
   Alert,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import * as Location from "expo-location";
 import { useAuth } from "../../../context/AuthContext";
 import { RestaurantProfile, FoodItem } from "../../../types/restaurant";
@@ -21,9 +22,10 @@ import { fetchLiveStores, fetchLiveMenuItems, LiveStoreProfile } from "../../../
 import { createOrder } from "../../../services/orders";
 import { createReservation } from "../../../services/reservations";
 import { RestaurantProfileSheet } from "../../../components/restaurant/RestaurantProfileSheet";
-import { CheckoutSheet } from "../../../components/checkout/CheckoutSheet";
+import { CheckoutSheet, CheckoutConfirmedPayload } from "../../../components/checkout/CheckoutSheet";
 import { ReservationSheet } from "../../../components/reservation/ReservationSheet";
 import { GuestGateModal } from "../../../components/auth/GuestGateModal";
+import { FloatingCartBar } from "../../../components/cart/FloatingCartBar";
 import {
   MATI_CITY_HALL_COORDS,
   projectGeoToMapPercent,
@@ -158,6 +160,10 @@ const EXPLORE_FALLBACK_SPOTS: ExploreSpotItem[] = [
 export default function MobileMapScreen() {
   const { isLoggedIn } = useAuth();
   const router = useRouter();
+  const params = useLocalSearchParams<{ storeId?: string; storeName?: string }>();
+  const { width: windowWidth } = useWindowDimensions();
+  const isWideMap = windowWidth >= 900;
+  const isTwoColList = windowWidth >= 768;
 
   // Mati City Center default coordinates
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number }>(
@@ -195,6 +201,22 @@ export default function MobileMapScreen() {
     requestUserLocation();
     loadLiveCatalog();
   }, []);
+
+  // Handle incoming deep link navigation (e.g. from table reservation "Directions")
+  useEffect(() => {
+    if ((params.storeId || params.storeName) && rawSpots.length > 0) {
+      const target = rawSpots.find(
+        (s) =>
+          (params.storeId && String(s.storeId) === String(params.storeId)) ||
+          (params.storeId && String(s.id) === String(params.storeId)) ||
+          (params.storeName && s.name.toLowerCase().trim() === params.storeName.toLowerCase().trim())
+      );
+      if (target) {
+        setSelectedSpotId(target.id);
+        setViewMode("map");
+      }
+    }
+  }, [params.storeId, params.storeName, rawSpots]);
 
   const loadLiveCatalog = async () => {
     try {
@@ -376,41 +398,42 @@ export default function MobileMapScreen() {
   };
 
   // Handle Order Placement
-  const handlePlaceOrderFromSheet = async (orderPayload: {
-    dish: FoodItem;
-    qty: number;
-    barangay: string;
-    address: string;
-    notes: string;
-    fulfillment: "delivery" | "pickup";
-    total: number;
-  }) => {
-    let storeId = orderPayload.dish.storeId;
-    if (!storeId) {
+  const handlePlaceOrderFromSheet = async (orderPayload: CheckoutConfirmedPayload) => {
+    let targetStoreId = orderPayload.storeId || orderPayload.dish?.storeId;
+    const targetStoreName = orderPayload.storeName || orderPayload.dish?.store || "";
+    if (!targetStoreId) {
       const match = Object.values(restaurants).find(
         (r: any) =>
-          r.name === orderPayload.dish.store ||
-          (r.id && r.name.toLowerCase().includes((orderPayload.dish.store || "").toLowerCase()))
+          r.name === targetStoreName ||
+          (r.id && r.name.toLowerCase().includes(targetStoreName.toLowerCase()))
       ) as any;
-      storeId = match?.id || "11111111-1111-1111-1111-111111111111";
+      targetStoreId = match?.id || "11111111-1111-1111-1111-111111111111";
     }
+
+    const itemsToOrder =
+      orderPayload.items && orderPayload.items.length > 0
+        ? orderPayload.items
+        : [
+            {
+              menuItemId: orderPayload.dish?.menuItemId,
+              name: orderPayload.dish?.name || "Mati Special",
+              price: orderPayload.dish?.price || orderPayload.total,
+              quantity: orderPayload.qty || 1,
+            },
+          ];
 
     try {
       const createdOrder = await createOrder({
-        storeId: storeId || "11111111-1111-1111-1111-111111111111",
-        items: [
-          {
-            menuItemId: orderPayload.dish.menuItemId,
-            name: orderPayload.dish.name,
-            price: orderPayload.dish.price,
-            quantity: orderPayload.qty,
-          },
-        ],
+        storeId: targetStoreId || "11111111-1111-1111-1111-111111111111",
+        items: itemsToOrder,
         fulfillmentType: orderPayload.fulfillment,
         paymentMethod: "cod",
         deliveryAddress: orderPayload.address,
         barangay: orderPayload.barangay,
         notes: orderPayload.notes,
+        voucherCode: orderPayload.voucherCode,
+        voucherId: orderPayload.voucherId,
+        discount: orderPayload.discount,
       });
 
       setShowCheckoutModal(false);
@@ -432,17 +455,18 @@ export default function MobileMapScreen() {
     <SafeAreaView edges={["top"]} className="flex-1 bg-[#F8FAFC]">
       {/* 1. TOP APP BAR */}
       <View className="px-4 pt-2 pb-3 bg-white border-b border-gray-100 shadow-xs">
-        <View className="flex-row items-center justify-between mb-2">
-          <View>
+        <View className="w-full max-w-6xl self-center">
+        <View className="flex-row flex-wrap items-center justify-between gap-2 mb-2">
+          <View className="flex-1 min-w-[180px]">
             <Text className="text-[10px] font-bold text-gray-400 tracking-wider uppercase">
               MATI CITY EXPLORE
             </Text>
-            <Text className="text-xl font-black text-gray-900 tracking-tight mt-0.5">
+            <Text className="text-xl font-black text-gray-900 tracking-tight mt-0.5" numberOfLines={1}>
               Live Food Map & Nearby
             </Text>
           </View>
 
-          <View className="flex-row items-center gap-2">
+          <View className="flex-row items-center gap-2 shrink-0">
             {/* View Mode Switcher */}
             <Pressable
               onPress={() => setViewMode(viewMode === "map" ? "list" : "map")}
@@ -487,11 +511,11 @@ export default function MobileMapScreen() {
 
         {/* Current Location Strip */}
         <View className="flex-row items-center gap-2 bg-orange-50 px-3 py-2 rounded-2xl border border-orange-200">
-          <View className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-          <Text className="text-xs font-bold text-gray-900 flex-1 truncate" numberOfLines={1}>
+          <View className="w-2.5 h-2.5 rounded-full bg-blue-600 shrink-0" />
+          <Text className="text-xs font-bold text-gray-900 flex-1" numberOfLines={1}>
             {locationName}
           </Text>
-          <View className="bg-orange-100 px-2 py-0.5 rounded-full">
+          <View className="bg-orange-100 px-2 py-0.5 rounded-full shrink-0">
             <Text className="text-[10px] font-black text-[#EA5410] uppercase">
               {spotsWithEvaluation.filter((s) => s.evaluation.isServiceable).length} deliverable
             </Text>
@@ -575,13 +599,22 @@ export default function MobileMapScreen() {
             </Pressable>
           </View>
         </ScrollView>
+        </View>
       </View>
 
       {/* 2. MAIN VIEW: MAP OR LIST */}
       {viewMode === "map" ? (
-        <View className="flex-1">
+        <View
+          className={`flex-1 w-full max-w-6xl self-center ${
+            isWideMap ? "flex-row p-4 gap-4 items-stretch" : "flex-col"
+          }`}
+        >
           {/* Visual Map Surface with Mati Landmarks */}
-          <View className="flex-1 bg-slate-100 items-center justify-center relative overflow-hidden">
+          <View
+            className={`flex-1 bg-slate-100 items-center justify-center relative overflow-hidden ${
+              isWideMap ? "rounded-3xl border border-gray-200 shadow-sm min-h-[420px]" : "min-h-[220px]"
+            }`}
+          >
             {/* Street Grid pattern */}
             <View className="absolute inset-0 opacity-20 flex-row flex-wrap pointer-events-none">
               {[...Array(32)].map((_, i) => (
@@ -590,15 +623,15 @@ export default function MobileMapScreen() {
             </View>
 
             {/* Geographical Mati Landmarks */}
-            <View className="absolute bottom-60 left-4 bg-white/95 px-3 py-1 rounded-xl shadow-xs border border-gray-200 flex-row items-center gap-1 z-10">
+            <View className="absolute bottom-3 left-3 bg-white/95 px-2.5 py-1 rounded-xl shadow-xs border border-gray-200 flex-row items-center gap-1 z-10">
               <Text className="text-xs">🌊</Text>
               <Text className="text-[11px] font-black text-gray-800">Pujada Bay</Text>
             </View>
-            <View className="absolute bottom-28 right-4 bg-white/95 px-3 py-1 rounded-xl shadow-xs border border-gray-200 flex-row items-center gap-1 z-10">
+            <View className="absolute bottom-3 right-3 bg-white/95 px-2.5 py-1 rounded-xl shadow-xs border border-gray-200 flex-row items-center gap-1 z-10">
               <Text className="text-xs">🏖️</Text>
               <Text className="text-[11px] font-black text-gray-800">Dahican Beach</Text>
             </View>
-            <View className="absolute top-4 left-4 bg-white/95 px-3 py-1 rounded-xl shadow-xs border border-gray-200 flex-row items-center gap-1 z-10">
+            <View className="absolute top-3 left-3 bg-white/95 px-2.5 py-1 rounded-xl shadow-xs border border-gray-200 flex-row items-center gap-1 z-10">
               <Text className="text-xs">🏛️</Text>
               <Text className="text-[11px] font-black text-gray-800">Mati City Hall</Text>
             </View>
@@ -676,9 +709,14 @@ export default function MobileMapScreen() {
             </View>
           </View>
 
-          {/* Selected Restaurant Floating Card at Bottom of Map */}
+          {/* Selected Restaurant Floating Card at Bottom of Map (Side Panel on Wide Screens) */}
           {selectedSpot && (
-            <View className="m-4 p-4 bg-white rounded-3xl border border-gray-200 shadow-xl">
+            <View
+              className={`bg-white rounded-3xl border border-gray-200 shadow-xl ${
+                isWideMap ? "w-[380px] p-5 self-stretch justify-between" : "m-3 sm:m-4 p-4"
+              }`}
+            >
+              <View>
               <View className="flex-row items-center gap-3.5 mb-2.5">
                 <Image
                   source={{ uri: selectedSpot.imageUrl }}
@@ -746,12 +784,13 @@ export default function MobileMapScreen() {
                 </View>
               </View>
 
-              <Text className="text-xs text-gray-600 font-medium mb-3" numberOfLines={1}>
+              <Text className="text-xs text-gray-600 font-medium mb-3" numberOfLines={isWideMap ? 3 : 1}>
                 🔥 <Text className="font-bold text-[#EA5410]">Specialty:</Text> {selectedSpot.specialty}
               </Text>
+              </View>
 
               {/* Quick Actions: View Full Profile or Route */}
-              <View className="flex-row gap-2 pt-2 border-t border-gray-100">
+              <View className="flex-row flex-wrap gap-2 pt-2 border-t border-gray-100">
                 <Pressable
                   onPress={() => handleOpenRestaurant(selectedSpot.name)}
                   className="flex-1 py-3 bg-[#EA5410] rounded-2xl items-center shadow-sm active:opacity-95"
@@ -811,6 +850,7 @@ export default function MobileMapScreen() {
           contentContainerStyle={{ paddingBottom: 110 }}
           showsVerticalScrollIndicator={false}
         >
+          <View className="w-full max-w-5xl self-center">
           {/* Guest Mode Discovery Banner */}
           {!isLoggedIn && (
             <View className="p-4 mb-4 bg-orange-50 border border-orange-200 rounded-2xl">
@@ -838,11 +878,12 @@ export default function MobileMapScreen() {
             Restaurants Sorted by Distance from You
           </Text>
 
-          <View className="gap-3.5">
+          <View className="flex-row flex-wrap gap-3.5">
             {sortedSpots.map((spot) => (
               <Pressable
                 key={String(spot.id)}
                 onPress={() => handleOpenRestaurant(spot.name)}
+                style={isTwoColList ? { width: "48.8%" } : { width: "100%" }}
                 className="bg-white rounded-3xl border border-gray-200 p-4 shadow-sm flex-row items-center gap-3.5 active:bg-orange-50/40"
               >
                 <Image
@@ -894,6 +935,7 @@ export default function MobileMapScreen() {
               </Pressable>
             ))}
           </View>
+          </View>
         </ScrollView>
       )}
 
@@ -916,6 +958,10 @@ export default function MobileMapScreen() {
         onSelectDish={(dish) => {
           setShowRestaurantModal(false);
           handleOpenCheckout(dish);
+        }}
+        onOpenBasket={() => {
+          setShowRestaurantModal(false);
+          setShowCheckoutModal(true);
         }}
       />
 
@@ -970,6 +1016,9 @@ export default function MobileMapScreen() {
           router.push("/(mobile)/auth/customer-login");
         }}
       />
+
+      {/* Floating Bottom Basket Pill */}
+      <FloatingCartBar onPress={() => setShowCheckoutModal(true)} />
     </SafeAreaView>
   );
 }

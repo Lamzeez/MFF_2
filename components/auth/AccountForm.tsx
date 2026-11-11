@@ -391,14 +391,14 @@ export function AccountForm({ initialMode = "login", onSuccess }: AccountFormPro
             Enter 6-Digit Code
           </Text>
           <View className="relative">
-            <View className="flex-row justify-between mb-2">
+            <View className="flex-row justify-center gap-1.5 sm:gap-2 mb-2">
               {[0, 1, 2, 3, 4, 5].map((index) => {
                 const digit = code[index] || "";
                 const isCurrent = code.length === index;
                 return (
                   <View
                     key={index}
-                    className={`w-12 h-14 rounded-2xl border-2 items-center justify-center bg-gray-50 ${
+                    className={`flex-1 max-w-[48px] h-14 rounded-2xl border-2 items-center justify-center bg-gray-50 ${
                       isCurrent
                         ? "border-[#EA5410] bg-white shadow-2xs"
                         : digit

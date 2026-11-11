@@ -3,7 +3,7 @@ import type { Database } from "./database";
 export type Store = Database["public"]["Tables"]["stores"]["Row"];
 export type MenuItem = Database["public"]["Tables"]["menu_items"]["Row"];
 export type StoreApprovalStatus = Database["public"]["Enums"]["store_approval_status"];
-export type StoreCatalogEdit = Pick<Store, "name" | "description" | "public_phone" | "address_text" | "barangay" | "location" | "delivery_enabled">;
+export type StoreCatalogEdit = Pick<Store, "name" | "description" | "public_phone" | "address_text" | "barangay" | "location" | "delivery_enabled" | "operating_hours" | "cover_image_url">;
 export type MenuItemCreate = Pick<MenuItem, "store_id" | "name" | "description" | "price_centavos" | "currency" | "is_published" | "is_available">;
 export type MenuItemEdit = Partial<Pick<MenuItem, "name" | "description" | "price_centavos" | "is_published" | "is_available" | "archived_at">>;
 
@@ -16,6 +16,7 @@ export interface RestaurantProfile {
   id?: string;
   name: string;
   category: string;
+  categories?: string[];
   rating: string;
   address: string;
   phone: string;
@@ -32,6 +33,20 @@ export interface RestaurantProfile {
   latitude?: number;
   longitude?: number;
   deliveryRadiusKm?: number;
+  isOpen?: boolean;
+}
+
+export interface DishModifierOption {
+  id: string;
+  name: string;
+  priceAdjustment: number; // in pesos (e.g. 0, 15, 20)
+}
+
+export interface DishModifierGroup {
+  id: string;
+  name: string; // e.g. "Spice Level", "Add-ons & Sides", "Choice of Drink"
+  required?: boolean;
+  options: DishModifierOption[];
 }
 
 export interface FoodItem {
@@ -48,4 +63,5 @@ export interface FoodItem {
   emoji?: string;
   description?: string;
   imageUrl?: string;
+  modifiers?: DishModifierGroup[];
 }

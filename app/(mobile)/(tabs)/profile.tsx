@@ -7,6 +7,7 @@ import {
   Pressable,
   Switch,
   Alert,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -65,12 +66,18 @@ const REGISTERED_MEMBER_PERKS: RegisteredPerk[] = [
 
 export default function MobileCustomerProfileScreen() {
   const { isLoggedIn, user, recovering, logoutToGuest } = useAuth();
-  const { updateProfile } = useSession();
+  const { updateProfile, identity } = useSession();
   const router = useRouter();
 
-  const [personalizationEnabled, setPersonalizationEnabled] = useState(true);
-  const togglePersonalization = (enable?: boolean) =>
-    setPersonalizationEnabled((p) => (typeof enable === "boolean" ? enable : !p));
+  const [personalizationEnabled, setPersonalizationEnabled] = useState(
+    identity?.profile?.personalization_consent ?? true
+  );
+
+  useEffect(() => {
+    if (typeof identity?.profile?.personalization_consent === "boolean") {
+      setPersonalizationEnabled(identity.profile.personalization_consent);
+    }
+  }, [identity?.profile?.personalization_consent]);
 
   // Profile Edit State
   const [editingProfile, setEditingProfile] = useState(false);
@@ -104,9 +111,33 @@ export default function MobileCustomerProfileScreen() {
   const matiBarangays = ["Central (Poblacion)", "Dahican", "Sainz", "Matiao", "Badas", "Mayo"];
   const [defaultBarangay, setDefaultBarangay] = useState("Central (Poblacion)");
   const [savedAddress, setSavedAddress] = useState("Near Baywalk Pavilion, Blue Gate");
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [addressMsg, setAddressMsg] = useState<string | null>(null);
 
-  // Discreet Switch Role Section (Tricky/subtle so regular users won't misclick it)
-  const [showAdvancedSession, setShowAdvancedSession] = useState(false);
+  useEffect(() => {
+    if (identity?.profile) {
+      const prof = identity.profile as any;
+      if (prof.default_barangay) setDefaultBarangay(prof.default_barangay);
+      if (prof.delivery_address) setSavedAddress(prof.delivery_address);
+    }
+  }, [identity?.profile]);
+
+  const handleSaveAddress = async () => {
+    setSavingAddress(true);
+    setAddressMsg(null);
+    try {
+      await updateProfile({
+        default_barangay: defaultBarangay,
+        delivery_address: savedAddress.trim(),
+      });
+      setAddressMsg("Default address saved to account!");
+      setTimeout(() => setAddressMsg(null), 3500);
+    } catch (e) {
+      Alert.alert("Address Save Error", authMessage(e));
+    } finally {
+      setSavingAddress(false);
+    }
+  };
 
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
@@ -115,6 +146,9 @@ export default function MobileCustomerProfileScreen() {
     setSignOutError(null);
     try {
       await logoutToGuest();
+      if (Platform.OS === "web") {
+        router.replace("/");
+      }
     } catch (error) {
       setSignOutError(authMessage(error));
     } finally {
@@ -122,7 +156,7 @@ export default function MobileCustomerProfileScreen() {
     }
   };
 
-  const handleTogglePersonalizationAttempt = () => {
+  const handleTogglePersonalizationAttempt = async (forcedVal?: boolean) => {
     if (!isLoggedIn) {
       Alert.alert(
         "Registered Users Only 🔒",
@@ -134,22 +168,13 @@ export default function MobileCustomerProfileScreen() {
       );
       return;
     }
-    togglePersonalization();
-  };
-
-  const handleSwitchRoleConfirm = () => {
-    Alert.alert(
-      "Switch User Role?",
-      "Are you sure you want to leave Customer Mode and return to the Mati FoodFinder access portal?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Yes, Return to Portal",
-          style: "destructive",
-          onPress: () => router.replace("/(mobile)/portal"),
-        },
-      ]
-    );
+    const nextVal = typeof forcedVal === "boolean" ? forcedVal : !personalizationEnabled;
+    setPersonalizationEnabled(nextVal);
+    try {
+      await updateProfile({ personalization_consent: nextVal });
+    } catch {
+      setPersonalizationEnabled(!nextVal);
+    }
   };
 
   const [liveVisitSummary, setLiveVisitSummary] = useState<UserVisitSummary | null>(null);
@@ -173,36 +198,39 @@ export default function MobileCustomerProfileScreen() {
   return (
     <SafeAreaView className="flex-1 bg-[#F8FAFC]">
       {/* Top Header */}
-      <View className="px-5 pt-3 pb-3 bg-white border-b border-gray-100 flex-row justify-between items-center shadow-xs">
-        <View>
-          <Text className="text-[11px] font-extrabold text-[#EA5410] uppercase tracking-wider">
-            CUSTOMER ACCOUNT
-          </Text>
-          <Text className="text-xl font-black text-gray-900 tracking-tight">
-            Profile & Settings
-          </Text>
-        </View>
-        {!isLoggedIn ? (
-          <Pressable
-            onPress={() => router.push("/(mobile)/auth/customer-login")}
-            className="bg-[#EA5410]/10 border border-[#EA5410]/20 px-3.5 py-1.5 rounded-full flex-row items-center gap-1.5"
-          >
-            <Ionicons name="log-in-outline" size={15} color="#EA5410" />
-            <Text className="text-xs font-bold text-[#EA5410]">Sign In</Text>
-          </Pressable>
-        ) : (
-          <View className="bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full flex-row items-center gap-1.5">
-            <View className="w-2 h-2 rounded-full bg-emerald-600" />
-            <Text className="text-xs font-bold text-emerald-800">Online</Text>
+      <View className="px-4 sm:px-5 pt-3 pb-3 bg-white border-b border-gray-100 shadow-xs">
+        <View className="w-full max-w-2xl self-center flex-row justify-between items-center">
+          <View className="flex-1 pr-2">
+            <Text className="text-[11px] font-extrabold text-[#EA5410] uppercase tracking-wider">
+              CUSTOMER ACCOUNT
+            </Text>
+            <Text className="text-xl font-black text-gray-900 tracking-tight" numberOfLines={1}>
+              Profile & Settings
+            </Text>
           </View>
-        )}
+          {!isLoggedIn ? (
+            <Pressable
+              onPress={() => router.push("/(mobile)/auth/customer-login")}
+              className="bg-[#EA5410]/10 border border-[#EA5410]/20 px-3.5 py-1.5 rounded-full flex-row items-center gap-1.5 shrink-0"
+            >
+              <Ionicons name="log-in-outline" size={15} color="#EA5410" />
+              <Text className="text-xs font-bold text-[#EA5410]">Sign In</Text>
+            </Pressable>
+          ) : (
+            <View className="bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full flex-row items-center gap-1.5 shrink-0">
+              <View className="w-2 h-2 rounded-full bg-emerald-600" />
+              <Text className="text-xs font-bold text-emerald-800">Online</Text>
+            </View>
+          )}
+        </View>
       </View>
 
       <ScrollView
-        className="flex-1 px-5 pt-5"
+        className="flex-1 px-4 sm:px-5 pt-5"
         contentContainerStyle={{ paddingBottom: 110 }}
         showsVerticalScrollIndicator={false}
       >
+        <View className="w-full max-w-2xl self-center">
         {/* GUEST MEMBER PRIVILEGES SHOWCASE (Visible exclusively to Guest Users) */}
         {!isLoggedIn && (
           <View className="bg-white rounded-3xl border border-orange-200/90 p-5 shadow-sm mb-5">
@@ -377,7 +405,7 @@ export default function MobileCustomerProfileScreen() {
               >
                 <Ionicons name="log-out-outline" size={16} color="#6b7280" />
                 <Text className="text-xs font-bold text-gray-700">
-                  {signingOut ? "Signing out..." : "Log Out to Guest Mode"}
+                  {signingOut ? "Signing out..." : Platform.OS === "web" ? "Sign Out" : "Log Out to Guest Mode"}
                 </Text>
               </Pressable>
             </View>
@@ -417,12 +445,12 @@ export default function MobileCustomerProfileScreen() {
               </View>
 
               {/* Toggle Switch */}
-              <Pressable onPress={handleTogglePersonalizationAttempt} hitSlop={10}>
+              <Pressable onPress={() => handleTogglePersonalizationAttempt()} hitSlop={10}>
                 <Switch
                   trackColor={{ false: "#d1d5db", true: "#EA5410" }}
                   thumbColor={personalizationEnabled ? "#ffffff" : "#f3f4f6"}
                   ios_backgroundColor="#d1d5db"
-                  onValueChange={handleTogglePersonalizationAttempt}
+                  onValueChange={(val) => handleTogglePersonalizationAttempt(val)}
                   value={personalizationEnabled}
                 />
               </Pressable>
@@ -445,7 +473,7 @@ export default function MobileCustomerProfileScreen() {
                   </Text>
 
                   {/* Visit Stats Summary */}
-                  <View className="bg-gray-50/80 rounded-2xl p-4 border border-gray-100 flex-row justify-between items-center">
+                  <View className="bg-gray-50/80 rounded-2xl p-4 border border-gray-100 flex-row flex-wrap justify-between items-center gap-2">
                     <View>
                       <Text className="text-[10px] uppercase font-extrabold text-gray-400">
                         Total Check-ins
@@ -454,7 +482,7 @@ export default function MobileCustomerProfileScreen() {
                         {displayTotalScans} In-Store Scans
                       </Text>
                     </View>
-                    <View className="items-end">
+                    <View className="sm:items-end">
                       <Text className="text-[10px] uppercase font-extrabold text-gray-400">
                         #1 Most Visited
                       </Text>
@@ -479,7 +507,7 @@ export default function MobileCustomerProfileScreen() {
                   </Text>
 
                   <Pressable
-                    onPress={() => togglePersonalization(true)}
+                    onPress={() => handleTogglePersonalizationAttempt(true)}
                     className="py-3 bg-[#EA5410] rounded-2xl items-center shadow-sm"
                   >
                     <Text className="text-white font-extrabold text-xs">
@@ -536,12 +564,30 @@ export default function MobileCustomerProfileScreen() {
               className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-gray-900 mb-3"
               placeholderTextColor="#9ca3af"
             />
-            <View className="flex-row items-center gap-2 bg-orange-50/60 p-2.5 rounded-xl border border-orange-100">
+            <View className="flex-row items-center gap-2 bg-orange-50/60 p-2.5 rounded-xl border border-orange-100 mb-3.5">
               <Ionicons name="cash-outline" size={15} color="#EA5410" />
               <Text className="text-[11px] text-gray-600">
                 Payment Method: <Text className="font-black text-[#EA5410]">Cash on Delivery (COD)</Text>
               </Text>
             </View>
+
+            {addressMsg && (
+              <View className="flex-row items-center gap-1.5 mb-3 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl">
+                <Ionicons name="checkmark-circle" size={14} color="#059669" />
+                <Text className="text-xs font-bold text-emerald-800">{addressMsg}</Text>
+              </View>
+            )}
+
+            <Pressable
+              onPress={handleSaveAddress}
+              disabled={savingAddress}
+              className="py-3 bg-[#EA5410] rounded-2xl items-center shadow-xs active:bg-[#EA5410]/90 flex-row justify-center gap-1.5"
+            >
+              <Ionicons name="save-outline" size={15} color="white" />
+              <Text className="text-white font-black text-xs">
+                {savingAddress ? "Saving to Account..." : "Save Delivery Address"}
+              </Text>
+            </Pressable>
           </View>
         )}
 
@@ -597,38 +643,6 @@ export default function MobileCustomerProfileScreen() {
             </View>
           </View>
         </View>
-
-        {/* 6. DISCREET ROLE SWITCHER / PORTAL ACCESS */}
-        <View className="items-center mb-6">
-          <Pressable
-            onPress={() => setShowAdvancedSession(!showAdvancedSession)}
-            className="py-2.5 px-4 flex-row items-center gap-2 opacity-60"
-          >
-            <Ionicons
-              name={showAdvancedSession ? "chevron-down" : "ellipsis-horizontal"}
-              size={14}
-              color="#6b7280"
-            />
-            <Text className="text-[11px] font-semibold text-gray-500">
-              Session Management & Role Portal
-            </Text>
-          </Pressable>
-
-          {showAdvancedSession && (
-            <View className="w-full mt-3 p-5 bg-gray-100 rounded-3xl border border-gray-200 items-center">
-              <Text className="text-[11px] text-gray-500 text-center mb-3.5 leading-snug">
-                Switching roles will exit Customer Mode and return to the main Mati FoodFinder
-                access portal.
-              </Text>
-              <Pressable
-                onPress={handleSwitchRoleConfirm}
-                className="py-3 px-6 bg-[#111827] rounded-2xl flex-row items-center gap-2 shadow-sm"
-              >
-                <Ionicons name="swap-horizontal" size={15} color="white" />
-                <Text className="text-white font-extrabold text-xs">Switch User Role (Return to Portal)</Text>
-              </Pressable>
-            </View>
-          )}
         </View>
       </ScrollView>
     </SafeAreaView>

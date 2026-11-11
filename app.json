@@ -24,13 +24,29 @@
       "bundler": "metro"
     },
     "plugins": [
-      "expo-router",
+      [
+        "expo-router",
+        {
+          "asyncRoutes": {
+            "web": true,
+            "android": false,
+            "ios": false
+          }
+        }
+      ],
       "expo-status-bar",
       "expo-font",
       [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Allow Mati FoodFinder to use your location to show nearby Karenderias and restaurants."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#EA5410"
         }
       ],
       "expo-sqlite"

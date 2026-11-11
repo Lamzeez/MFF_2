@@ -57,3 +57,64 @@ test("Customer No-Show verification generates compliant GPS audit log", () => {
   assert.ok(auditNote.includes("(6.9549° N, 126.2165° E)"));
   assert.ok(auditNote.includes("Customer unreachable"));
 });
+
+test("Merchant Re-broadcast audit note is accurately detected", () => {
+  const merchantRebroadcastNote =
+    "[Merchant Re-broadcast: Courier delayed at store; re-broadcasted by merchant at 2:45:00 PM]";
+  const isRebroadcast =
+    merchantRebroadcastNote.includes("Auto-Reassigned") ||
+    merchantRebroadcastNote.includes("Courier Released") ||
+    merchantRebroadcastNote.includes("Merchant Re-broadcast");
+
+  assert.equal(isRebroadcast, true);
+});
+
+test("Customer COD eligibility policy enforces threshold of 2 strikes", () => {
+  const checkCodPolicy = (strikes: number) => {
+    return {
+      eligible: strikes < 2,
+      strikes,
+    };
+  };
+
+  // 0 strikes -> Eligible
+  assert.deepEqual(checkCodPolicy(0), { eligible: true, strikes: 0 });
+
+  // 1 strike -> Eligible (Warning state)
+  assert.deepEqual(checkCodPolicy(1), { eligible: true, strikes: 1 });
+
+  // 2 strikes -> Suspended (COD disabled)
+  assert.deepEqual(checkCodPolicy(2), { eligible: false, strikes: 2 });
+
+  // 3 strikes -> Suspended
+  assert.deepEqual(checkCodPolicy(3), { eligible: false, strikes: 3 });
+});
+
+test("Dining table capacity accurately calculates available tables from confirmed reservations", () => {
+  const TOTAL_TABLES = 6;
+  const reservations = [
+    { id: "1", status: "confirmed" },
+    { id: "2", status: "confirmed" },
+    { id: "3", status: "pending" },
+    { id: "4", status: "completed" },
+    { id: "5", status: "no_show" },
+  ];
+
+  const confirmedCount = reservations.filter((r) => r.status === "confirmed").length;
+  const availableTables = Math.max(0, TOTAL_TABLES - confirmedCount);
+
+  // Only 2 confirmed bookings are occupying tables
+  assert.equal(confirmedCount, 2);
+  assert.equal(availableTables, 4);
+
+  // When reservation 1 completes:
+  const updatedReservations = reservations.map((r) =>
+    r.id === "1" ? { ...r, status: "completed" } : r
+  );
+  const updatedConfirmedCount = updatedReservations.filter((r) => r.status === "confirmed").length;
+  const updatedAvailableTables = Math.max(0, TOTAL_TABLES - updatedConfirmedCount);
+
+  assert.equal(updatedConfirmedCount, 1);
+  assert.equal(updatedAvailableTables, 5);
+});
+

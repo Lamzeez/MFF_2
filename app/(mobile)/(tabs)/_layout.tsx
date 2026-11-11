@@ -1,25 +1,46 @@
-import { Tabs, Redirect } from "expo-router";
+import React, { useEffect } from "react";
+import { Tabs, Redirect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../context/AuthContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { View, Platform, useWindowDimensions } from "react-native";
 import { ENFORCE_STRICT_PLATFORM_GUARDS, isDesktopDevice } from "../../../lib/platform-policy";
+import {
+  initializeNotificationChannels,
+  registerForPushNotificationsAsync,
+  setupNotificationResponseListener,
+} from "../../../services/device-notifications";
 
 export default function MobileTabsLayout() {
   const { width } = useWindowDimensions();
   if (ENFORCE_STRICT_PLATFORM_GUARDS && isDesktopDevice(width)) {
-    return <Redirect href="/portal" />;
+    return <Redirect href="/" />;
   }
 
-  const { isLoggedIn } = useAuth();
+  const router = useRouter();
+  const { isLoggedIn, user } = useAuth();
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    initializeNotificationChannels();
+    if (isLoggedIn && user?.id) {
+      registerForPushNotificationsAsync(user.id);
+    }
+    const unsub = setupNotificationResponseListener(() => {
+      router.push("/(mobile)/(tabs)/orders");
+    });
+    return () => unsub();
+  }, [isLoggedIn, user?.id]);
 
   // Ensure ample bottom clearance so Android 3-button navigation doesn't overlap the tabs
   const bottomInset = insets.bottom > 0 ? insets.bottom : (Platform.OS === "android" ? 16 : 8);
   const tabHeight = 60 + bottomInset;
+  const wideHorizontalPadding =
+    Platform.OS === "web" && width >= 900 ? Math.max(0, Math.round((width - 720) / 2)) : 0;
 
   return (
     <Tabs
+      initialRouteName="discover"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: "#EA5410", // prototype --brand
@@ -31,6 +52,7 @@ export default function MobileTabsLayout() {
           height: tabHeight,
           paddingBottom: bottomInset,
           paddingTop: 8,
+          paddingHorizontal: wideHorizontalPadding,
           elevation: 8,
           shadowColor: "#101828",
           shadowOffset: { width: 0, height: -2 },
@@ -45,7 +67,7 @@ export default function MobileTabsLayout() {
       }}
     >
       <Tabs.Screen
-        name="index"
+        name="discover"
         options={{
           title: "Home",
           tabBarIcon: ({ focused }) => (

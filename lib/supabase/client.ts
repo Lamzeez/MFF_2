@@ -1,7 +1,7 @@
-import { createLazySupabaseClient } from "./core";
+import type { AuthPortalScope } from "../../types/auth";
+import { createScopedSupabaseClients, type SessionStorage } from "./core";
 
-/** Browser runtime only. No server-global auth session is ever constructed. */
-export const getSupabaseClient = createLazySupabaseClient(() => {
+function getBrowserStorage(): SessionStorage {
   if (typeof window === "undefined") {
     throw new Error("Supabase browser client cannot be used during server rendering.");
   }
@@ -14,4 +14,10 @@ export const getSupabaseClient = createLazySupabaseClient(() => {
   } catch {
     throw new Error("Persistent browser storage is unavailable. Enable storage before signing in.");
   }
-}, false);
+}
+
+/** Browser runtime only. No server-global auth session is ever constructed. */
+export const getScopedSupabaseClient = createScopedSupabaseClients(getBrowserStorage, false);
+
+export const getSupabaseClient = (scope: AuthPortalScope = "customer") =>
+  getScopedSupabaseClient(scope);

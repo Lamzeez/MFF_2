@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { RestaurantProfile } from "../../types/restaurant";
 import { BottomSheetModal } from "../ui/BottomSheetModal";
+import {
+  ReservationDateOption,
+  generateUpcomingReservationDates,
+} from "../../lib/reservation-dates";
 
 interface ReservationSheetProps {
   visible: boolean;
@@ -36,18 +40,20 @@ export function ReservationSheet({
 }: ReservationSheetProps) {
   const [selectedResto, setSelectedResto] = useState(initialRestaurant);
   const [partySize, setPartySize] = useState(2);
-  const [date, setDate] = useState("Tonight");
+  const dateOptions = useMemo(() => generateUpcomingReservationDates(14), []);
+  const [selectedDateIso, setSelectedDateIso] = useState<string>(() => dateOptions[0]?.iso || "");
   const [time, setTime] = useState("7:30 PM");
   const [seating, setSeating] = useState("Bayside Sea Breeze");
   const [notes, setNotes] = useState("");
 
   const activeResto = restaurants[selectedResto] || Object.values(restaurants)[0];
+  const selectedDateOption = dateOptions.find((d) => d.iso === selectedDateIso) || dateOptions[0];
 
   const handleSubmit = (handleDismiss: () => void) => {
     onConfirmReservation({
       restaurantName: selectedResto,
       partySize,
-      date,
+      date: selectedDateOption.iso,
       time,
       seatingPreference: seating,
       specialNotes: notes.trim(),
@@ -153,8 +159,54 @@ export function ReservationSheet({
               ))}
             </View>
 
-            {/* Tap 2: Time Slot Pills */}
-            <Text className="text-xs font-bold text-gray-700 mb-2">Time Slot (Tonight) *</Text>
+            {/* Tap 2: Date Selector (14-Day Booking Horizon) */}
+            <View className="flex-row items-center justify-between mb-2">
+              <Text className="text-xs font-bold text-gray-700">Reservation Date *</Text>
+              <Text className="text-[11px] font-black text-[#EA5410]">
+                {selectedDateOption.label} ({selectedDateOption.dayNum})
+              </Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              className="mb-4"
+              contentContainerStyle={{ paddingRight: 10 }}
+            >
+              {dateOptions.map((opt) => {
+                const isSelected = selectedDateIso === opt.iso;
+                return (
+                  <Pressable
+                    key={opt.iso}
+                    onPress={() => setSelectedDateIso(opt.iso)}
+                    className={`mr-2 px-3.5 py-2 rounded-xl border items-center min-w-[72px] ${
+                      isSelected
+                        ? "bg-[#EA5410] border-[#EA5410] shadow-xs"
+                        : "bg-gray-50 border-gray-200"
+                    }`}
+                  >
+                    <Text
+                      className={`text-[10px] font-black uppercase ${
+                        isSelected ? "text-white" : "text-gray-500"
+                      }`}
+                    >
+                      {opt.shortDay}
+                    </Text>
+                    <Text
+                      className={`text-xs font-bold ${
+                        isSelected ? "text-white" : "text-gray-900"
+                      }`}
+                    >
+                      {opt.dayNum}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            {/* Tap 3: Time Slot Pills */}
+            <Text className="text-xs font-bold text-gray-700 mb-2">
+              Time Slot ({selectedDateOption.shortDay}) *
+            </Text>
             <View className="flex-row flex-wrap gap-2 mb-4">
               {["6:00 PM", "6:30 PM", "7:00 PM", "7:30 PM", "8:00 PM", "8:30 PM"].map((t) => (
                 <Pressable
@@ -175,7 +227,7 @@ export function ReservationSheet({
               ))}
             </View>
 
-            {/* Tap 3: Seating Preference */}
+            {/* Tap 4: Seating Preference */}
             <Text className="text-xs font-bold text-gray-700 mb-2">Seating Preference</Text>
             <View className="flex-row gap-2 mb-4">
               {["Bayside Sea Breeze", "Indoor AC", "Family Booth"].map((opt) => (
@@ -218,7 +270,7 @@ export function ReservationSheet({
             >
               <Ionicons name="calendar" size={17} color="white" />
               <Text className="text-white font-black text-sm">
-                Confirm Reservation ({partySize} Guests · {time})
+                Confirm Reservation ({partySize} Guests · {selectedDateOption.shortDay} · {time})
               </Text>
             </Pressable>
           </ScrollView>

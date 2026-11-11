@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSession } from "../../../context/SessionContext";
 import { fetchStoreById, updateStoreProfile, fetchUserStoreId } from "../../../services/catalog";
+import { uploadStoreCoverPhoto } from "../../../services/storage";
+import { NotificationBanner, type BannerMessage } from "../../../components/ui/NotificationBanner";
 
 const DEFAULT_STORE_ID = "11111111-1111-1111-1111-111111111111";
 
 export default function StoreProfile() {
-  const { identity } = useSession();
+  const { identity } = useSession("merchant");
   const [storeId, setStoreId] = useState<string>(DEFAULT_STORE_ID);
 
   const [storeName, setStoreName] = useState("Mama Letty's Karenderia");
@@ -17,9 +19,11 @@ export default function StoreProfile() {
   const [openTime, setOpenTime] = useState("07:00 AM");
   const [closeTime, setCloseTime] = useState("08:00 PM");
   const [phone, setPhone] = useState("+63 917 234 5678");
-  const [saved, setSaved] = useState(false);
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [banner, setBanner] = useState<BannerMessage | null>(null);
 
   useEffect(() => {
     if (identity?.id) {
@@ -35,60 +39,137 @@ export default function StoreProfile() {
         setStoreName(store.name);
         setDescription(store.description);
         if (store.phone) setPhone(store.phone);
+        if (store.cover_image_url) {
+          setCoverImageUrl(store.cover_image_url);
+        } else if (store.imageUrl) {
+          setCoverImageUrl(store.imageUrl);
+        }
+        const hoursStr = store.operating_hours || store.hours;
+        if (hoursStr) {
+          const match = hoursStr.match(/^([0-9]{1,2}:[0-9]{2}\s*(?:AM|PM))\s*-\s*([0-9]{1,2}:[0-9]{2}\s*(?:AM|PM))/i);
+          if (match) {
+            setOpenTime(match[1]);
+            setCloseTime(match[2]);
+          }
+        }
       }
       setLoading(false);
     });
   }, [storeId]);
 
+  const handleUploadCoverPhoto = () => {
+    if (typeof document !== "undefined") {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/*";
+      input.onchange = async (e: any) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploading(true);
+        try {
+          const res = await uploadStoreCoverPhoto(file, storeId, {
+            mimeType: file.type || "image/jpeg",
+          });
+          if (res.publicUrl) {
+            setCoverImageUrl(res.publicUrl);
+            setBanner({
+              type: "success",
+              message: "Store cover photo uploaded successfully to Supabase Storage!",
+            });
+          } else {
+            setBanner({
+              type: "error",
+              message: `Failed to upload cover photo: ${res.error || "Unknown error"}`,
+            });
+          }
+        } catch (err: any) {
+          setBanner({
+            type: "error",
+            message: `Failed to upload photo: ${err?.message || "Unknown error"}`,
+          });
+        } finally {
+          setUploading(false);
+        }
+      };
+      input.click();
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
+    const operating_hours = `${openTime} - ${closeTime} Daily`;
     const res = await updateStoreProfile(storeId, {
       name: storeName,
       description,
       public_phone: phone,
+      operating_hours,
+      cover_image_url: coverImageUrl || undefined,
     });
     setSaving(false);
     if (res.success) {
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      setBanner({
+        type: "success",
+        message: "Store profile & operating hours updated successfully on Supabase!",
+      });
     } else {
-      alert(`Failed to save: ${res.error || "Unknown error"}`);
+      setBanner({
+        type: "error",
+        message: `Failed to save: ${res.error || "Unknown error"}`,
+      });
     }
   };
 
   return (
-    <View className="flex-1 p-6 md:p-10 w-full max-w-4xl self-center">
+    <View className="flex-1 p-4 sm:p-6 lg:p-10 w-full max-w-4xl self-center">
       {/* Header */}
-      <View className="mb-8">
+      <View className="mb-6 sm:mb-8">
         <View className="flex-row items-center gap-2 mb-1">
           <Text className="text-[11px] font-black text-[#EA5410] uppercase tracking-wider">
             STORE SETTINGS
           </Text>
         </View>
-        <Text className="text-3xl font-black text-gray-900 tracking-tight">Store Profile & Operating Hours</Text>
+        <Text className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">Store Profile & Operating Hours</Text>
         <Text className="text-gray-500 text-sm mt-1">
           Update how your Karenderia or Restaurant appears to customers across Mati City.
         </Text>
       </View>
 
+      {/* Notification Banner */}
+      <NotificationBanner banner={banner} onDismiss={() => setBanner(null)} />
+
       <ScrollView
         className="bg-white rounded-3xl shadow-sm border border-gray-200/80 overflow-hidden"
-        contentContainerStyle={{ padding: 32 }}
       >
+        <View className="p-5 sm:p-7 lg:p-8">
         {/* Banner/Logo Uploads */}
-        <View className="flex-row items-center gap-6 mb-8 pb-8 border-b border-gray-100">
-          <View className="w-24 h-24 bg-[#EA5410]/10 rounded-2xl items-center justify-center border-2 border-dashed border-[#EA5410]/30">
-            <Ionicons name="storefront" size={36} color="#EA5410" />
-          </View>
-          <View>
+        <View className="flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 mb-6 sm:mb-8 pb-6 sm:pb-8 border-b border-gray-100">
+          {coverImageUrl ? (
+            <Image
+              source={{ uri: coverImageUrl }}
+              className="w-24 h-24 rounded-2xl border border-gray-200 shrink-0"
+              resizeMode="cover"
+            />
+          ) : (
+            <View className="w-24 h-24 bg-[#EA5410]/10 rounded-2xl items-center justify-center border-2 border-dashed border-[#EA5410]/30 shrink-0">
+              <Ionicons name="storefront" size={36} color="#EA5410" />
+            </View>
+          )}
+          <View className="flex-1">
             <Pressable
-              onPress={() => alert("Upload Logo: In production, uploads cover image to Supabase Storage.")}
+              disabled={uploading}
+              onPress={handleUploadCoverPhoto}
               className="px-5 py-2.5 bg-[#111827] rounded-xl hover:bg-black transition-colors mb-2 self-start flex-row items-center gap-2"
             >
-              <Ionicons name="cloud-upload-outline" size={16} color="white" />
-              <Text className="text-white font-bold text-xs">Upload Store Cover Photo</Text>
+              {uploading ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Ionicons name="cloud-upload-outline" size={16} color="white" />
+              )}
+              <Text className="text-white font-bold text-xs">
+                {uploading ? "Uploading to Storage..." : "Upload Store Cover Photo"}
+              </Text>
             </Pressable>
-            <Text className="text-gray-400 text-xs">Recommended: 1200x600 PNG or JPEG, up to 5MB</Text>
+            <Text className="text-gray-400 text-xs">Recommended: 1200x600 PNG, WEBP or JPEG, up to 10MB</Text>
           </View>
         </View>
 
@@ -151,24 +232,18 @@ export default function StoreProfile() {
           </View>
         )}
 
-        {saved && (
-          <View className="mt-6 bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex-row items-center gap-2">
-            <Ionicons name="checkmark-circle" size={18} color="#047857" />
-            <Text className="text-emerald-800 text-xs font-bold">Store profile updated successfully on Supabase!</Text>
-          </View>
-        )}
-
         <View className="mt-8 pt-6 border-t border-gray-100 flex-row justify-end">
           <Pressable
             disabled={saving || loading}
             onPress={handleSave}
-            className="px-8 py-3.5 bg-[#EA5410] rounded-2xl hover:bg-[#D04508] transition-colors shadow-sm flex-row items-center gap-2"
+            className="w-full sm:w-auto px-8 py-3.5 bg-[#EA5410] rounded-2xl hover:bg-[#D04508] transition-colors shadow-sm flex-row items-center justify-center gap-2"
           >
             {saving && <ActivityIndicator size="small" color="white" />}
             <Text className="text-white font-extrabold text-sm">
               {saving ? "Saving..." : "Save Store Changes"}
             </Text>
           </Pressable>
+        </View>
         </View>
       </ScrollView>
     </View>

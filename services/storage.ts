@@ -60,3 +60,103 @@ export async function uploadDishPhoto(
     };
   }
 }
+
+async function uploadMerchantAsset(
+  fileOrUri: Blob | string,
+  pathPrefix: string,
+  options?: {
+    mimeType?: string;
+    errorLabel?: string;
+  }
+): Promise<UploadResult> {
+  try {
+    const client = getSupabaseClient("merchant");
+    const mime =
+      options?.mimeType ||
+      (typeof fileOrUri !== "string" && (fileOrUri as any)?.type
+        ? (fileOrUri as any).type
+        : "image/jpeg");
+    const ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : "jpg";
+    const uniquePath = `${pathPrefix}_${Date.now()}.${ext}`;
+
+    let blob: Blob;
+    if (typeof fileOrUri === "string") {
+      const response = await fetch(fileOrUri);
+      blob = await response.blob();
+    } else {
+      blob = fileOrUri;
+    }
+
+    let bucket = "store-branding";
+    let { data, error } = await client.storage
+      .from(bucket)
+      .upload(uniquePath, blob, {
+        contentType: mime,
+        upsert: true,
+      });
+
+    if (error) {
+      bucket = "foodie-uploads";
+      const fallbackUpload = await client.storage
+        .from(bucket)
+        .upload(uniquePath, blob, {
+          contentType: mime,
+          upsert: true,
+        });
+      data = fallbackUpload.data;
+      error = fallbackUpload.error;
+    }
+
+    if (error || !data) {
+      return {
+        publicUrl: null,
+        error: error?.message || `Failed to upload ${options?.errorLabel || "merchant asset"}.`,
+      };
+    }
+
+    const { data: urlData } = client.storage.from(bucket).getPublicUrl(data.path);
+
+    return {
+      publicUrl: urlData.publicUrl,
+      path: data.path,
+    };
+  } catch (err: any) {
+    return {
+      publicUrl: null,
+      error: err?.message || `Failed to upload ${options?.errorLabel || "merchant asset"}.`,
+    };
+  }
+}
+
+/**
+ * Uploads a merchant store cover photo or branding asset to 'store-branding' bucket (with fallback to 'foodie-uploads').
+ * Supports both web File/Blob instances and local URI strings.
+ */
+export async function uploadStoreCoverPhoto(
+  fileOrUri: Blob | string,
+  storeId: string,
+  options?: {
+    mimeType?: string;
+  }
+): Promise<UploadResult> {
+  return uploadMerchantAsset(fileOrUri, `covers/${storeId}`, {
+    mimeType: options?.mimeType,
+    errorLabel: "store cover photo",
+  });
+}
+
+/**
+ * Uploads a merchant verification permit or storefront photo during registration.
+ */
+export async function uploadStoreVerificationDocument(
+  fileOrUri: Blob | string,
+  userId: string,
+  options?: {
+    mimeType?: string;
+  }
+): Promise<UploadResult> {
+  return uploadMerchantAsset(fileOrUri, `verification-docs/${userId}`, {
+    mimeType: options?.mimeType,
+    errorLabel: "verification document",
+  });
+}

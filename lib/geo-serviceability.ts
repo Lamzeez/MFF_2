@@ -296,3 +296,93 @@ export function evaluateStoreDeliveryServiceability(
     effectiveRadiusKm,
   };
 }
+
+export interface StoreHoursEvaluation {
+  isOpen: boolean;
+  opensAt: string;
+  closesAt: string;
+  formattedHours: string;
+  message: string;
+}
+
+/**
+ * Parses time string like "7:30 AM" or "07:30" or "9:00 PM" into minutes from midnight (0..1439).
+ */
+function parseTimeToMinutes(timeStr: string): number | null {
+  const clean = timeStr.trim().toUpperCase();
+  const match12 = clean.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!match12) return null;
+
+  let hours = parseInt(match12[1], 10);
+  const minutes = parseInt(match12[2], 10);
+  const period = match12[3];
+
+  if (period) {
+    if (period === "PM" && hours < 12) hours += 12;
+    if (period === "AM" && hours === 12) hours = 0;
+  }
+
+  return hours * 60 + minutes;
+}
+
+/**
+ * Evaluates whether a restaurant is currently open based on operating hours string.
+ * Example strings: "7:30 AM - 9:00 PM Daily", "07:00 - 21:00", "7:00 AM - 8:30 PM".
+ * Default Mati City restaurant window: 7:00 AM to 9:00 PM Daily.
+ */
+export function isStoreCurrentlyOpen(
+  hoursString?: string | null,
+  refDate: Date = new Date()
+): StoreHoursEvaluation {
+  const fallbackHours = "7:00 AM - 9:00 PM Daily";
+  const raw = hoursString?.trim() || fallbackHours;
+
+  if (/24\s*hours?/i.test(raw)) {
+    return {
+      isOpen: true,
+      opensAt: "Open 24 Hours",
+      closesAt: "Daily",
+      formattedHours: raw,
+      message: "Store is open 24 hours.",
+    };
+  }
+
+  // Split on hyphen or en-dash
+  const parts = raw.split(/[-–—]/);
+  let openMin = 7 * 60; // 7:00 AM default
+  let closeMin = 21 * 60; // 9:00 PM default
+  let opensAt = "7:00 AM";
+  let closesAt = "9:00 PM";
+
+  if (parts.length >= 2) {
+    const startStr = parts[0].trim();
+    // Strip trailing days like "Daily", "Mon-Sun"
+    const endStr = parts[1].replace(/(Daily|Mon|Tue|Wed|Thu|Fri|Sat|Sun|[.,()])/gi, "").trim();
+
+    const parsedStart = parseTimeToMinutes(startStr);
+    const parsedEnd = parseTimeToMinutes(endStr);
+
+    if (parsedStart !== null && parsedEnd !== null) {
+      openMin = parsedStart;
+      closeMin = parsedEnd;
+      opensAt = startStr;
+      closesAt = endStr;
+    }
+  }
+
+  const currentMin = refDate.getHours() * 60 + refDate.getMinutes();
+  const isOpen =
+    closeMin >= openMin
+      ? currentMin >= openMin && currentMin < closeMin
+      : currentMin >= openMin || currentMin < closeMin;
+
+  return {
+    isOpen,
+    opensAt,
+    closesAt,
+    formattedHours: raw,
+    message: isOpen
+      ? `Store is open. Operating hours: ${opensAt} – ${closesAt}.`
+      : `Store is currently closed. Operating hours: ${opensAt} – ${closesAt}. Please order during open hours.`,
+  };
+}

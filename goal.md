@@ -242,28 +242,48 @@ Reach a cohesive "mature consumer app" quality bar.
 -   [ ] Release/build process documented.
 -   [ ] Security/RLS review completed.
 
-## Current priority
+## Current priority: System Remediation & Production Completeness (Phases A–F)
 
-The approved current objective is **Milestone 2A: Supabase Real Auth & Session Migration**.
+The approved active goal is the comprehensive remediation of functional gaps, UI/theme discrepancies, and system shortfalls identified during the system-wide audit:
 
-**Core focus:**
-1. **Docker is skipped completely**: Target the hosted/remote Supabase instance directly. No local Docker daemon, no containerized CLI dependencies.
-2. **Real customer authentication**: Connect `customer-register.tsx` and `customer-login.tsx` to real Supabase Auth (`signUp`, `signInWithPassword`, email confirmation code, password recovery).
-3. **Real merchant authentication & role verification**: Migrate store partner login/registration to real Supabase Auth, verifying active store membership via `store_memberships`. Retire demo credential shortcuts (`lette@karenderia.com`).
-4. **Real rider authentication & role verification**: Migrate rider login/registration to real Supabase Auth, verifying active platform rider status via `platform_roles`.
-5. **Real persistent sessions**: Ensure sessions persist reliably across app restarts via `expo-sqlite` on native and `localStorage` on web through `SessionContext.tsx`.
-6. **Graceful guest gating**: Allow unrestricted guest food browsing; require authentication only when opening checkout, placing orders, making reservations, scanning QR visits, or accessing the profile.
+### Phase A: Critical Multi-Item Cart & Booking Bugfixes (Completed)
+- [x] Fix `CartContext.tsx` `updateQuantity` & `removeItem` to key by unique composite `itemId` (rather than generic `dishId`), preventing cross-variation quantity and deletion collisions on customized dishes.
+- [x] Upgrade `ReservationSheet.tsx` date handling: replace hardcoded `"Tonight"` string with interactive day selector pills (*"Today"*, *"Tomorrow"*, *"This Weekend"*, or custom date) serializing canonical ISO `YYYY-MM-DD` strings for PostgreSQL `table_reservations`.
 
-Daily menus/hours, orders, deliveries/COD, reservations, and community data migration will follow once authentication and sessions are production-solid.
+### Phase B: Community Moderation Trigger & Rider/Store Rating Wiring (Completed)
+- [x] Add customer-facing "Report Post" action button and reason selector sheet to `app/(mobile)/(tabs)/community.tsx`, hooking into `reportCommunityPost` and remote `post_reports` queue.
+- [x] Wire Rider Profile Modal in `app/(mobile)/rider/index.tsx` to query live courier star ratings and customer compliments via `fetchRiderRatingSummary`.
+- [x] Connect live store ratings and review counts to catalog cards in `services/catalog.ts` via `fetchStoreRatingSummary` / `get_store_rating_summary`.
+
+### Phase C: Web Merchant Profile Persistence & Storage (Completed)
+- [x] Add `operating_hours` and `cover_image_url` columns to `public.stores` via Supabase migration.
+- [x] Implement real store cover image upload to Supabase Storage (`store-branding` bucket with `foodie-uploads` fallback) in `app/(web)/dashboard/profile.tsx`.
+- [x] Persist store operating hours in web and mobile merchant settings to remote database.
+- [x] Persist customer `personalization_consent` boolean in `public.profiles`.
+
+### Phase D: Design Token Unification & Web Alert Modernization (Completed)
+- [x] Audit and replace raw inline status ternaries with canonical `lib/status-tokens.ts` across `app/(mobile)/merchant/index.tsx`, `app/(web)/system-admin/approvals.tsx`, and `app/(web)/system-admin/users.tsx`.
+- [x] Standardize Brand Primary to `#EA5410` and modal backdrop dimming to `bg-black/60`.
+- [x] Replace disruptive raw browser `alert()` popups in Web Store and System Admin views with styled inline notification/toast banners.
+
+### Phase E: Admin Analytics Aggregation & Offline Banner (Completed)
+- [x] Implement Supabase RPC `admin_get_monthly_gmv()` aggregating live order sums grouped by month/week to power `app/(web)/system-admin/metrics.tsx` bar chart.
+- [x] Query real QR check-in ratios from `store_visits` for admin telemetry discovery channels.
+- [x] Add top-level offline connectivity detector and subtle reconnecting banner for weak Mati cellular signals.
+- [x] Replace reservation "Directions" alert stub with deep link navigation to maps.
+
+### Phase F: Quality Gates & Documentation Memory (Completed)
+- [x] Add automated unit tests covering composite cart item mutations, date serialization, and token compliance in `tests/foundation/`.
+- [x] Execute standard quality suite: `npm test`, `npm run typecheck`, and `npm run check:client-bundle`.
+- [x] Update `progress.md` with verified phase changes.
 
 ## Anti-goals
 
-Until real Auth & Sessions are fully migrated, do NOT prioritize:
+Until Phases A–F are complete, do NOT prioritize:
+- Implementing Phase 4C (PayMongo payment gateway) until explicitly requested in a later phase.
 - Setting up or troubleshooting local Docker or containerized databases.
-- Adding mock login shortcuts or hardcoded demo user switches.
-- Decorative animation or visual tweaks unrelated to the auth journey.
-- Broad rewrites of feature screens not yet scheduled for backend migration.
-- Speculative ML/AI features or unnecessary third-party libraries.
+- Modifying working code without explicit phase-by-phase instruction from the user.
+- Decorative animations or visual redesigns unrelated to token standardization.
 
 ## Success metrics to define before pilot
 

@@ -26,6 +26,9 @@ import {
   togglePostLike,
   addCommunityComment,
   subscribeToCommunityFeed,
+  reportCommunityPost,
+  COMMUNITY_REPORT_REASONS,
+  CommunityReportReason,
   FeedSortOption,
 } from "../../../services/community";
 import { uploadDishPhoto } from "../../../services/storage";
@@ -61,6 +64,11 @@ export default function MobileCommunityScreen() {
   const [guestGateAction, setGuestGateAction] = useState<string>(
     "post reviews to the foodie community"
   );
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportingPost, setReportingPost] = useState<SocialPost | null>(null);
+  const [reportReason, setReportReason] = useState<CommunityReportReason>(COMMUNITY_REPORT_REASONS[0]);
+  const [reportDetails, setReportDetails] = useState("");
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
 
   // New Post Form State
   const [newPostText, setNewPostText] = useState("");
@@ -202,6 +210,34 @@ export default function MobileCommunityScreen() {
     }
   };
 
+  // Initiate Report Post
+  const handleInitiateReport = (post: SocialPost) => {
+    if (!verifyRegisteredUser("report community content")) return;
+    setReportingPost(post);
+    setReportReason(COMMUNITY_REPORT_REASONS[0]);
+    setReportDetails("");
+    setShowReportModal(true);
+  };
+
+  // Submit Moderation Report
+  const handleSubmitReport = async () => {
+    if (!reportingPost) return;
+    setIsSubmittingReport(true);
+    try {
+      await reportCommunityPost(reportingPost.id, reportReason, reportDetails);
+      setShowReportModal(false);
+      setReportingPost(null);
+      Alert.alert(
+        "Report Submitted 🛡️",
+        "Thank you for helping keep the Mati foodie community trustworthy. Our moderators have received your report."
+      );
+    } catch (err: any) {
+      Alert.alert("Report Failed", err.message || "Could not submit report. Please try again.");
+    } finally {
+      setIsSubmittingReport(false);
+    }
+  };
+
   // Pick Dish Photo with ImagePicker
   const handlePickDishPhoto = async () => {
     try {
@@ -274,18 +310,19 @@ export default function MobileCommunityScreen() {
 
   // Render Post Card Item for Virtualized FlatList
   const renderPostCard = ({ item: post }: { item: SocialPost }) => (
-    <View className="bg-white rounded-3xl border border-gray-200 p-4 shadow-sm mb-4 mx-4">
+    <View className="w-full max-w-2xl self-center px-4">
+    <View className="bg-white rounded-3xl border border-gray-200 p-4 shadow-sm mb-4">
       {/* Author & Header Row */}
-      <View className="flex-row items-center justify-between mb-3">
-        <View className="flex-row items-center gap-2.5">
+      <View className="flex-row items-center justify-between mb-3 gap-2">
+        <View className="flex-row items-center gap-2.5 flex-1 min-w-0">
           <View
-            className={`w-9 h-9 rounded-full items-center justify-center ${
+            className={`w-9 h-9 rounded-full items-center justify-center shrink-0 ${
               post.avatarBg || "bg-[#EA5410]"
             }`}
           >
             <Text className="text-white font-black text-xs">{post.authorInitial}</Text>
           </View>
-          <View>
+          <View className="flex-1 min-w-0">
             <View className="flex-row items-center gap-1.5 flex-wrap">
               <Text className="text-sm font-extrabold text-gray-900">{post.author}</Text>
               {post.roleBadge ? (
@@ -304,13 +341,25 @@ export default function MobileCommunityScreen() {
           </View>
         </View>
 
-        {/* Rating Badge */}
-        {post.rating ? (
-          <View className="flex-row items-center bg-amber-50 px-2 py-1 rounded-xl border border-amber-200">
-            <Ionicons name="star" size={12} color="#D97706" />
-            <Text className="text-xs font-black text-amber-900 ml-1">{post.rating}.0</Text>
-          </View>
-        ) : null}
+        {/* Rating Badge & Report Flag Button */}
+        <View className="flex-row items-center gap-1.5">
+          {post.rating ? (
+            <View className="flex-row items-center bg-amber-50 px-2 py-1 rounded-xl border border-amber-200">
+              <Ionicons name="star" size={12} color="#D97706" />
+              <Text className="text-xs font-black text-amber-900 ml-1">{post.rating}.0</Text>
+            </View>
+          ) : null}
+
+          {/* Report Post Action Button */}
+          <Pressable
+            onPress={() => handleInitiateReport(post)}
+            className="w-7 h-7 rounded-full items-center justify-center bg-gray-50 active:bg-gray-200 border border-gray-200/60"
+            accessibilityRole="button"
+            accessibilityLabel="Report post"
+          >
+            <Ionicons name="flag-outline" size={13} color="#9CA3AF" />
+          </Pressable>
+        </View>
       </View>
 
       {/* Tagged Restaurant / Dish Pill & Ranking Indicators */}
@@ -427,16 +476,17 @@ export default function MobileCommunityScreen() {
         </Pressable>
       </View>
     </View>
+    </View>
   );
 
   // List Header Component
   const renderListHeader = () => (
-    <View>
+    <View className="w-full max-w-2xl self-center">
       {/* GUEST WELCOME BANNER OR REGISTERED USER COMPOSE BOX */}
       {!isLoggedIn ? (
         <View className="mx-4 mt-3 mb-4 p-4 bg-orange-50 border border-orange-200 rounded-2xl">
-          <View className="flex-row items-center justify-between mb-1.5">
-            <View className="flex-row items-center gap-1.5">
+          <View className="flex-row items-center justify-between flex-wrap gap-2 mb-1.5">
+            <View className="flex-row items-center gap-1.5 flex-1 min-w-[180px]">
               <Ionicons name="sparkles" size={15} color="#EA5410" />
               <Text className="text-sm font-black text-gray-900">
                 Mati Foodie Community 🍽️
@@ -459,7 +509,7 @@ export default function MobileCommunityScreen() {
       ) : (
         <View className="mx-4 mt-3 mb-4 p-4 bg-white border border-gray-200 rounded-2xl shadow-xs">
           <View className="flex-row items-center gap-3 mb-2.5">
-            <View className="w-10 h-10 rounded-full bg-[#EA5410] items-center justify-center">
+            <View className="w-10 h-10 rounded-full bg-[#EA5410] items-center justify-center shrink-0">
               <Text className="text-white font-black text-sm">
                 {user?.name?.charAt(0).toUpperCase() || "F"}
               </Text>
@@ -468,12 +518,12 @@ export default function MobileCommunityScreen() {
               onPress={() => setShowCreateModal(true)}
               className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5"
             >
-              <Text className="text-xs text-gray-400 font-medium">
+              <Text className="text-xs text-gray-400 font-medium" numberOfLines={1}>
                 Tried something delicious in Mati? Share it...
               </Text>
             </Pressable>
           </View>
-          <View className="flex-row items-center justify-between pt-2 border-t border-gray-100">
+          <View className="flex-row flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-100">
             <Pressable
               onPress={() => setShowCreateModal(true)}
               className="flex-row items-center gap-1.5"
@@ -499,7 +549,7 @@ export default function MobileCommunityScreen() {
       )}
 
       {/* FEED FILTER / RANKING SELECTOR */}
-      <View className="mx-4 mb-3 flex-row items-center justify-between">
+      <View className="mx-4 mb-3 flex-row flex-wrap items-center justify-between gap-2">
         <View className="flex-row items-center gap-2">
           <Pressable
             onPress={() => handleSwitchFeedSort("trending")}
@@ -558,33 +608,35 @@ export default function MobileCommunityScreen() {
   return (
     <SafeAreaView edges={["top"]} className="flex-1 bg-[#F8FAFC]">
       {/* 1. TOP APP BAR */}
-      <View className="px-4 pt-2 pb-3 bg-white border-b border-gray-100 flex-row items-center justify-between shadow-xs">
-        <View>
-          <Text className="text-[10px] font-bold text-gray-400 tracking-wider uppercase">
-            MATI COMMUNITY
-          </Text>
-          <Text className="text-xl font-black text-gray-900 tracking-tight mt-0.5">
-            Foodie Reviews & Feed
-          </Text>
-        </View>
+      <View className="px-4 pt-2 pb-3 bg-white border-b border-gray-100 shadow-xs">
+        <View className="w-full max-w-2xl self-center flex-row items-center justify-between gap-2">
+          <View className="flex-1 min-w-0">
+            <Text className="text-[10px] font-bold text-gray-400 tracking-wider uppercase">
+              MATI COMMUNITY
+            </Text>
+            <Text className="text-xl font-black text-gray-900 tracking-tight mt-0.5" numberOfLines={1}>
+              Foodie Reviews & Feed
+            </Text>
+          </View>
 
-        {isLoggedIn ? (
-          <Pressable
-            onPress={() => setShowCreateModal(true)}
-            className="bg-[#EA5410] px-3.5 py-1.5 rounded-full flex-row items-center gap-1.5 shadow-sm active:opacity-90"
-          >
-            <Ionicons name="create-outline" size={15} color="white" />
-            <Text className="text-white font-black text-xs">Write Review</Text>
-          </Pressable>
-        ) : (
-          <Pressable
-            onPress={() => router.push("/(mobile)/auth/customer-login")}
-            className="bg-[#EA5410] px-3.5 py-1.5 rounded-full flex-row items-center gap-1 shadow-sm active:opacity-90"
-          >
-            <Ionicons name="log-in-outline" size={14} color="white" />
-            <Text className="text-white text-xs font-black">Sign In</Text>
-          </Pressable>
-        )}
+          {isLoggedIn ? (
+            <Pressable
+              onPress={() => setShowCreateModal(true)}
+              className="bg-[#EA5410] px-3.5 py-1.5 rounded-full flex-row items-center gap-1.5 shadow-sm active:opacity-90 shrink-0"
+            >
+              <Ionicons name="create-outline" size={15} color="white" />
+              <Text className="text-white font-black text-xs">Write Review</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={() => router.push("/(mobile)/auth/customer-login")}
+              className="bg-[#EA5410] px-3.5 py-1.5 rounded-full flex-row items-center gap-1 shadow-sm active:opacity-90 shrink-0"
+            >
+              <Ionicons name="log-in-outline" size={14} color="white" />
+              <Text className="text-white text-xs font-black">Sign In</Text>
+            </Pressable>
+          )}
+        </View>
       </View>
 
       {/* 2. VIRTUALIZED FLATLIST REVIEWS FEED */}
@@ -600,6 +652,36 @@ export default function MobileCommunityScreen() {
               <Text className="text-[11px] font-medium text-gray-500 mt-1">Loading more reviews...</Text>
             </View>
           ) : null
+        }
+        ListEmptyComponent={
+          <View className="w-full max-w-2xl self-center px-4">
+          <View className="bg-white p-8 rounded-3xl border border-gray-200/80 items-center justify-center my-6 shadow-sm">
+            <View className="w-16 h-16 rounded-2xl bg-[#EA5410]/10 items-center justify-center mb-3">
+              <Ionicons name="chatbubbles-outline" size={32} color="#EA5410" />
+            </View>
+            <Text className="text-base font-black text-gray-900 mt-1">No Foodie Reviews Yet</Text>
+            <Text className="text-xs text-gray-500 text-center mt-1.5 mb-5 max-w-xs leading-relaxed">
+              Be the first to share a review or dish photo of your favorite restaurant in Mati City!
+            </Text>
+            {isLoggedIn ? (
+              <Pressable
+                onPress={() => setShowCreateModal(true)}
+                className="bg-[#EA5410] px-6 py-3 rounded-2xl shadow-sm active:opacity-90 flex-row items-center gap-2"
+              >
+                <Ionicons name="create-outline" size={16} color="white" />
+                <Text className="text-white font-extrabold text-xs">Write the First Review</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={() => router.push("/(mobile)/auth/customer-login")}
+                className="bg-[#EA5410] px-6 py-3 rounded-2xl shadow-sm active:opacity-90 flex-row items-center gap-2"
+              >
+                <Ionicons name="log-in-outline" size={16} color="white" />
+                <Text className="text-white font-extrabold text-xs">Sign In to Post</Text>
+              </Pressable>
+            )}
+          </View>
+          </View>
         }
         initialNumToRender={6}
         maxToRenderPerBatch={8}
@@ -874,6 +956,130 @@ export default function MobileCommunityScreen() {
                 className="bg-[#EA5410] px-4 py-2.5 rounded-xl items-center justify-center active:opacity-90"
               >
                 <Ionicons name="send" size={14} color="white" />
+              </Pressable>
+            </View>
+          </KeyboardAvoidingView>
+        )}
+      </BottomSheetModal>
+
+      {/* 3. REPORT POST BOTTOM SHEET */}
+      <BottomSheetModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        heightPercent={0.72}
+      >
+        {({ handleDismiss }) => (
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            className="flex-1 bg-white p-5 flex-col"
+          >
+            {/* Visual Drag Handle Pill */}
+            <View className="w-12 h-1.5 rounded-full bg-gray-300 self-center mb-3" />
+
+            {/* Header */}
+            <View className="flex-row justify-between items-center pb-3 border-b border-gray-100">
+              <View className="flex-row items-center gap-2">
+                <View className="w-8 h-8 rounded-full bg-rose-50 border border-rose-200 items-center justify-center">
+                  <Ionicons name="flag" size={16} color="#E11D48" />
+                </View>
+                <View>
+                  <Text className="text-lg font-black text-gray-900 tracking-tight">Report Review</Text>
+                  <Text className="text-xs text-gray-500 font-medium">
+                    Posted by {reportingPost?.author || "Mati Diner"}
+                  </Text>
+                </View>
+              </View>
+              <Pressable
+                onPress={handleDismiss}
+                accessibilityRole="button"
+                accessibilityLabel="Close report modal"
+                className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center active:bg-gray-200"
+              >
+                <Ionicons name="close" size={18} color="#374151" />
+              </Pressable>
+            </View>
+
+            <ScrollView className="flex-1 my-3" showsVerticalScrollIndicator={false}>
+              {/* Snippet preview */}
+              {reportingPost?.content ? (
+                <View className="bg-gray-50 border border-gray-200 p-3 rounded-2xl mb-4">
+                  <Text className="text-[11px] text-gray-500 font-medium italic" numberOfLines={2}>
+                    "{reportingPost.content}"
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Reason Selector */}
+              <Text className="text-xs font-black text-gray-900 uppercase tracking-wider mb-2">
+                Reason for Reporting
+              </Text>
+
+              <View className="gap-2 mb-4">
+                {COMMUNITY_REPORT_REASONS.map((reason) => {
+                  const isSelected = reportReason === reason;
+                  return (
+                    <Pressable
+                      key={reason}
+                      onPress={() => setReportReason(reason)}
+                      className={`p-3.5 rounded-2xl border flex-row items-center justify-between ${
+                        isSelected
+                          ? "bg-rose-50/80 border-rose-300"
+                          : "bg-white border-gray-200 active:bg-gray-50"
+                      }`}
+                    >
+                      <View className="flex-row items-center gap-2.5">
+                        <Ionicons
+                          name={isSelected ? "radio-button-on" : "radio-button-off"}
+                          size={18}
+                          color={isSelected ? "#E11D48" : "#9CA3AF"}
+                        />
+                        <Text
+                          className={`text-xs ${
+                            isSelected ? "text-rose-950 font-black" : "text-gray-800 font-bold"
+                          }`}
+                        >
+                          {reason}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {/* Optional Details Input */}
+              <Text className="text-xs font-black text-gray-900 uppercase tracking-wider mb-2">
+                Additional Details (Optional)
+              </Text>
+              <TextInput
+                value={reportDetails}
+                onChangeText={setReportDetails}
+                placeholder="Help our moderation team understand the issue..."
+                placeholderTextColor="#9CA3AF"
+                multiline
+                numberOfLines={3}
+                className="bg-gray-50 border border-gray-200 rounded-2xl p-3 text-xs text-gray-900 font-medium mb-4 min-h-[70px]"
+                textAlignVertical="top"
+              />
+            </ScrollView>
+
+            {/* Action Buttons */}
+            <View className="pt-2 border-t border-gray-100 flex-row gap-2.5">
+              <Pressable
+                onPress={handleDismiss}
+                className="flex-1 py-3.5 bg-gray-100 rounded-2xl items-center active:bg-gray-200"
+              >
+                <Text className="text-xs font-bold text-gray-700">Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleSubmitReport}
+                disabled={isSubmittingReport}
+                className="flex-1 py-3.5 bg-rose-600 rounded-2xl items-center active:bg-rose-700"
+              >
+                {isSubmittingReport ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text className="text-xs font-black text-white">Submit Report 🛡️</Text>
+                )}
               </Pressable>
             </View>
           </KeyboardAvoidingView>
