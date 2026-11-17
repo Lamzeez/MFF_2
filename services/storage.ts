@@ -146,6 +146,38 @@ export async function uploadStoreCoverPhoto(
 }
 
 /**
+ * Uploads a merchant store profile/logo avatar to 'store-branding' (with fallback to 'foodie-uploads').
+ */
+export async function uploadStoreProfilePhoto(
+  fileOrUri: Blob | string,
+  storeId: string,
+  options?: {
+    mimeType?: string;
+  }
+): Promise<UploadResult> {
+  return uploadMerchantAsset(fileOrUri, `logos/${storeId}`, {
+    mimeType: options?.mimeType,
+    errorLabel: "store profile photo",
+  });
+}
+
+/**
+ * Uploads a menu item overview photo to 'store-branding' (with fallback to 'foodie-uploads').
+ */
+export async function uploadMenuItemPhoto(
+  fileOrUri: Blob | string,
+  storeId: string,
+  options?: {
+    mimeType?: string;
+  }
+): Promise<UploadResult> {
+  return uploadMerchantAsset(fileOrUri, `menu-items/${storeId}`, {
+    mimeType: options?.mimeType,
+    errorLabel: "menu item photo",
+  });
+}
+
+/**
  * Uploads a merchant verification permit or storefront photo during registration.
  */
 export async function uploadStoreVerificationDocument(
@@ -158,5 +190,23 @@ export async function uploadStoreVerificationDocument(
   return uploadMerchantAsset(fileOrUri, `verification-docs/${userId}`, {
     mimeType: options?.mimeType,
     errorLabel: "verification document",
+  });
+}
+
+/**
+ * Uploads a courier registration document (Driver's License or Vehicle OR/CR) to Supabase storage.
+ */
+export async function uploadCourierDocument(
+  fileOrUri: Blob | string,
+  docType: "license" | "vehicle_or_cr",
+  identifier?: string,
+  options?: {
+    mimeType?: string;
+  }
+): Promise<UploadResult> {
+  const safeId = identifier ? identifier.replace(/[^a-zA-Z0-9_-]/g, "") : `courier_${Date.now()}`;
+  return uploadMerchantAsset(fileOrUri, `courier-docs/${docType}_${safeId}`, {
+    mimeType: options?.mimeType,
+    errorLabel: docType === "license" ? "driver's license" : "vehicle registration document",
   });
 }

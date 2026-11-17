@@ -5,7 +5,8 @@ import {
   type GeoCoordinates,
 } from "../lib/geo-serviceability";
 import {
-  isValidMatiStorePhone,
+  PH_MOBILE_ERROR_MESSAGE,
+  filterPhoneInput,
   isValidPhilippineMobile,
   sanitizePhoneNumber,
 } from "../lib/phone";
@@ -293,9 +294,8 @@ export function validateStoreRegistrationFieldErrors(
     errors.description = "Enter at least 5 descriptive characters or leave blank.";
   }
 
-  if (!isValidMatiStorePhone(input.storePhone)) {
-    errors.storePhone =
-      "Enter a valid PH mobile (09XXXXXXXXX / +639XXXXXXXXX) or (087) landline.";
+  if (!isValidPhilippineMobile(input.storePhone)) {
+    errors.storePhone = PH_MOBILE_ERROR_MESSAGE;
   }
 
   if (!input.isOpen24Hours) {
@@ -352,8 +352,7 @@ export function validateStoreRegistrationFieldErrors(
   }
 
   if (!isValidPhilippineMobile(input.ownerPhone)) {
-    errors.ownerPhone =
-      "Enter a valid 11-digit Philippine mobile number (09XXXXXXXXX or +639XXXXXXXXX).";
+    errors.ownerPhone = PH_MOBILE_ERROR_MESSAGE;
   }
 
   const cleanEmail = input.email.trim().toLowerCase();
@@ -482,6 +481,7 @@ export interface MerchantMembershipSummary {
   storeId?: string;
   storeName?: string;
   approvalStatus?: Database["public"]["Enums"]["store_approval_status"];
+  isSuspended?: boolean;
 }
 
 export async function fetchMerchantMembershipStatus(
@@ -490,7 +490,7 @@ export async function fetchMerchantMembershipStatus(
   const client = getSupabaseClient("merchant");
   const { data, error } = await client
     .from("store_memberships")
-    .select("store_id, is_active, role, store:stores(id, name, approval_status)")
+    .select("store_id, is_active, role, store:stores(id, name, approval_status, archived_at)")
     .eq("user_id", userId)
     .eq("is_active", true);
 
@@ -500,7 +500,12 @@ export async function fetchMerchantMembershipStatus(
 
   const rows = (data || []) as Array<{
     store_id: string;
-    store: { id: string; name: string; approval_status: Database["public"]["Enums"]["store_approval_status"] } | null;
+    store: {
+      id: string;
+      name: string;
+      approval_status: Database["public"]["Enums"]["store_approval_status"];
+      archived_at: string | null;
+    } | null;
   }>;
 
   if (rows.length === 0) {
@@ -515,5 +520,230 @@ export async function fetchMerchantMembershipStatus(
     storeId: preferred.store_id,
     storeName: preferred.store?.name,
     approvalStatus: preferred.store?.approval_status,
+    isSuspended: Boolean(preferred.store?.archived_at),
   };
+}
+
+export const MERCHANT_REGISTER_DRAFT_KEY = "mff_merchant_register_draft_v1";
+const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const DRAFT_IDB_NAME = "mff_merchant_draft_db";
+const DRAFT_IDB_STORE = "files";
+const DRAFT_IDB_KEY = "permit";
+
+/** Non-sensitive draft snapshot persisted across browser page reloads (excludes passwords). */
+export interface MerchantRegistrationDraft {
+  storeName: string;
+  categories: string[];
+  description: string;
+  storePhone: string;
+  openTime: string;
+  closeTime: string;
+  isOpen24Hours: boolean;
+  barangay: string;
+  addressText: string;
+  latitude: number;
+  longitude: number;
+  ownerName: string;
+  ownerPhone: string;
+  email: string;
+  step: "form" | "otp";
+  otpCooldownUntil: number;
+  savedAt: number;
+}
+
+export interface MerchantDraftDocumentRecord {
+  blob: Blob;
+  fileName: string;
+  mimeType: string;
+  sizeBytes?: number;
+}
+
+function getWebLocalStorage(): Storage | null {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      return window.localStorage;
+    }
+  } catch {
+    // Storage access blocked (e.g., private browsing)
+  }
+  return null;
+}
+
+export function saveMerchantRegistrationDraft(
+  draft: Omit<MerchantRegistrationDraft, "savedAt">
+): void {
+  const storage = getWebLocalStorage();
+  if (!storage) return;
+  try {
+    const payload: MerchantRegistrationDraft = {
+      ...draft,
+      savedAt: Date.now(),
+    };
+    storage.setItem(MERCHANT_REGISTER_DRAFT_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore storage quota or serialization errors
+  }
+}
+
+export function loadMerchantRegistrationDraft(): MerchantRegistrationDraft | null {
+  const storage = getWebLocalStorage();
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(MERCHANT_REGISTER_DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<MerchantRegistrationDraft> | null;
+    if (!parsed || typeof parsed.savedAt !== "number") {
+      storage.removeItem(MERCHANT_REGISTER_DRAFT_KEY);
+      return null;
+    }
+    if (Date.now() - parsed.savedAt > DRAFT_MAX_AGE_MS) {
+      storage.removeItem(MERCHANT_REGISTER_DRAFT_KEY);
+      return null;
+    }
+
+    const validBarangay = BARANGAY_OPTION_SET.has(parsed.barangay || "")
+      ? (parsed.barangay as string)
+      : STORE_BARANGAY_OPTIONS[0];
+    const fallbackCoords = getBarangayDefaultCoordinates(validBarangay);
+    const validCategories = normalizeStoreCategories(parsed.categories);
+
+    return {
+      storeName: typeof parsed.storeName === "string" ? filterStoreNameInput(parsed.storeName) : "",
+      categories: validCategories.length > 0 ? validCategories : [STORE_CUISINE_OPTIONS[0]],
+      description:
+        typeof parsed.description === "string" ? filterDescriptionInput(parsed.description) : "",
+      storePhone: typeof parsed.storePhone === "string" ? filterPhoneInput(parsed.storePhone) : "",
+      openTime: OPERATING_TIME_SLOT_SET.has(parsed.openTime || "")
+        ? (parsed.openTime as string)
+        : DEFAULT_OPEN_TIME,
+      closeTime: OPERATING_TIME_SLOT_SET.has(parsed.closeTime || "")
+        ? (parsed.closeTime as string)
+        : DEFAULT_CLOSE_TIME,
+      isOpen24Hours: Boolean(parsed.isOpen24Hours),
+      barangay: validBarangay,
+      addressText:
+        typeof parsed.addressText === "string" ? filterAddressInput(parsed.addressText) : "",
+      latitude:
+        typeof parsed.latitude === "number" &&
+        typeof parsed.longitude === "number" &&
+        isWithinMatiBounds(parsed.latitude, parsed.longitude)
+          ? parsed.latitude
+          : fallbackCoords.latitude,
+      longitude:
+        typeof parsed.latitude === "number" &&
+        typeof parsed.longitude === "number" &&
+        isWithinMatiBounds(parsed.latitude, parsed.longitude)
+          ? parsed.longitude
+          : fallbackCoords.longitude,
+      ownerName: typeof parsed.ownerName === "string" ? filterOwnerNameInput(parsed.ownerName) : "",
+      ownerPhone: typeof parsed.ownerPhone === "string" ? filterPhoneInput(parsed.ownerPhone) : "",
+      email: typeof parsed.email === "string" ? filterEmailInput(parsed.email) : "",
+      step: parsed.step === "otp" && typeof parsed.email === "string" && parsed.email.trim() ? "otp" : "form",
+      otpCooldownUntil: typeof parsed.otpCooldownUntil === "number" ? parsed.otpCooldownUntil : 0,
+      savedAt: parsed.savedAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function openDraftDocumentDb(): Promise<IDBDatabase | null> {
+  return new Promise((resolve) => {
+    try {
+      if (typeof window === "undefined" || !("indexedDB" in window)) {
+        resolve(null);
+        return;
+      }
+      const req = window.indexedDB.open(DRAFT_IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(DRAFT_IDB_STORE)) {
+          db.createObjectStore(DRAFT_IDB_STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+export async function saveDraftDocumentFile(
+  record: MerchantDraftDocumentRecord
+): Promise<void> {
+  const db = await openDraftDocumentDb();
+  if (!db) return;
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = db.transaction(DRAFT_IDB_STORE, "readwrite");
+      tx.objectStore(DRAFT_IDB_STORE).put(record, DRAFT_IDB_KEY);
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      tx.onerror = () => {
+        db.close();
+        resolve();
+      };
+    } catch {
+      db.close();
+      resolve();
+    }
+  });
+}
+
+export async function loadDraftDocumentFile(): Promise<MerchantDraftDocumentRecord | null> {
+  const db = await openDraftDocumentDb();
+  if (!db) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(DRAFT_IDB_STORE, "readonly");
+      const req = tx.objectStore(DRAFT_IDB_STORE).get(DRAFT_IDB_KEY);
+      req.onsuccess = () => {
+        const val = req.result as Partial<MerchantDraftDocumentRecord> | undefined;
+        db.close();
+        if (val && val.blob instanceof Blob && typeof val.fileName === "string") {
+          resolve({
+            blob: val.blob,
+            fileName: val.fileName,
+            mimeType: val.mimeType || "image/jpeg",
+            sizeBytes: val.sizeBytes,
+          });
+        } else {
+          resolve(null);
+        }
+      };
+      req.onerror = () => {
+        db.close();
+        resolve(null);
+      };
+    } catch {
+      db.close();
+      resolve(null);
+    }
+  });
+}
+
+export function clearMerchantRegistrationDraft(): void {
+  const storage = getWebLocalStorage();
+  if (storage) {
+    try {
+      storage.removeItem(MERCHANT_REGISTER_DRAFT_KEY);
+    } catch {
+      // Ignore
+    }
+  }
+
+  void openDraftDocumentDb().then((db) => {
+    if (!db) return;
+    try {
+      const tx = db.transaction(DRAFT_IDB_STORE, "readwrite");
+      tx.objectStore(DRAFT_IDB_STORE).delete(DRAFT_IDB_KEY);
+      tx.oncomplete = () => db.close();
+      tx.onerror = () => db.close();
+    } catch {
+      db.close();
+    }
+  });
 }

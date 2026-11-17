@@ -88,8 +88,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           try {
             return await api.loadIdentity(token);
           } catch (err) {
-            if (err instanceof ScopeMismatchError) {
+            if (err instanceof ScopeMismatchError && scope !== "merchant") {
               // Auto-clear leftover cross-role tokens from another portal so the UI stays cleanly guest.
+              // Keep merchant scope tokens during background refresh so newly verified store applicants
+              // are not signed out before merchant_submit_store_application creates their membership.
               await client.auth.signOut({ scope: "local" }).catch(() => {});
             }
             throw err;
@@ -110,9 +112,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             : bindNativeAuthLifecycle(client.auth, AppState, () =>
                 store.fail("Your session could not refresh. Check your connection and try again.")
               );
-        const foreground = AppState.addEventListener("change", (state) => {
-          if (state === "active") void store.refresh();
-        });
+        const foreground =
+          Platform.OS === "web"
+            ? { remove: () => {} }
+            : AppState.addEventListener("change", (state) => {
+                if (state === "active") void store.refresh();
+              });
 
         controller.dispose = () => {
           unsubscribeStore();
@@ -178,7 +183,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
         return {
           signIn: (email, password) => api().signIn(email, password),
-          signUp: (name, email, password, phone) => api().signUp(name, email, password, phone),
+          signUp: (name, email, password, phone, extraMetadata) =>
+            api().signUp(name, email, password, phone, extraMetadata),
           resendConfirmation: (email) => api().resendConfirmation(email),
           requestRecovery: (email) => api().requestRecovery(email),
           verifyCode: (email, code, type) => api().verifyCode(email, code, type),

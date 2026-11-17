@@ -9,6 +9,15 @@ export const COURIER_QUICK_MESSAGES = [
   "⏳ Kadiyot lang, medyo trapik / naay gamayng aberya",
 ] as const;
 
+export const BISAYA_RIDER_DISPATCH_CHIPS = [
+  "🛵 Padulong na sa kan-anan",
+  "🥡 Naghulat pa gi-pack ang pagkaon",
+  "📍 Nakuha na ang order, padulong na diha",
+  "🏡 Naa nako sa gawas sa inyong balay/gate",
+  "💵 Palihug andam sa saktong bayad",
+  "🔔 Palihug i-andam ang 4-digit PIN",
+] as const;
+
 export const CUSTOMER_QUICK_MESSAGES = [
   "📍 Naa na ko sa gawas / gate naghulat",
   "💵 Naa kay sukli sa ₱1,000 / ₱500?",

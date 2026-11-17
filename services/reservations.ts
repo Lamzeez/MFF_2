@@ -1,6 +1,7 @@
 import { getSupabaseClient } from "../lib/supabase/client";
 import type { AuthPortalScope } from "../types/auth";
 import { Database } from "../types/database";
+import { createNotification } from "./notifications";
 
 export type ReservationRow = Database["public"]["Tables"]["table_reservations"]["Row"];
 export type ReservationStatus = Database["public"]["Enums"]["reservation_status"];
@@ -64,6 +65,17 @@ export async function createReservation(input: CreateReservationInput): Promise<
   if (error || !data) {
     console.error("[services/reservations] createReservation error:", error);
     throw new Error(error?.message || "Failed to create reservation");
+  }
+
+  try {
+    await createNotification({
+      userId: session.user.id,
+      title: "Table Reservation Requested! 📅",
+      message: `Your booking for ${input.partySize} guest(s) on ${input.reservationDate} at ${input.reservationTime} has been submitted and is pending confirmation.`,
+      type: "reservation",
+    });
+  } catch (nErr) {
+    console.warn("[services/reservations] Could not create reservation notification:", nErr);
   }
 
   return data;
@@ -152,6 +164,37 @@ export async function updateReservationStatus(
   if (error || !data) {
     console.error("[services/reservations] updateReservationStatus error:", error);
     throw new Error(error?.message || "Failed to update reservation status");
+  }
+
+  try {
+    if (data.customer_id) {
+      const isConfirmed = status === "confirmed";
+      const isDeclined = status === "declined";
+      const isCancelled = status === "cancelled";
+      const isCompleted = status === "completed";
+      const title = isConfirmed
+        ? "Table Reservation Confirmed! 🍽️"
+        : isDeclined
+        ? "Reservation Declined"
+        : isCancelled
+        ? "Reservation Cancelled"
+        : isCompleted
+        ? "Table Visit Completed"
+        : `Reservation Update: ${status}`;
+      const msg = isConfirmed
+        ? `Your table for ${data.party_size} guests on ${data.reservation_date} (${data.reservation_time}) is confirmed! See you at the restaurant.`
+        : isDeclined
+        ? `Your reservation for ${data.reservation_date} was declined by the merchant.${storeNotes ? ` Note: ${storeNotes}` : ""}`
+        : `Your reservation status has been updated to ${status}.`;
+      await createNotification({
+        userId: data.customer_id,
+        title,
+        message: msg,
+        type: "reservation",
+      });
+    }
+  } catch (nErr) {
+    console.warn("[services/reservations] Status notification notice:", nErr);
   }
 
   return data;

@@ -10,15 +10,31 @@ export function sanitizePhoneNumber(phone?: string | null): string {
   return hasPlus ? `+${digitsOnly}` : digitsOnly;
 }
 
+export const PH_MOBILE_ERROR_MESSAGE =
+  "Enter an 11-digit mobile number starting with 09 (09XX XXX XXXX).";
+
 /**
- * Strips non-telephone characters during typing while preserving optional leading '+',
- * digits, spaces, and hyphens up to 16 characters.
+ * Formats Philippine mobile numbers live into `09XX XXX XXXX`:
+ * - Strips non-digits (converting pasted `+639...` or `639...` into `09...`)
+ * - Enforces `"09"` as the first two digits
+ * - Caps at 11 digits (13 formatted characters including spaces)
  */
 export function filterPhoneInput(raw: string): string {
-  const cleaned = raw.replace(/[^\d+\s-]/g, "");
-  const hasLeadingPlus = cleaned.trimStart().startsWith("+");
-  const withoutPlus = cleaned.replace(/\+/g, "");
-  return `${hasLeadingPlus ? "+" : ""}${withoutPlus}`.slice(0, 16);
+  let digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("639")) {
+    digits = `0${digits.slice(2)}`;
+  } else if (digits.startsWith("9")) {
+    digits = `0${digits}`;
+  }
+
+  if (!digits) return "";
+  if (digits[0] !== "0") return "";
+  if (digits.length >= 2 && digits[1] !== "9") return "0";
+
+  const capped = digits.slice(0, 11);
+  if (capped.length <= 4) return capped;
+  if (capped.length <= 7) return `${capped.slice(0, 4)} ${capped.slice(4)}`;
+  return `${capped.slice(0, 4)} ${capped.slice(4, 7)} ${capped.slice(7)}`;
 }
 
 /**
@@ -31,11 +47,11 @@ export function isValidPhoneNumber(phone?: string | null): boolean {
 }
 
 /**
- * Strictly validates a Philippine mobile / GCash number (`09XXXXXXXXX` or `+639XXXXXXXXX`).
+ * Strictly validates an 11-digit Philippine mobile / GCash number starting with `09` (`09XXXXXXXXX`).
  */
 export function isValidPhilippineMobile(phone?: string | null): boolean {
   const normalized = sanitizePhoneNumber(phone);
-  return /^(\+639\d{9}|09\d{9})$/.test(normalized);
+  return /^09\d{9}$/.test(normalized);
 }
 
 /**

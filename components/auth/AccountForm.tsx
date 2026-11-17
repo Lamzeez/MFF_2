@@ -2,26 +2,19 @@ import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSession } from "../../context/SessionContext";
-import { authMessage } from "../../services/auth";
+import { AccountError, authMessage } from "../../services/auth";
+import {
+  PH_MOBILE_ERROR_MESSAGE,
+  filterPhoneInput,
+  isValidPhilippineMobile,
+  sanitizePhoneNumber,
+} from "../../lib/phone";
 
 type Mode = "login" | "register" | "confirm" | "recover" | "recover-code" | "password";
 
 interface AccountFormProps {
   initialMode?: "login" | "register";
   onSuccess?: () => void;
-}
-
-function cleanPhilippineNumber(raw: string): string {
-  let digits = raw.replace(/\D/g, "");
-  if (digits.startsWith("63")) digits = digits.slice(2);
-  if (digits.startsWith("0")) digits = digits.slice(1);
-  return digits.slice(0, 10);
-}
-
-function formatPhilippineDisplay(digits: string): string {
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 6) return `${digits.slice(0, 3)} ${digits.slice(3)}`;
-  return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 10)}`;
 }
 
 /**
@@ -107,8 +100,11 @@ export function AccountForm({ initialMode = "login", onSuccess }: AccountFormPro
           }
           break;
         case "register": {
-          const formattedPhone = phoneDigits ? `+63${phoneDigits}` : "";
-          await auth.signUp(name, email, password, formattedPhone);
+          const cleanPhone = sanitizePhoneNumber(phoneDigits);
+          if (cleanPhone && !isValidPhilippineMobile(cleanPhone)) {
+            throw new AccountError(PH_MOBILE_ERROR_MESSAGE);
+          }
+          await auth.signUp(name, email, password, cleanPhone);
           setMode("confirm");
           setCountdown(60);
           setNotice("A 6-digit verification code has been sent to your email. Enter it below to activate your account.");
@@ -252,21 +248,20 @@ export function AccountForm({ initialMode = "login", onSuccess }: AccountFormPro
             <Text className="text-xs font-bold text-gray-700">Mobile Number</Text>
             <Text className="text-[11px] text-gray-400 font-medium">Optional</Text>
           </View>
-          <View className="flex-row items-center">
-            <View className="flex-row items-center bg-gray-100 border border-gray-200 rounded-xl px-3 py-3 mr-2">
-              <Text className="text-sm mr-1">🇵🇭</Text>
-              <Text className="text-xs font-black text-gray-700">+63</Text>
+          <View className="relative flex-row items-center">
+            <View className="absolute left-3.5 z-10">
+              <Ionicons name="call-outline" size={18} color="#9ca3af" />
             </View>
             <TextInput
               accessibilityLabel="Contact phone number"
-              placeholder="912 345 6789"
+              placeholder="0912 345 6789"
               placeholderTextColor="#9ca3af"
-              value={formatPhilippineDisplay(phoneDigits)}
-              onChangeText={(text) => setPhoneDigits(cleanPhilippineNumber(text))}
+              value={phoneDigits}
+              onChangeText={(text) => setPhoneDigits(filterPhoneInput(text))}
               editable={!busy}
               keyboardType="phone-pad"
-              maxLength={12}
-              className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-3 text-sm text-gray-900 font-medium"
+              maxLength={13}
+              className="flex-1 bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-3.5 py-3 text-sm text-gray-900 font-medium"
             />
           </View>
         </View>

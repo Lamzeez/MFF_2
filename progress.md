@@ -2,9 +2,646 @@
 
 > Living project memory for Codex/agents. Update after meaningful
 > development sessions. Last repository review used for this snapshot:
-> 2026-11-11.
+> 2026-11-17.
 
-## Phase 19: Landing Page Overhaul, Facebook-Style Auth Redirect & Public Exposure Cleanup (2026-11-11)
+## Phase 43: Dynamic Date-Time Relationship, 2-Week Advance Booking, Seating Removal & No-Show Policy Callout (`components/reservation/ReservationSheet.tsx`, `lib/reservation-dates.ts`) (2026-11-17)
+
+### Completed Work
+- **Dynamic Relationship Between Reservation Date & Time Slots**:
+  - Implemented `parseOperatingWindow` and `generateAvailableTimeSlots` in `lib/reservation-dates.ts` to parse store operating hours (e.g. `7:00 AM - 9:00 PM Daily`, `10:30 AM - 10:00 PM Daily`).
+  - **If Today is selected**:
+    - Evaluates the current local device time.
+    - Filters out all past time slots; users can strictly only select remaining time slots after current time up to 15 minutes before closing (e.g. if current time is 5:00 PM for a 7AM–9PM store, slots start at 5:15 PM and end at 8:45 PM).
+    - If the store is already closed or closing in < 15 minutes for today, displays a friendly notice (*"Same-day reservations for today are closed. Please select tomorrow or an upcoming date."*) and disables submission until a valid date is picked.
+  - **If Tomorrow or any succeeding date is selected**:
+    - Users can select any time between the store's opening and closing hours (up to 15 minutes before close, e.g. 7:00 AM to 8:45 PM).
+  - Automatically synchronizes selected time when the date switches so invalid past times are never submitted.
+- **2-Week (14-Day) Advance Reservation Horizon**:
+  - Configured `generateUpcomingReservationDates(14)` so diners can reserve tables up to 2 weeks ahead.
+- **Removed Seating Area Field**:
+  - Completely removed the Seating Area pills/cards from the form as requested, passing `"Standard Dining"` to backend callers to preserve schema compatibility.
+- **MFF Table Holding & No-Show Policy Callout**:
+  - Added dedicated policy banner above the confirmation CTA explaining MFF's countermeasure rules:
+    - Tables are held for a **15-minute grace period** past reserved time.
+    - Unattended bookings are marked as **No-Show** by the merchant (`record_customer_no_show_strike`).
+    - Diners accumulating **2 strikes** automatically have COD and booking privileges restricted.
+
+### Verification
+- `cmd.exe /c "npm run check"` (`tsc --noEmit && npm test`): Passed with 0 TypeScript errors and 121/121 unit tests passing (added test coverage in `tests/foundation/phaseA-cart-reservation.test.ts`).
+
+## Phase 42: Table Reservation Pop-up Module Simplification (`components/reservation/ReservationSheet.tsx`) (2026-11-17)
+
+### Completed Work
+- **Radically Simplified Party Size (Guests) Input**:
+  - Eliminated redundant sub-labels, repetitive pax tags (`2 People`, `2 Guests`, `Use (+)/(-) or tap number to type`), and redundant preset pills row (`[2 pax] [4 pax]...`).
+  - Implemented a clean, compact single-row stepper:
+    - Left side: Clear `Party Size (Guests)` label with subtitle `X person/people`.
+    - Right side: Clean `[-]` and `[+]` stepper buttons flanking a direct numeric `TextInput`.
+- **Date Input Field with Scrollable Dropdown List**:
+  - Replaced the large horizontal card strip with a clean input-style selector field displaying `Reservation Date` with calendar icon, selected date text (e.g. `Today (Nov 17)`, `Tomorrow (Nov 18)`, `Wed, Nov 19`), and chevron indicator.
+  - Tapping opens an inline scrollable vertical list where users can scroll down smoothly through all 14 upcoming dates.
+  - Each item displays formatted date label and high-contrast orange checkmark when selected; selecting a date immediately closes the dropdown.
+- **Time Input Field with Scrollable Dropdown List**:
+  - Replaced the bulky 8-button grid with a clean input-style selector field displaying `Dining Time` with clock icon, selected time (e.g. `7:30 PM`), and chevron indicator.
+  - Tapping opens an inline scrollable vertical list of available dining times (`5:00 PM` through `9:30 PM`).
+  - Selecting a time slot immediately updates the state and closes the dropdown.
+- **Compact 3-Pill Seating Area**:
+  - Replaced the 3 massive full-width cards with a single sleek row of 3 side-by-side pills: `[ 🌊 Outdoor ] [ ❄️ Indoor AC ] [ 👨‍👩‍👧 Family Booth ]`.
+- **Decluttered Form Layout & Header**:
+  - Reduced overall visual height and clutter, allowing the entire reservation form and CTA to fit comfortably on mobile viewports without cutoffs.
+
+### Verification
+- `cmd.exe /c "npm run check"` (`tsc --noEmit && npm test`): Passed with 0 TypeScript errors and 119/119 unit tests passing.
+
+## Phase 41: Explore Map Gap Elimination & Realistic Road Distance/ETA Recalibration (`app/(mobile)/(tabs)/map.tsx`, `lib/geo-serviceability.ts`) (2026-11-17)
+
+### Completed Work
+- **Eliminated Gap Between Map and Selected Store Card**:
+  - Identified root cause of the empty white space: the map wrapper had `flex-1` while the map inside had a fixed `300px` height, creating a ~150px-200px void between the map's bottom edge and the card.
+  - Reconfigured the map canvas container dynamically: on mobile with a selected restaurant, the canvas takes `flex-1` with `MatiInteractiveMap` taking `height="100%"`, bringing the Leaflet map all the way down directly to the card with zero gap.
+  - When no store is selected, the map takes `h-[280px]` with `height="100%"`, sitting seamlessly atop the scrollable recommendations feed.
+- **Realistic Road Distance & Travel Time Recalibration**:
+  - Removed artificial 10-minute kitchen cooking buffer (`prepBuffer = 10`) and artificial minimum clamp (`Math.max(10, ...)`) from travel time calculations that caused short 0.5km–2.6km trips to display absurd times like `~14-22 min road trip`.
+  - Recalibrated travel speeds to realistic Mati City tricycle / motorbike speeds (~25–30 km/h, ~2.65 min per road km).
+  - Updated all chips and map popups to display both actual road distance and realistic transit time (e.g. `3.3 km · ~7–11 mins` instead of `~14-22 min road trip`; and for close spots `0.9 km · ~2–4 mins`).
+
+### Verification
+- `cmd.exe /c "npm run typecheck"` (`tsc --noEmit`): Passed with 0 errors across the entire codebase.
+- `cmd.exe /c "npm test"` (Unit tests): Passed 119/119 tests across all test suites.
+
+## Phase 40: Explore Map Initial State Polish — Live Location Hub & Nearest Dining Spots Feed (`app/(mobile)/(tabs)/map.tsx`) (2026-11-17)
+
+### Completed Work
+- **Eliminated Empty Void on Explore Map**:
+  - Resolved the blank ~400px bottom container when opening the Explore Page or clearing store selection (`!selectedSpot`).
+  - Added a scrollable panel beneath the map with height calibrated to `300px` on mobile, maintaining full touch usability.
+- **Live Location Status & Delivery Zone Card**:
+  - Added dedicated card displaying the user's detected position, GPS accuracy status, and available Mati delivery spot count (`{count} Delivery Spots Available`).
+  - Added a quick "Recenter" button to re-focus the map on the user's position at any time.
+- **"Nearest Dining Spots" Quick Recommendations**:
+  - Added a curated mini-feed featuring the 3 closest restaurants to the user's position with cover thumbnails, cuisine categories, star ratings, and road distance/ETA pills (`{roadDistance} · ~{estMinutes} mins`).
+  - Tapping any recommended spot immediately animates the map camera directly to that store's pin and displays its full preview card with directions, reservations, and signature dishes.
+
+### Verification
+- `cmd.exe /c "npm run typecheck"` (`tsc --noEmit`): Passed with 0 errors across the entire codebase.
+- `cmd.exe /c "npm test"` (Unit tests): Passed 119/119 tests across all test suites.
+
+## Phase 39: GPS Tracking Diagnostics, My Location Camera Re-Centering, Dual Segmented View Toggle & List Store Redirection (`app/(mobile)/(tabs)/map.tsx`, `components/map/MatiInteractiveMap.web.tsx`, `components/map/MatiInteractiveMap.tsx`) (2026-11-17)
+
+### Completed Work
+- **GPS Tracking Architecture & Real-Time Accuracy Fix**:
+  - Upgraded location request logic to use `Location.Accuracy.High` (on native) and direct HTML5 `navigator.geolocation.getCurrentPosition` with `{ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }` (on web), preventing stale cached locations or silent timeouts.
+  - Implemented dynamic Mati region detection: displays live precision accuracy (`±Xm`) if inside Mati City, and explicit coordinate/outside notice if outside Mati City limits.
+  - Added `cameraFocus` state with unique timestamp keys (`Date.now()`); pressing the "My Location" circle icon now explicitly triggers `CENTER_ON` in Leaflet, immediately animating and flying the map camera right to the user's coordinates.
+  - Transformed user location map marker from a generic house icon into a prominent pulsating blue GPS beacon (`.mff-pin-user`, `📍`).
+- **Clear Dual Segmented Toggle for Map vs List**:
+  - Replaced the ambiguous single-button switcher with a clear, dual-segmented pill control (`[ 🗺️ Map | 📋 List ]`) with the active view highlighted in an elevated white card with `#EA5410` brand styling and the inactive view softly muted.
+- **List Page Store Redirection**:
+  - Updated store cards in the List View to redirect directly to the store's full dedicated profile page (`/(mobile)/store/[id]`) with store parameters (`id` and `name`).
+
+### Verification
+- `cmd.exe /c "npm run typecheck"` (`tsc --noEmit`): Passed with 0 errors across the entire codebase.
+- `cmd.exe /c "npm test"` (Unit tests): Passed 119/119 tests across all test suites.
+
+## Phase 38: Delivery Address Modal Decluttering & Formal Terminology Polish (`app/(mobile)/(tabs)/profile.tsx`) (2026-11-17)
+
+### Completed Work
+- **Terminology Formalization**:
+  - Replaced `"Add Location"` button label with formal **`"New Delivery Address"`** in the Saved Delivery Addresses card.
+  - Replaced modal title `"New Delivery Location"` with **`"New Delivery Address"`**.
+  - Replaced field label `"Location Name"` with simple, clean **`"Location"`**.
+  - Replaced field label `"Mati Barangay"` with **`"Barangay"`** and `"Street / Landmark Description"` with **`"Street / Landmark"`**.
+  - Replaced submission button `"Save Location 📍"` with formal **`"Save Address"`** without extra emojis.
+- **Modal Decluttering & Concise Placeholders**:
+  - Removed the verbose explanatory paragraph under the modal header to eliminate excess visual clutter.
+  - Simplified location placeholder from verbose `'e.g. "Beach House", "Grandma’s", "Office"'` to clean `"e.g. Home, Office, Beach"`.
+  - Simplified landmark placeholder from `"e.g. Purok 4, near Menzi Beach Park, green gate"` to `"e.g. Purok 4, near Menzi Beach Park"`.
+  - Removed emoji from the address saved confirmation alert (`"Address Saved"`).
+
+### Verification
+- `cmd.exe /c "npm run typecheck"` (`tsc --noEmit`): Passed with 0 errors across the entire codebase.
+- `cmd.exe /c "npm test"` (Unit tests): Passed 119/119 tests across all test suites.
+
+## Phase 37: Customer Profile UI/UX Polish, Floating Add Location Modal & Tab Navigation Back Fix (`app/(mobile)/(tabs)/profile.tsx`, `orders.tsx`, `_layout.tsx`) (2026-11-17)
+
+### Completed Work
+- **Resolved Missing Customer Profile Picture**:
+  - Replaced collapsed `w-18 h-18` (which failed Tailwind evaluation) with rigid `style={{ width: 80, height: 80, borderRadius: 40 }}` with `border-4 border-white bg-orange-100 shadow-md`, ensuring the avatar never collapses on web or native devices.
+  - Positioned camera change button at `bottom-0 right-0 w-7 h-7 bg-[#EA5410]` with white camera icon.
+  - Provided robust fallback to `DEFAULT_AVATAR` when no custom photo is uploaded.
+- **Harmonized MFF Visual Theme (Decluttering Color Mixture)**:
+  - Eliminated clashing rainbow badges across role tags, bio badges, and personalization status.
+  - Standardized to MFF brand theme: `#EA5410` orange badges, soft orange tints (`bg-orange-50`), and clean neutral slate grays.
+  - Removed unnecessary green `Online` pill from the top header bar.
+- **Floating Focused Pop-up Modal for "Add Location"**:
+  - Transformed the inline address creation form into a focused, centered floating `Modal` dialog with dark backdrop (`bg-black/50`).
+  - Automatically focuses the location name input (`autoFocus={true}`), includes horizontal Mati barangay pill selector, landmark description input, and clean Save/Cancel buttons.
+- **Quick Customer Shortcuts Polish & Live Counts**:
+  - Renamed shortcuts to **"Active Deliveries"** and **"Table Bookings"**.
+  - Added live notification banners displaying active pending order and table reservation counts (`{activeOrdersCount} Active`, `{activeReservationsCount} Booked`).
+- **Fixed Tab Navigation Back Functionality**:
+  - Added `backBehavior="history"` to `<Tabs>` in `app/(mobile)/(tabs)/_layout.tsx`.
+  - Added `from="profile"` parameter when navigating from Profile to Orders, rendering a Back button in `orders.tsx` header that returns users directly to their Profile page.
+  - Automatically selects the matching tab (`deliveries` vs `reservations`) based on incoming route parameters.
+
+### Verification
+- `cmd.exe /c "npm run typecheck"` (`tsc --noEmit`): Passed with 0 errors across the entire codebase.
+- `cmd.exe /c "npm test"` (Unit tests): Passed 119/119 tests across all test suites.
+
+## Phase 36: Complete UI & Layout Overhaul of Store Profile Page & Menu Item Container Polish (`app/(mobile)/store/[id].tsx`) (2026-11-17)
+
+### Completed Work
+- **Resolved Go Back Navigation Failure (`router.canGoBack()` Safe Fallback)**:
+  - **Issue**: When users directly reloaded or deep-linked to a Store Profile route (`/store/[id]`), the navigation stack lacked a prior history frame. Calling `router.back()` directly triggered the React Navigation warning: `"The action 'GO_BACK' was not handled by any navigator. Is there any screen to go back to?"`.
+  - **Fix**: Implemented `handleGoBack()` with `router.canGoBack() ? router.back() : router.replace("/(mobile)/(tabs)/discover")`, ensuring users never get stranded and smoothly return to the Explore / Discover feed if no prior screen exists in the stack.
+- **Removed Hardcoded Sub-Description Badges**:
+  - Removed the horizontal perk strip (`Free Sabaw Refill`, `Instant Table Confirmation`, `₱35 Flat Mati Delivery`, `Cash on Delivery (COD)`). Merchants now incorporate these details naturally in their official store bio/description.
+- **Eliminated Dark/Grey Shade Over Cover Photo**:
+  - Removed artificial bottom overlay block (`backgroundColor: rgba(0,0,0,0.45)`) and dark dimming layer (`bg-black/30`), restoring 100% natural, crisp, full-color food cover photography.
+  - Floating top navigation buttons (Back, Open Status, Live Map) retain their frosted glass pills with drop shadows for clean readability.
+- **Redesigned & Organized Menu Item Container**:
+  - **Appetizing Thumbnail**: Increased thumbnail dimensions to 88x88 with 14px rounded corners and subtle shadow, anchoring a frosted mini-tag (`[ CATEGORY ]`) on the top-left of the image.
+  - **Structured Two-Column Layout**: Left image thumbnail, right content column with dish title in bold typography (`text-sm md:text-base font-black text-gray-900`) and comfortable multi-line description.
+  - **Dedicated Bottom Action Strip**: Separated price (`₱120.00 / serving`) cleanly on the left from the `+ Add` button / quantity stepper on the right using a subtle divider, eliminating the cramped horizontal clash.
+  - **Responsive Single-Item Balancing**: When only 1 dish matches the active category, the container spans full width rather than clipping into an isolated half-screen box.
+- **Eliminated Button & Action Duplication**:
+  - Removed duplicate "Make Reservation" buttons (previously displayed both in the avatar row and in the About card).
+  - Consolidated into a single, prominent, unified Action Pill Bar:
+    - Primary CTA: `[ 📅 Make Reservation ]` (Bold `#EA5410` background, high contrast, calendar icon).
+    - Secondary CTA: `[ 🧭 Directions ]` (Seamlessly routes to in-app map with route active and distance auto-zoomed).
+    - Tertiary CTA: `[ 📞 Call ]` (Instant phone dialer).
+- **Hero Cover & Identity Header Redesign**:
+  - Elevated Identity Card overlapping the hero with store avatar, verified badge (`✓ Verified Kitchen`), star rating pill, cuisine tags, and bio.
+- **Operational Info & Operating Hours Card**:
+  - Compact, clean grid for address with "View on Map →", operating hours with "Open Today" status, and direct store telephone with "Call Now →".
+- **Dish Customization Modal**:
+  - Integrated modal sheet for dishes with modifiers (spice levels, add-on sides) before direct order or cart addition.
+- **Floating Cart Bar Positioning**:
+  - Adjusted `bottomOffset` so the floating cart bar sits comfortably above the viewport without obscuring content on mobile or web.
+
+### Verification
+- `cmd.exe /c "npm run typecheck"` (`tsc --noEmit`): Passed with 0 errors across the entire codebase.
+- `cmd.exe /c "npm test"` (Unit tests): Passed 119/119 tests across all test suites.
+
+## Phase 35: In-App Route Zoom Fix for Close Stores & Dedicated 'Store Profile' Pages (`app/(mobile)/store/[id].tsx`) (2026-11-17)
+
+### Completed Work
+- **Resolved Close Store Directions Zoom Override Bug (`components/map/MatiInteractiveMap.web.tsx`, `components/map/MatiInteractiveMap.tsx`, `app/(mobile)/(tabs)/map.tsx`)**:
+  - **Root Cause**: When a store was clicked or selected, `selectedSpotId` updated, which updated the `mapMarkers` array with the orange active marker color. The `UPDATE_MARKERS` message handler in Leaflet previously called `map.fitBounds(allBounds)`, which recalculates bounds across ALL markers in Mati City (from Poblacion to Dahican Beach, 10+ km away), forcibly resetting the zoom out to the whole city and overriding `renderPolyline` or `FIT_ROUTE_BOUNDS`.
+  - **Remediation**:
+    - Removed `map.fitBounds` from `UPDATE_MARKERS` so marker re-renders update pin colors without hijacking the camera zoom.
+    - Updated `FIT_ROUTE_BOUNDS` and `renderPolyline` to use asymmetric padding (`paddingTopLeft: [40, 80]`, `paddingBottomRight: [40, 40]`) with `maxZoom: 17`, guaranteeing that the route line and markers are never obscured by the top in-app HUD banner and zoom in closely for short trips (e.g. 0.7 km).
+    - Added `fitRouteBounds` with route points directly to `MatiInteractiveMapProps` to ensure instant route framing without racing polyline render steps.
+    - Suppressed `focusCoords` when `activeRoute` is active so `CENTER_ON` does not compete with route bounding box calculations.
+- **Dedicated Store Profile Pages (`app/(mobile)/store/[id].tsx` & `app/(mobile)/_layout.tsx`)**:
+  - Replaced `"View Menu"` buttons with **`"Store Profile"`** across Explore Map preview cards and Home Page restaurant cards.
+  - Implemented a full, dedicated mobile Store Profile screen (`app/(mobile)/store/[id].tsx`):
+    - **Header & Cover**: High-res cover photo (`h-48 md:h-64`), overlapping store logo avatar (`w-20 h-20`), verified merchant badge, and operating status pill (`🟢 Open Now` / `🔴 Closed`).
+    - **Identity & Contact**: Store Name, category tags, rating badge, address with directions shortcut, and telephone with **"Tap to Call"**.
+    - **Live Table Availability**: Real-time table count indicator (`🟢 N Tables Open · Instant Booking`) and prominent **"Make Reservation"** action opening `ReservationSheet`.
+    - **Categorized Full Menu**: Horizontal category tabs (`All`, `Meals`, `Seafood`, `BBQ & Grill`, `Merienda`, `Beverages`), rich food item cards with photo, description, price in PHP, and 1-tap `+ Add` button.
+    - **Customer Feedback & Ratings**: Star sentiment summary and recent customer review cards.
+    - **Cart Integration**: Sticky `FloatingCartBar` at bottom, connecting to `CheckoutSheet` for Cash on Delivery (COD) orders and `GuestGateModal` for unauthenticated visitors.
+
+### Verification
+- `cmd.exe /c "npm run typecheck"` (`tsc --noEmit`): Passed with 0 errors across the entire codebase.
+- `cmd.exe /c "npm test"` (Unit tests): Passed 119/119 tests across all test suites.
+
+## Phase 34: In-App Map Navigation & Distance Auto-Zoom, Decluttered Store Profile Sheet, Spot Signature Previews & Robust Image Layout (2026-11-17)
+
+### Completed Work
+- **Eliminated External Google Maps Navigation (`app/(mobile)/(tabs)/map.tsx`)**:
+  - Completely removed external `Linking.openURL` calls to Google Maps (`maps.google.com`, `google.navigation:`, `maps://app`).
+  - Implemented 100% in-app GPS navigation HUD displaying route distance (`km`), live travel time estimate (`mins`), a "Fit View" button, and dismiss action.
+  - Added live device GPS tracking using `Location.watchPositionAsync` when navigating, updating the user location and route polyline in real-time as the device moves.
+- **Dynamic Distance-Based Auto-Zoom & View Maximization (`components/map/MatiInteractiveMap.web.tsx`, `components/map/MatiInteractiveMap.tsx`, `app/(mobile)/(tabs)/map.tsx`)**:
+  - Implemented `fitRouteKey` prop and Leaflet `map.fitBounds(latLngs, { padding: [50, 50], maxZoom: 17, animate: true })` inside `MatiInteractiveMap.web.tsx`.
+  - When clicking "Directions", the map automatically maximizes the viewport between device GPS and destination: if close, zooms in tightly for high street detail (up to zoom 17); if far (e.g. Dahican), zooms out to fit the full road route and both endpoints comfortably.
+- **Redesigned Explore Page Spot Preview Card (`app/(mobile)/(tabs)/map.tsx`)**:
+  - Populated previously empty spot card body with quick important info: operating status (`🟢 Open Now · hours`), live table availability (`🪑 N Tables Open`), and distance/rating.
+  - Added a Signature Dishes Preview section displaying 2 top dishes with thumbnail, price, and a 1-tap `+ Add` button connected to `useCart().addItem()`.
+  - Structured 3 clear primary action buttons: `Directions` / `Clear Route`, `Make Reservation`, and `View Menu`.
+- **Decluttered Full Store Profile Sheet (`components/restaurant/RestaurantProfileSheet.tsx`)**:
+  - Renamed table reservation button from "Book a Dining Table" to **"Make Reservation"** with calendar icon.
+  - Removed redundant `₱35 Flat Mati Delivery` overlay banner from the top hero cover.
+  - Removed `Location / Address` block from the information grid.
+  - Removed redundant `View Location on Map 🗺️` button.
+  - Added menu category filter tabs (`All`, `Meals`, `Seafood`, `BBQ & Grill`, `Merienda`, `Beverages`).
+- **Eliminated Text Overlapping on Home Page Cards (`app/(mobile)/(tabs)/discover.tsx`)**:
+  - Added rigid inline `style={{ width: "100%", height: 144, position: "relative" }}` to the restaurant card image container and `style={{ width: "100%", height: "100%" }}` to `<Image>`, guaranteeing the cover photo never collapses to 0 height or allows badges to overlap the restaurant title.
+  - Applied explicit layout styles to trending dishes carousel (`height: 96`).
+- **Synchronized Store Filtering with Dish Categories (`app/(mobile)/(tabs)/discover.tsx`)**:
+  - Enhanced category filter to check both store-level categories and dishes published by that store (`storeHasMenuInCat`), ensuring newly created stores with dishes under "Meals", "Seafood", etc. display immediately when filtering.
+- **Order In Progress Cancellation (`app/(mobile)/(tabs)/orders.tsx`)**:
+  - Added a "Cancel Order" button for orders in `"placed"` status, allowing customers to cancel pending placed orders before kitchen acceptance.
+
+### Verification
+- `cmd.exe /c "npm run typecheck"` (`tsc --noEmit`): Passed with 0 errors across the entire codebase.
+- `cmd.exe /c "npm test"` (Unit tests): Passed 119/119 tests across all test suites.
+
+## Phase 33: Customer Profile Personalization (Facebook-Style), Category Sync & Karenderia Verification, Customer Notifications & Explore Map Animations (2026-11-17)
+
+### Completed Work
+- **Facebook-Style Personalized Customer Profile (`app/(mobile)/(tabs)/profile.tsx` & `lib/customer-profile.ts`)**:
+  - Implemented Facebook-style Cover Photo banner (`h-32` Dahican coastline default) with an overlay `Edit Cover` camera button.
+  - Added overlapping circular profile picture (`w-18 h-18` rounded-full with white border) with a camera badge overlay.
+  - Integrated `expo-image-picker` (`launchImageLibraryAsync`) with client-side permissions check, allowing customers to upload/change avatar and cover photos from their device with instant feedback and persistent local + Supabase Auth metadata synchronization.
+  - Added customer Bio section (*"Mati foodie exploring the best seaside grills and authentic karenderias 🌊🍲"*) and Favorite Mati Dish tag (*"Classic Pork Humba"*).
+  - Added inline "Edit Profile" modal to update display name, phone, bio, and favorite dish.
+  - Added a direct "Notifications & Alerts" shortcut tile on Profile displaying unread notification count and opening the `NotificationsSheet`.
+- **Social Media Food Feed Avatar Integration (`app/(mobile)/(tabs)/community.tsx` & `types/post.ts`)**:
+  - Added `authorAvatarUrl?: string;` to `SocialPost`.
+  - Updated `renderPostCard` in `community.tsx` to display the customer's custom avatar photo when present instead of just the fallback initial letter, creating visual consistency between the profile and community reviews.
+- **Home Page Category Synchronization & Karenderia Verification (`services/catalog.ts` & `app/(mobile)/(tabs)/discover.tsx`)**:
+  - Verified that `"Karenderias"` was **NOT** removed from Store Admin registration: `STORE_CUISINE_OPTIONS` in `services/merchant-registration.ts` includes `Meals`, `Karenderias`, `Seafood`, `BBQ & Grill`, `Merienda`, `Beverages`.
+  - Updated `fetchLiveStores()` in `services/catalog.ts` to include `.in("approval_status", ["approved", "pending"])` so newly registered stores are queryable and visible to store creators immediately without waiting for admin approval.
+  - Upgraded category matching logic in `discover.tsx` to be singular/plural agnostic (`replace(/s$/, "")`), matching across `r.categories`, `r.category`, and `r.name` so selecting `"Meals"` or `"Karenderias"` reliably displays all matching stores and dishes.
+  - Added an `✕` dismiss button to the Active Order banner on `discover.tsx` so users can easily dismiss the banner when desired.
+- **Customer Notifications Activation (`services/reservations.ts` & `services/orders.ts`)**:
+  - Integrated `createNotification` into `createReservation` and `updateReservationStatus` in `services/reservations.ts`.
+  - When a customer reserves a table or a merchant confirms/declines it, an in-app notification is automatically recorded in Supabase and displayed in real-time in the Notifications sheet on both Discover and Profile.
+- **Explore Page Animations & UX (`components/map/MatiInteractiveMap.web.tsx`, `components/map/MatiInteractiveMap.tsx`, `app/(mobile)/(tabs)/map.tsx`)**:
+  - Added `@keyframes mff-pin-pulse` glowing CSS ring animation to the selected pin on the map.
+  - Implemented smooth camera fly-to (`map.flyTo([lat, lng], 16, { duration: 0.8, easeLinearity: 0.25 })`) when a store/point is tapped.
+  - Passed `selectedMarkerId` and `focusCoords` from `map.tsx` to `MatiInteractiveMap`, ensuring the map automatically zooms and focuses on the selected store with popup opening.
+
+### Verification
+- `cmd.exe /c "npm run typecheck"` (`tsc --noEmit`): Passed with 0 errors across the entire codebase.
+- `cmd.exe /c "npm test"` (Unit tests): Passed 119/119 tests across all test suites.
+
+## Phase 32: Discover Card Overlap Fix, Profile Visits Schema Fix & Explore Tab Decluttering (2026-11-17)
+
+### Completed Work
+- **Resolved Card Overlapping on Discover Screen (`app/(mobile)/(tabs)/discover.tsx`)**:
+  - Diagnosed that `h-34` was an invalid Tailwind spacing token, which caused NativeWind/Tailwind to omit the height style entirely, collapsing the restaurant image banner to 0 height.
+  - As a result, the absolute-positioned badges (`Fast Mati delivery` and table availability) floated directly over the restaurant title and rating below.
+  - Fixed banner height to the standard Tailwind class `h-36` (144px), restoring proper food cover photo rendering and preventing any badge overlap.
+  - Corrected `w-38` on trending dish cards to standard `w-36`.
+- **Resolved PostgreSQL Error 42703 on Profile Screen (`services/visits.ts`)**:
+  - Diagnosed that `fetchUserVisits()` in `services/visits.ts` queried `stores(name, address)` when the Supabase table `public.stores` actually defines the column as `address_text`.
+  - This threw error `column stores_1.address does not exist` (code `42703`) and triggered the error toast on the Profile page.
+  - Replaced `address` with `address_text` in the select query and mapping, resolving the error and allowing the visit summary to load cleanly.
+- **Streamlined & Decluttered Explore Page (`app/(mobile)/(tabs)/map.tsx`)**:
+  - Removed engineering-heavy 3-column metric breakdown (*Haversine GPS vs Road Travel Time vs Delivery Fee*), multi-line specialty descriptions, and cluttered 4-button action rows.
+  - Redesigned the floating spot preview card to a clean, minimal preview:
+    - Cover photo, store name, category & area, and a single human-readable badge row (`⭐ 4.8 · ~X mins · ₱X delivery`).
+    - Added an `X` dismiss button to allow customers to easily close the bottom card.
+    - Simplified action buttons to 2 clear, balanced choices: **"Directions"** (to show/clear the road path) and **"View Menu"** (to open the full restaurant profile).
+  - Cleaned up top filter chips to concise labels: `All`, `Near Me`, `Open Now`, `Deliverable`.
+  - Streamlined list view items with clean ratings and delivery fees instead of stacked technical tags.
+
+### Verification
+- `npm.cmd run typecheck` (`tsc --noEmit`): Passed with 0 errors across the entire codebase.
+- `npm.cmd test` (Unit tests): Passed 119/119 tests across all test suites.
+
+## Phase 31: Customer & Guest Surface Scaling and 5-Pillar Efficiency Architecture (2026-11-16)
+
+### Completed Work
+- **Proportional Component Scaling Across Customer & Guest Surfaces**:
+  - Downscaled oversized padding, heights, icons, and fonts (~20-25% more compact and ergonomic) across all customer & guest surfaces, ensuring cards fit comfortably within mobile viewports without excessive scrolling:
+    - `app/(mobile)/(tabs)/discover.tsx`: App bar (`text-base font-black`, `w-8 h-8`), guest welcome banner (`p-3 rounded-xl`), active order banner (`p-2.5 rounded-xl`), search bar (`px-3 py-1.5 text-xs rounded-xl`), category chips (`px-2.5 py-1 text-[11px]`), restaurant hero cards (`h-34`, `p-3`, `rounded-2xl`, name `text-sm font-black`), trending dish cards (`w-36`, `h-22`, `p-2.5`, `rounded-xl`).
+    - `app/(mobile)/(tabs)/orders.tsx`: Order cards (`p-3.5 rounded-2xl`), order headers (`text-sm font-black`, total `text-base`), order items summary box (`p-3 rounded-xl`), PIN handshake card (`p-3 rounded-xl`, PIN `text-sm font-mono`), Rider info card (`p-3 rounded-xl`, avatar `w-8 h-8`), reservation cards (`p-3.5 rounded-2xl`), and segmented control buttons (`py-1.5 rounded-lg text-xs`).
+    - `app/(mobile)/(tabs)/profile.tsx`: Screen header (`text-base font-black`), Guest Privileges card (`p-3.5 rounded-2xl`, perks `p-2.5 rounded-xl`, `w-8 h-8` icons), Customer Identity card (`p-3.5 rounded-2xl`, avatar `w-11 h-11`), Personalization Mode card (`p-3.5 rounded-2xl`), quick shortcuts, and About MFF card.
+    - `app/(mobile)/(tabs)/community.tsx`: Screen header (`text-base font-black`), post cards (`p-3 mb-2.5 rounded-2xl`), author row (avatar `w-7.5 h-7.5`, name `text-xs font-black`, timestamp `text-[10px]`), rating badge (`px-1.5 py-0.5 text-[11px]`), tagged restaurant pill (`px-2 py-0.5 text-[11px]`), post text (`text-xs`), food photo banner (`h-40 rounded-xl`), engagement row (`text-[11px]`), and modal sheets (`p-4 rounded-xl`, inputs `text-xs`, action buttons `py-2.5 rounded-xl`).
+    - `app/(mobile)/(tabs)/map.tsx`: Top app bar (`text-base font-black`, controls `px-2.5 py-1 text-[11px]`), floating spot preview card (`p-3.5 rounded-2xl`, image `w-13 h-13`, title `text-sm font-black`, metrics strip `p-2 rounded-lg`, action buttons `py-2 rounded-xl text-[11px]`), and list view spot cards (`p-3 rounded-2xl`, image `w-16 h-16`, title `text-xs font-black`).
+    - `components/restaurant/RestaurantProfileSheet.tsx`: Hero cover banner (`h-40`, down from `h-52`), header title (`text-lg font-black`), information grid (`p-3 rounded-xl`), menu dish cards (`p-2.5 rounded-xl`, image `56x56px`), and action buttons (`py-3 rounded-xl`).
+    - `components/checkout/CheckoutSheet.tsx`: Header (`text-base font-black`, close button `w-8 h-8`), basket item cards (`p-2.5 rounded-xl`, image `52x52px`), quantity steppers, fulfillment selector cards (`p-2.5 rounded-xl`), promo code chip suggestions, fee breakdown table (`p-3 rounded-xl`, total `text-lg font-black`), and action buttons (`py-3 rounded-xl`).
+    - `components/reservation/ReservationSheet.tsx`: Sheet container (`p-4`), header (`text-base font-black`, close `w-8 h-8`), restaurant selector pills (`px-3 py-1.5 text-[11px]`), party size buttons (`py-2 text-[11px]`), date selector chips (`min-w-[58px] px-2.5 py-1.5 text-[11px]`), time slot pills (`px-3 py-1.5 text-[11px]`), seating preference buttons (`py-2 text-[10px]`), special requests input (`p-2 text-xs rounded-xl`), and confirmation CTA (`py-2.5 text-xs font-black`).
+    - `components/cart/FloatingCartBar.tsx`: Scaled padding (`p-2.5 px-3 rounded-xl`), icon container (`w-7 h-7 rounded-lg`), text tokens (`text-xs font-black`, `text-[10px]`), and action CTA (`px-2.5 py-1 text-[11px]`).
+    - `components/auth/GuestGateModal.tsx`: Scaled modal card (`p-4.5 rounded-2xl max-w-xs`), icon container (`w-11 h-11 rounded-xl`), title (`text-base font-black`), feature list (`p-2.5 rounded-xl text-[11px]`), and buttons (`py-2.5 text-xs font-black`).
+- **5-Pillar Customer Efficiency Architecture**:
+  - **Pillar 1: 1-Tap "Order Again" (`app/(mobile)/(tabs)/orders.tsx`)**:
+    - For completed deliveries (`order.status === "delivered"`), added a 1-tap re-order button with prompt dialog showing order items, total, and address, invoking `createOrder` immediately.
+  - **Pillar 2: Saved Delivery Addresses (`lib/saved-addresses.ts`, `profile.tsx`, `CheckoutSheet.tsx`)**:
+    - Created persistent client storage module with Mati landmark presets (*Home: Central near Baywalk*, *Work: Provincial Capitol*, *Beach House: Dahican Menzi*).
+    - Added interactive address management card in `profile.tsx` with 1-tap "Set Default", delete action, and inline form to add custom addresses.
+    - Integrated horizontal 1-tap address selection chips in `CheckoutSheet.tsx` Step 2 (Delivery Address) to instantly auto-fill barangay and landmark address.
+  - **Pillar 3: Advanced Sorting & Filter Chips (`app/(mobile)/(tabs)/discover.tsx`)**:
+    - Added quick filter chips: `"All" | "Open Now" | "Fastest Delivery" | "Top Rated" | "Budget Friendly"`, dynamically filtering both `restaurantList` and `trendingDishes`.
+  - **Pillar 4: Visual Order Timeline Stepper (`app/(mobile)/(tabs)/orders.tsx`)**:
+    - 4-step horizontal stepper (*Placed → Kitchen Prep → Courier Picked Up → At Your Door*) with status icons, step lines, and active status indicators.
+  - **Pillar 5: Real-time Table Availability Indicator (`components/restaurant/RestaurantProfileSheet.tsx`)**:
+    - Prominently displays live table capacity (`🟢 {availableTables} Tables Open · Instant Booking` vs `🔴 Tables Fully Booked Tonight`) in the information grid and dynamic table booking button text.
+
+### Verification
+- `npm.cmd run typecheck` (`tsc --noEmit`): Passed with 0 errors across the entire codebase.
+- `npm.cmd test` (Unit tests): Passed 119/119 tests across all test suites.
+
+## Phase 30: Explore Tab Interactive Map & Directions Integration, Order in Progress Bug Fix (2026-11-16)
+
+### Completed Work
+- **Live Interactive Map & Road Directions on Customer Explore Tab (`app/(mobile)/(tabs)/map.tsx`)**:
+  - Replaced the legacy 32-box CSS grid placeholder with the unified `MatiInteractiveMap` cartography engine (Leaflet + OpenStreetMap) with zero external Google Maps billing or API keys.
+  - Dynamically rendered live food spots as interactive pins with food badges (🍽️) and color-coded serviceability (brand orange for selected, emerald for deliverable, gray for outside radius).
+  - Added user customer GPS puck marker ("YOU ARE HERE") with live location name.
+  - Implemented live road routing using `fetchMatiRoadRoute` (OSRM):
+    - When tapping "Live Route", calculates and draws the orange road route polyline from the customer's GPS position directly to the selected restaurant.
+    - Displays active route summary overlay with duration (e.g. `~8 mins`), road distance (e.g. `2.4 km`), and road corridor (`via Magsaysay St`).
+    - Added 1-click **"GPS Nav"** action opening external turn-by-turn navigation (Google Maps / Apple Maps / Waze) with exact coordinates.
+    - Added "Clear Route" toggle to dismiss route lines.
+  - Synchronized pin clicks with the floating bottom preview card and supported deep-linked routing (e.g. when opening from table reservation directions).
+- **Resolution of False-Positive "Order In Progress" Banner (`app/(mobile)/(tabs)/discover.tsx`)**:
+  - Fixed logic that grabbed `liveOrders[0]` without checking order status, which previously displayed "Order In Progress" even for orders already delivered or cancelled.
+  - Filtered specifically for active non-terminal states (`o.status !== "delivered" && o.status !== "cancelled"`).
+  - Dynamically displays the accurate stage title (`Preparing in Kitchen`, `Ready for Pickup`, `Out for Delivery`, or `Order In Progress`).
+- **Decommissioned Lingering Mock Default States (`context/PrototypeDataContext.tsx`)**:
+  - Emptied legacy mock default orders (`#MFF-2041`, `Pork Humba`), reservations, and notifications in `PrototypeDataContext` to ensure no mock order data leakage.
+
+### Verification
+- `npm.cmd run typecheck` (`tsc --noEmit`): Verified.
+- `npm.cmd test` (Unit tests): Verified.
+
+## Phase 29: Customer Sign In Page Theme, Layout & Culinary Concept Artwork Parity (2026-11-16)
+
+### Completed Work
+- **Design & Layout Unification for Customer Sign In (`app/(mobile)/auth/customer-login.tsx`)**:
+  - Transformed the Customer Sign In page into the clean, modern dual-column responsive layout shared with Store Admin (`app/(web)/auth/store-login.tsx`) and Delivery Rider (`app/(mobile)/auth/rider-login.tsx`).
+  - **Left Column**:
+    - Top bar: Back to Home button (`router.canGoBack() ? router.back() : router.replace("/")`) and official Mati FoodFinder logo badge.
+    - Centered Auth card: "Customer Sign In" header with description, clean white rounded card (`bg-white border border-gray-200/90 rounded-2xl p-5 shadow-sm`), email input with mail icon, password input with lock icon and interactive show/hide toggle, and high-visibility brand orange "Log In" button.
+    - Added direct navigation links: "New to Mati FoodFinder? Create account" linking to `/(mobile)/auth/customer-register` and "Continue browsing as Guest" linking to `/(mobile)/(tabs)/discover`.
+  - **Right Column Artwork (`assets/customer-bg.jpg`)**:
+    - Created custom visual artwork embodying Mati FoodFinder's core concept: authentic Mati City food discovery and coastal dining.
+    - Showcases a vibrant feast of local Mati delicacies (grilled tuna steaks, savory barbecue skewers, fresh seafood sinigang, and tropical mango and calamansi drinks on fresh banana leaves) set against the sunlit tropical coast of Mati City (Pujada Bay / Dahican) in warm golden hour light.
+    - Adheres to strict constraints: zero text, zero letters, zero logos, zero watermarks, and smooth edge styling within the rounded showcase card.
+
+### Verification
+- `npm.cmd run typecheck` (`tsc --noEmit`): Verified.
+- `npm.cmd test` (Unit tests): Verified.
+
+## Phase 28: Cross-Platform Rider Sign Out Fix & Graceful Web Fallback (2026-11-16)
+
+### Completed Work
+- **Root Cause Resolution for Rider Sign Out on Web Browsers**:
+  - Identified that React Native Web implements `Alert.alert` as a silent no-op (`class Alert { static alert() {} }`), which caused clicking "Sign Out" in web browser sessions (e.g. `localhost:8081`) to fail silently without invoking the confirmation callback.
+  - Added cross-platform branching in `handleSignOutRider` (`app/(mobile)/rider/index.tsx`):
+    - On Web: uses `window.confirm("Are you sure you want to sign out of your Rider Account?")` to confirm user intent before triggering sign-out.
+    - On Native (iOS/Android): preserves native `Alert.alert` dialog with "Cancel" and destructive "Sign Out" buttons.
+  - Implemented resilient `performSignOut` routine:
+    - Tracks `signingOut` state to prevent duplicate concurrent sign-out requests.
+    - Dismisses the profile modal (`setProfileModalVisible(false)`).
+    - Invokes `logoutToGuest()` from `SessionContext`.
+    - Guarantees route replacement to guest discovery (`router.replace("/")`) and state reset inside a `finally` block, ensuring the rider is never stuck on a failed or slow auth network response.
+  - Updated all 3 Sign Out buttons across the rider interface (Header action button, bottom of Earnings tab, and inside Profile modal) with disabled state and `ActivityIndicator` during sign-out.
+
+### Verification
+- `npm.cmd run typecheck` (`tsc --noEmit`): Verified.
+- `npm.cmd test` (Unit tests): Verified.
+
+## Phase 27: Courier Registration Document Uploads, Streamlined "Earnings" Page & Personalized Profile (2026-11-15)
+
+### Completed Work
+- **React 19 & Expo Router Reconciliation Guard Hardening**:
+  - Resolved `Rendered fewer hooks than expected (app/(mobile)/_layout.tsx:23)` by replacing conditional `<Redirect />` platform guards with unconditional `useEffect` navigation (`router.replace`) across `app/(mobile)/_layout.tsx`, `app/(mobile)/auth/rider-login.tsx`, and `app/(mobile)/auth/rider-register.tsx`. Ensures the `<Stack>` navigator is returned unconditionally on 100% of renders with zero mid-transition unmounts.
+- **Courier Document Uploads on Registration Page (`app/(mobile)/auth/rider-register.tsx`)**:
+  - Integrated two cross-platform `ImageUploadDropzone` components supporting drag-and-drop on web and image picker on mobile:
+    1. **Driver's License Photo (Front)**: Mandatory photo upload with client-side file validation (PNG, JPG up to 5MB).
+    2. **Vehicle Registration (OR / CR)**: Mandatory document photo upload for motorcycle verification.
+  - Implemented `uploadCourierDocument` in `services/storage.ts` to upload documents to the remote Supabase storage bucket (`store-branding` with `foodie-uploads` fallback) under `courier-docs/`.
+  - Forwarded document public URLs (`license_document_url`, `vehicle_document_url`), motorcycle info, and barangay to Supabase user metadata via `signUp`.
+  - Added clickable inspection badges (`License` and `OR/CR` buttons invoking `openExternalUrl`) in the Super Admin Courier Applications approval table (`app/(web)/system-admin/approvals.tsx`).
+- **Streamlined & Standardized "Earnings" Page (`app/(mobile)/rider/index.tsx`)**:
+  - Renamed tab and navigation labels strictly to **"Earnings"** (retiring `"Earnings & COD"`).
+  - Summarized delivery finances into 3 standard delivery app cards:
+    - **Today's Net Earnings**: `₱{todayEarnings}` with trips counter and 100% retained fees indicator.
+    - **Cash on Hand & Remittance Due**: Side-by-side metric tiles with total physical COD cash collected and pending store remittance (with green `All settled ✓` state when clear).
+    - **Restaurant Turnovers**: Clean list of restaurant drops with food subtotal amounts and clear `Paid ✓` or `₱{due} Due` tags.
+  - Removed verbose instructional and policy text blocks while preserving all metric tokens.
+- **Personalized Courier Profile (`app/(mobile)/rider/index.tsx`)**:
+  - Added time-aware Bisaya greeting card (`"Maayong buntag / Maayong hapon / Maayong gabii, {firstName}! 👋"`) with subtitle `"Andam na para sa mga biyahe sa Mati City"`.
+  - Added Verified Partner status badge (`Mati Central • #M-XXXX`).
+  - Added Courier Performance & Rating card showing 5.0 star average and customer compliment tags (`Friendly`, `Fast Delivery`, `Food Handled with Care`).
+  - Added registered vehicle & logistics card showing motorcycle make/model and coverage zone.
+  - Added interactive preference toggles:
+    - **High-Precision GPS Beacon**: Toggle for live telemetry broadcasting.
+    - **Bisaya Dispatch Audio Chimes**: Toggle for audio alert chimes on nearby orders.
+  - Added 1-tap **Mati Express Dispatch Hotline** action (`callPhoneNumber("09171234567")`).
+  - Retained prominent full-width red-pill **Sign Out of Rider Account** button.
+
+### Verification
+- `npm.cmd run typecheck` (`tsc --noEmit`): Passed with 0 errors across the entire codebase.
+- `npm.cmd test` (Unit tests): Passed 119/119 tests across all test suites including updated assertions in `tests/foundation/responsive-layout.test.ts`.
+
+## Phase 26: Courier Navigation Tabs, Header Actions & Strict Registration Overhaul (2026-11-15)
+
+### Completed Work
+- **Rider Navigation Tabs & Prominent Actions (`app/(mobile)/rider/index.tsx`)**:
+  - **Persistent Header Action Bar**:
+    - Replaced the cluttered top text link with a high-utility app bar containing courier identity (avatar + display name + `RIDER #M-XXXX`), live `ONLINE / OFFLINE` status switch, and a direct, high-visibility red-pill **Sign Out** button with an instant confirmation dialog.
+  - **Segmented Courier Views (3 Tabs)**:
+    - **Deliveries Tab (`"deliveries"`)**: Live active order card with `MatiInteractiveMap`, OSRM road polyline, distance/ETA badge, external maps fallback, pickup/dropoff steps, COD to collect, Picked Up / Arrival / Complete PIN Handshake actions, Bisaya quick dispatch chips (`BISAYA_RIDER_DISPATCH_CHIPS`), and incoming available orders feed.
+    - **Earnings & COD Tab (`"earnings"`)**: Today's delivery fee earnings banner, completed trips counter, dedicated 24/7 rolling COD Cash in Pocket & Store Remittance breakdown (showing physical cash collected, food subtotal owed to restaurants, and restaurant-by-restaurant remittance status), and interactive Shift History & Take-Home Pay analytics.
+    - **Profile & Settings Tab (`"profile"`)**: Courier Identity Card, Star Rating & Customer Compliments summary, motorcycle & logistics credentials, and a prominent full-width Sign Out button.
+  - **Persistent Courier Bottom Navigation Bar**:
+    - Fixed at the bottom of the screen with safe-area insets (`useSafeAreaInsets`), active brand orange highlight (`#EA5410`), and real-time status indicators (active delivery dot on Deliveries, pending remittance dot on Earnings).
+- **Courier Registration Overhaul & Strict Input Sanitization (`app/(mobile)/auth/rider-register.tsx`)**:
+  - **Clean, Uncluttered UI**:
+    - Removed marketing subtitle (`"Earn ₱65 - ₱120 per trip"`), replacing with crisp, self-explanatory sections: *Personal Information*, *Vehicle & Driver Credentials*, *Account Security*, and *Cash on Delivery Protocol Agreement*.
+  - **Strict Real-Time Character Masking**:
+    - `riderName`: Auto-filtered to strictly reject numbers and invalid symbols in real time (`text.replace(/[^a-zA-Z\s.-]/g, "")`).
+    - `riderPlate`: Auto-uppercased and filtered (`text.toUpperCase().replace(/[^A-Z0-9-\s]/g, "")`).
+    - `riderLicense`: Auto-uppercased (`text.toUpperCase().replace(/[^A-Z0-9-]/g, "")`).
+    - `riderLicenseExpiry`: Auto-filtered for date characters (`text.replace(/[^0-9-]/g, "")`).
+    - `riderEmail`: Auto-trimmed and lowercased.
+  - **Strict Validation & Verification Checks**:
+    - Full Name: Validated for letters only and minimum length >= 3.
+    - Mobile Number: Validated for strictly 11-digit Philippine mobile format via `isValidPhilippineMobile`.
+    - Plate Number: Minimum 4 alphanumeric characters.
+    - Driver's License: Enforced Philippine LTO format (`A01-23-456789`).
+    - License Expiry Date: Validated as `YYYY-MM-DD`, with strict calendar date parsing and future-date enforcement (expired licenses are immediately rejected).
+    - Password & Confirm Password: Enforced 12-character minimum and exact match confirmation check.
+
+### Verification
+- `npm.cmd run typecheck` (`tsc --noEmit`): Passed with 0 errors across the entire codebase.
+- `npm.cmd test` (Unit tests): Passed 119/119 tests across all foundation test suites (added `Rider Navigation Tabs & Courier Registration Strict Validation` in `tests/foundation/responsive-layout.test.ts`).
+- `npm.cmd run check:client-bundle`: Bundled Android (1057 modules) and iOS (1062 modules) cleanly with 0 errors.
+
+## Phase 25: Driver Experience Transformation — Phases 1 to 5 Complete (2026-11-15)
+
+### Completed Work
+- **Hook Invariant Fix & Rider Login Stability**:
+  - Resolved React Rules of Hooks violation (`Rendered fewer hooks than expected`) triggered at `app/(mobile)/auth/rider-login.tsx` upon successful rider sign-in: hoisted all `useState` declarations before conditional platform redirects, ensuring hook call counts remain identical across every render cycle.
+  - Resolved early redirection placement in `app/(mobile)/rider/index.tsx`: deferred authentication guards (`if (!identity || !identity.roles.includes("rider")) return <Redirect ... />`) to line 664 after all 25+ `useState`, `useEffect`, and `useMemo` hooks execute.
+  - Aligned `app/(mobile)/auth/rider-register.tsx` and `app/(mobile)/(tabs)/_layout.tsx`: positioned all hooks before any platform guards or conditional returns.
+  - Verified repository-wide: 0 early returns before hooks exist across all routes in `app/` and components in `components/`.
+- **Phase 1: Shared In-App Map Component (`MatiInteractiveMap`) & Driver Live Navigation**:
+  - Created canonical Mati City road routing engine (`lib/mati-routing.ts`): provides coordinate resolution (`resolveMatiCoordinates`), corridor fallbacks (`MATI_ROAD_CORRIDORS`), fallback polyline generation, and real-road route calculation via OSRM (`fetchMatiRoadRoute`).
+  - Created unified cross-platform in-app interactive map component (`components/map/MatiInteractiveMap.web.tsx` & `components/map/MatiInteractiveMap.tsx`) using Leaflet / OpenStreetMap tiles with custom SVG icons (store, customer dropoff, courier motorcycle), animated live GPS puck, road polyline, and Mati landmark badges (Pujada Bay, Dahican Beach, Mati City Hall).
+  - Integrated in-app navigation at the top of the active delivery card in `app/(mobile)/rider/index.tsx`: features live OSRM road polyline, real-time GPS tracking via `expo-location`, trip distance & estimated travel time pill, and non-blocking external Google Maps fallback button.
+- **Phase 2: Live Courier Beacon & Customer Real-Time Tracking Parity**:
+  - Added remote Supabase migration `supabase/migrations/20261115000200_courier_live_location_and_remittance.sql`: added `courier_latitude`, `courier_longitude`, `courier_heading`, `courier_updated_at`, `cod_remitted`, `cod_remitted_at`, and `cod_remitted_by` columns to `public.orders`.
+  - Updated `types/database.ts` and `services/orders.ts` (`LiveOrder`, `mapDatabaseOrderToLiveOrder`, `updateCourierLiveLocation`).
+  - Configured location watcher in `app/(mobile)/rider/index.tsx` to broadcast live courier coordinates to Supabase in real time whenever an order is active.
+  - Updated `app/(mobile)/(tabs)/orders.tsx`: renders `MatiInteractiveMap` on active customer delivery screen (`out_for_delivery`) with moving courier motorcycle icon, store marker, delivery dropoff pin, and animated `< 500m` proximity alert banner notifying customer to prepare payment and 4-digit PIN.
+- **Phase 3: 1-Tap Quick-Dispatch Messaging with Bisaya Localized Pre-Messages**:
+  - Added and exported `BISAYA_RIDER_DISPATCH_CHIPS` in `services/quick-dispatch.ts`: provides 6 authentic Bisaya quick status chips for Mati couriers:
+    - `🛵 Padulong na sa kan-anan`
+    - `🥡 Naghulat pa gi-pack ang pagkaon`
+    - `📍 Nakuha na ang order, padulong na diha`
+    - `🏡 Naa nako sa gawas sa inyong balay/gate`
+    - `💵 Palihug andam sa saktong bayad`
+    - `🔔 Palihug i-andam ang 4-digit PIN`
+  - Integrated 1-tap quick dispatch messaging in `app/(mobile)/rider/index.tsx` directly above the customer contact action, broadcasting real-time dispatch messages and logging contact attempts with zero typing required.
+- **Phase 4: Store Merchant Cash Remittance Loop Closure**:
+  - Implemented `confirmCodRemittance` and `confirmStoreCodRemittance` in `services/orders.ts`: updates `cod_remitted = true`, `cod_remitted_at`, and `cod_remitted_by` with audit notes.
+  - Enhanced `mapDatabaseOrderToLiveOrder` to check `row.cod_remitted` for immediate settlement synchronization.
+  - Store Admin Dashboard (`app/(web)/dashboard/index.tsx`):
+    - Added "Incoming Courier Cash Remittance" callout banner and `"remittance"` ("Pending Cash (N)") filter tab.
+    - Added "Confirm Cash Received (₱{subtotal})" button on delivered COD orders for cashier handover confirmation.
+  - Rider App (`app/(mobile)/rider/index.tsx`):
+    - Rider COD Settlement sheet dynamically reconciles: confirmed orders immediately mark `Settled ✓` and pending cash amount drops to ₱0.
+- **Phase 5: Shift History & Weekly Take-Home Analytics & Admin Courier Approvals Pipeline**:
+  - Rider Profile Modal (`app/(mobile)/rider/index.tsx`):
+    - Added interactive Shift History & Take-Home Pay analytics section with `Today`, `Yesterday`, `This Week`, and `Past 30 Days` filter chips.
+    - Computes net delivery fees kept by rider, completed trips count, gross cash turnover, and food cash remitted vs pending.
+    - Displays a mini-log of completed trips for the selected range.
+  - System Admin Approvals (`app/(web)/system-admin/approvals.tsx`):
+    - Added segmented Category Scope Selector (`Store Applications` vs `Courier Applications`).
+    - Added courier approvals pipeline with search, filter tabs (`All`, `Active`, `Suspended`), rider details, and Approve/Suspend actions calling `setRiderApproval` in `services/admin.ts`.
+
+### Verification
+- `npm.cmd run typecheck` (`tsc --noEmit`): Passed with 0 errors across the entire codebase.
+- `npm.cmd test` (Unit tests): Passed 118/118 tests across all test suites (including 5 dedicated driver validation tests in `tests/foundation/responsive-layout.test.ts`).
+- `npm.cmd run check:client-bundle`: Bundled Android (1060 modules) and iOS (1060 modules) with 0 errors.
+
+## Phase 24: Store Admin Phase 4 — Menu Customization & Categories (2026-11-15)
+
+### Completed Work
+- **Database Schema & Types (`supabase/migrations/20261115000100_menu_item_modifiers.sql`, `types/database.ts`, `types/restaurant.ts`)**:
+  - Added migration adding `modifiers jsonb default '[]'::jsonb` to `public.menu_items`.
+  - Updated `types/database.ts` with `modifiers?: Json | null` across Row, Insert, and Update definitions for `menu_items`.
+  - Updated `types/restaurant.ts` with `modifiers?: DishModifierGroup[]` in `MenuItemCreate` and `MenuItemEdit`.
+- **Catalog Service Integration (`services/catalog.ts`)**:
+  - Updated `mapMenuItemToFoodItem` to extract and preserve `modifiers` for customer cart calculations.
+  - Updated `createStoreMenuItem` and `updateStoreMenuItem` to persist `modifiers` with graceful fallback retry if the remote Supabase schema cache does not yet have the column.
+- **Custom Store Categories in Menu Manager (`app/(web)/dashboard/menu.tsx`)**:
+  - Implemented dynamic category extraction combining canonical `MENU_ITEM_CATEGORIES` with all unique custom categories present across the merchant's dishes.
+  - Added Dynamic Category Filter Pills above the menu table (`All`, `Meals`, `Seafood`, `BBQ & Grill`, `Merienda`, `Beverages`, plus any custom categories like `Breakfast / Silog`, `Native Coffee`, `Desserts`).
+  - Added an interactive `+ Custom Category` mode in the Add/Edit Item modal with instant pill preview and validation against dynamic allowed categories.
+- **Dish Add-Ons & Modifiers Manager in Menu Manager (`app/(web)/dashboard/menu.tsx`)**:
+  - Built an interactive Dish Customizations & Modifiers manager inside the Add/Edit Item modal.
+  - Supports multiple customization groups (e.g., "Spice Level", "Add-ons & Sides", "Portion Size") with group title editing and Required vs. Optional toggles.
+  - Option management inside each group with option name, price adjustment (₱0 for baseline, +₱15, +₱20, etc.), and remove action.
+  - Added 1-click Preset Chips (`+ Spice Level`, `+ Extra Rice`, `+ Portion Size`, `+ Egg Add-on`) for rapid configuration.
+  - Added customization badge in table item rows (`X Customizations`) and full options display in the View Item modal.
+
+### Verification
+- `npm.cmd run typecheck` (`tsc --noEmit`): Passed with 0 errors.
+- `npm.cmd test` (Unit tests): Passed 113/113 tests across all test suites (added Phase 4 validation test in `tests/foundation/responsive-layout.test.ts`).
+- `npm.cmd run check:client-bundle`: Bundled Android (1058 modules) and iOS (1062 modules) cleanly.
+
+## Phase 23: Store Admin Phase 3 — Customer Reviews & Reputation Management (2026-11-15)
+
+### Completed Work
+- **Reputation Management Engine (`services/reviews.ts`)**:
+  - Defined domain interfaces `StoreReviewItem` and `StoreDetailedRatingSummary`.
+  - Implemented `computeStoreDetailedRatingSummary` to calculate total review count, exact star counts (1★ to 5★), percentage distributions, and positive diner sentiment score (% 4–5 star ratings) with zero-division protection.
+  - Implemented `fetchStoreReviews` to query `order_reviews` with joined customer profile data (`display_name`, `full_name`) and graceful fallback.
+  - Implemented `fetchStoreDetailedRatingSummary` for aggregate rating telemetry.
+- **Plan Entitlement Gating (`lib/subscription-tiers.ts`)**:
+  - Implemented `canStoreViewCustomerReviews` function enforcing plan rules: Basic tier keeps detailed comments locked; Standard (₱299/mo) and Commercial (₱699/mo) plans unlock full review details.
+- **Reviews & Reputation Dashboard Section (`app/(web)/dashboard/index.tsx`)**:
+  - Added a dedicated **Customer Reviews & Reputation** section directly in the Store Admin Overview tab with `#customer-reviews-section` anchor.
+  - Converted the Customer Rating KPI card into an interactive button that smoothly scrolls to the reviews section when clicked.
+  - **Basic Plan Gated View**: Shows overall rating pill with a blurred preview and an upgrade card directing merchants to `/dashboard/billing` to upgrade to Standard Plan.
+  - **Standard & Commercial Unlocked View**:
+    - Large numerical rating score (`4.8 ★`), visual stars, and positive sentiment badge (`X% Positive Diners`).
+    - Visual star rating breakdown bars for 5★, 4★, 3★, 2★, and 1★ with percentage fills and counts.
+    - Segment filter tabs: `All (N)`, `5 ★ (N)`, `4 ★ (N)`, and `3 ★ & Below (N)`.
+    - Live search input for filtering reviews by diner name or comment text.
+    - Verified review cards showing customer initials avatar, name, verified order badge, formatted timestamp, star rating, comment text, and `✨ Shared to Mati Foodie Community Feed` indicator.
+    - Clean empty state with helpful copy when a store has no customer reviews yet.
+
+### Verification
+- `npm.cmd run typecheck` (`tsc --noEmit`): Passed with 0 errors.
+- `npm.cmd test` (Unit tests): Passed 112/112 tests across all test suites.
+- `npm.cmd run check:client-bundle`: Bundled Android (977 modules) and iOS (1062 modules) cleanly.
+
+## Phase 22: Store Admin Phase 2 — Dine-In Table Reservations & Relational Metrics (2026-11-14)
+
+### Completed Work
+- **Configurable Table Capacity & Reservation Toggle in Store Profile (`supabase/migrations/20261114000100_store_table_capacity_and_reservations.sql`, `types/database.ts`, `types/restaurant.ts`, `services/catalog.ts`, `app/(web)/dashboard/profile.tsx`)**:
+  - Added `table_capacity` (integer default 8, valid range 1–50) and `reservations_enabled` (boolean default true) database columns via remote Supabase migration.
+  - Updated TypeScript domain types in `types/database.ts` and `types/restaurant.ts` to include `tableCapacity` and `reservationsEnabled`.
+  - Extended `updateStoreProfile` in `services/catalog.ts` with type-safe payloads and graceful error recovery.
+  - Added a dedicated "Dine-In Table Bookings & Seating Capacity" card in Store Profile (`profile.tsx`) featuring an active/paused toggle switch, an interactive table capacity stepper (`[-] / [+]` buttons with bounds 1–50), and clear helper text explaining how capacity limits prevent overbooking.
+- **Reservation Lifecycle Actions ("Mark as Seated" & "Mark as No-Show") (`app/(web)/dashboard/index.tsx`)**:
+  - Replaced generic completion with an authentic "Mark as Seated" button (`status: "completed"`) that releases table occupancy back into inventory after guests finish dining.
+  - Added "Mark as No-Show" (`status: "no_show"`) with an explicit confirmation modal (`noShowConfirmTarget`) displaying diner name, reservation date/time, and guest count to prevent accidental clicks before logging guest no-shows.
+  - Added table occupancy progress bar displaying `{occupiedTables}/{totalTables} Tables Booked ({availableTables} Free)` with visual capacity percentage indicator.
+  - Added segment filter tabs: `All (N)`, `Pending (N)`, `Confirmed (N)`, and `Past (N)`.
+  - Added a search input for instant table reservation filtering by customer name, phone number, guest count, or time slot.
+- **Relational KPIs & Operational Action Banner (`app/(web)/dashboard/index.tsx`)**:
+  - Implemented an Operational Action Alert Banner that appears automatically whenever `pendingOrdersCount + pendingReservationsCount > 0`, showing the exact count of new orders to accept and table requests to approve.
+  - Added a live "Customer Rating" KPI card (`{store?.rating || "5.0"} ★` + review count) alongside "Dine-In Bookings", "Menu Availability", "Today's Orders", and "Today's Gross Sales" in a responsive 5-card grid.
+
+### Verification
+- `npm.cmd run typecheck` (`tsc --noEmit`): Passed with 0 errors.
+- `npm.cmd test` (Unit tests): Passed 110/110 tests across all test suites.
+- `npm.cmd run check:client-bundle`: Bundled Android (1060 modules) and iOS (1062 modules) cleanly.
+
+## Phase 21: Store Admin Phase 1 — Kitchen & Operational Essentials (2026-11-14)
+
+### Completed Work
+- **Kitchen Audio Chime Alert (`lib/kitchen-audio.ts`, `app/(web)/dashboard/index.tsx`)**:
+  - Implemented dual-tone restaurant service bell chime (E5 659.25 Hz & G#5 830.61 Hz) via standard Web Audio API (`window.AudioContext`) with exponential decay envelopes, zero external MP3 assets, and zero network latency.
+  - Added header audio control toggle pill (`Chime ON / Chime Muted`) next to the Store Open/Closed switch.
+  - Integrated Supabase realtime orders listener in `StoreDashboardOverview`: detects newly incoming `placed` customer orders in real time and automatically rings the kitchen chime to alert kitchen staff without requiring screen polling.
+- **Full Kitchen Ticket / Order Chit Modal (`app/(web)/dashboard/index.tsx`)**:
+  - Created authentic kitchen ticket modal accessible by clicking any order row or the dedicated "View Chit" button.
+  - Displays complete operational ticket details: Order Number, timestamp, customer name, customer phone, full delivery address, barangay, delivery handshake PIN badge, and customer cooking / hand-off notes callout.
+  - Renders line-item breakdown with item names, quantities, unit prices, and line subtotals.
+  - Summarizes financial totals: food subtotal, Mati City delivery fee, voucher discount, and final 100% Cash on Delivery (COD) collection total.
+  - Includes a browser-native "Print Chit" action (`window.print()`) for thermal/standard kitchen ticket printing.
+- **Order Rejection Modal with Customer Reason (`app/(web)/dashboard/index.tsx`, `services/orders.ts`)**:
+  - Replaced immediate unprompted order cancellation with an interactive Order Decline Modal when clicking "Decline" on incoming `placed` orders.
+  - Provides 6 quick preset reasons: *"Ingredients out of stock"*, *"Kitchen at full capacity"*, *"Store closing earlier than scheduled"*, *"Delivery address outside service area"*, *"Customer requested cancellation"*, and *"Other reason"*.
+  - Includes an optional custom note input for specific customer explanations.
+  - Stores `[Store Declined: <reason>]` directly into `orders.notes` via `updateOrderStatus`, automatically displaying the decline reason in customer order tracking and historical logs.
+- **Kitchen Queue Segment Filters & Quick Search (`app/(web)/dashboard/index.tsx`)**:
+  - Added segment filter tabs in Live Kitchen Queue header: `Active (N)`, `Completed (N)`, `Cancelled (N)`, and `All (N)`.
+  - Added a search input for instant filtering by order number, customer name, barangay, delivery address, cooking notes, or menu item names.
+  - Rendered customer special instruction callouts on active orders and rejection reason badges on cancelled orders.
+
+### Verification
+- `npm.cmd run typecheck` (`tsc --noEmit`): Passed with 0 errors.
+- `npm.cmd test` (Unit tests): Passed 110/110 tests across all test suites.
+- `npm.cmd run check:client-bundle`: Bundled Android (1060 modules) and iOS (1062 modules) cleanly.
+
+## Phase 20: Persistent Store Admin Dashboard, Subscription Tier Gating, Post-Expiration Lifecycle & Profile Overhaul (2026-11-14)
+
+### Completed Work
+- **Persistent Store Admin Dashboard Tabs (`app/(web)/dashboard/_layout.tsx`)**:
+  - Replaced `<Slot />` route-swapping with an in-memory 4-tab container hosting `StoreDashboardOverview`, `MenuManager`, `StoreProfile`, and `BillingView` simultaneously on login.
+  - Tab visibility is managed seamlessly via `display: flex` / `display: none` keyed to the active route pathname (`/dashboard`, `/dashboard/menu`, `/dashboard/profile`, `/dashboard/billing`).
+  - Pre-loads all 4 tabs in parallel upon store admin authentication so switching tabs is instantaneous (0 ms delay), eliminates all full-screen loading spinners on tab switches, preserves search inputs, uncommitted drafts, and scroll positions across tabs, and keeps Supabase realtime order and reservation channels continuously connected in the background.
+  - Added automatic scroll-to-top on tab switches (`scrollToTabTop`) wired to `activeTab` transitions and navigation presses, so navigating to any tab (via sidebar links, mobile pills, or in-page shortcut links) immediately places the user at the very top of that tab's view (`y: 0`, `scrollTop = 0`). Also unified `StoreProfile` into a single outer scroll view to prevent nested scrollbars.
+- **Outside-Click Modal Dismissal (`app/(web)/dashboard/menu.tsx`, `app/(web)/dashboard/profile.tsx`)**:
+  - Upgraded Menu Manager's `viewingItem`, `showItemModal`, and `deletingItem` modals with backdrop press handlers (`<Pressable onPress={...}>`) and inner card stopPropagation (`<Pressable onPress={(e) => e.stopPropagation()}>`), so clicking outside the container closes the modal immediately.
+  - Applied the identical outside-click dismissal to the Barangay Picker and Operating Hours Time Slot modals in Store Profile.
+- **Store Profile Page Overhaul (`app/(web)/dashboard/profile.tsx`, `services/catalog.ts`)**:
+  - Added a **Live Customer Storefront Preview Card** displaying how diners see the store (cover banner, overlaid avatar logo, store name, Mati City barangay, live Open/Closed/Grace/Offline pill, and verified badge).
+  - Integrated interactive image upload, edit, and removal directly inside the Cover Photo Banner (`Change Cover` / `Upload Cover` + `Remove` pills, web drag-and-drop listener) and Avatar Logo (`camera` badge button + `Edit`/`Upload` and `Remove` buttons underneath).
+  - Completely eliminated the redundant "Store Branding Photos" section below the card.
+  - Positioned Store Name ("Estoy Watapamps Store") and Barangay/Address on the clean, solid white card background (`text-lg sm:text-xl font-bold text-gray-900`) next to the avatar, removing all photographic backdrop overlaps and guaranteeing 100% crisp contrast and legibility.
+  - Added Mati City's 26 official barangays dropdown selector (`STORE_BARANGAY_OPTIONS`).
+  - Added street address / landmark input (`address_text`).
+  - Added store delivery configuration section gated by subscription tier (`delivery_enabled` persisted to remote Supabase via `updateStoreProfile`).
+- **Subscription Tier Feature Enforcement (`app/(web)/dashboard/menu.tsx`, `app/(web)/dashboard/profile.tsx`, `lib/subscription-tiers.ts`)**:
+  - **Basic Plan** (₱99/mo, 2-month free trial upon approval): Enforced 15 menu items cap (`menuItems.length >= 15` blocks "Add New Item" with upgrade prompt), locked item-level sold-out toggle (prompts Standard upgrade while allowing store-wide Open/Closed status), and locked delivery integration.
+  - **Standard Plan** (₱299/mo): Unlocked up to 60 menu items, item-level sold-out switch toggles, and customer delivery orders.
+  - **Commercial Plan** (₱699/mo): Unlimited menu items, verified store badge on storefront preview, and priority placement.
+  - Added live quota pill in Menu Manager header (`15/15 Items (Basic Plan)`).
+- **Post-Subscription Expiration Lifecycle Implementation (`lib/subscription-tiers.ts`, `services/catalog.ts`, `dashboard/index.tsx`, `dashboard/billing.tsx`)**:
+  - **Stage 1: 7-Day Grace Period**: When a store's 2-month free trial or subscription period ends, the store enters an automatic 7-day grace period (`isGracePeriod = true`, `graceDaysRemaining`). The storefront remains live on customer discovery so active patrons are not disrupted, while amber warning banners appear across the Store Admin portal alerting the merchant.
+  - **Stage 2: Marketplace Delisting ("Temporarily Offline")**: If the 7-day grace period elapses without a plan selection, the store is automatically marked `isTemporarilyOffline = true`. `mapStoreToProfile` sets `isOpen = false`, `promo = "Temporarily Offline"`, and `deliveryEnabled = false`. Diners can no longer place orders or book reservations. Zero merchant data is deleted or penalized: menu items, photos, prices, operating hours, and order histories remain 100% intact. The Store Admin is not locked out, having read-only dashboard access with clear banners directing them to Billing.
+  - **Stage 3: 1-Click Reactivation**: The merchant can click "Choose Plan" on any tier (Basic ₱99, Standard ₱299, Commercial ₱699) on the Billing & Plans page at any time. Selecting a plan calls `merchant_select_subscription_plan`, which updates `subscription_status = 'active'`, `subscribed_at = now()`, immediately clears `isTemporarilyOffline`, and restores the store live to the Mati FoodFinder customer app in real time.
+
+### Verification
+- `npm run check` (`tsc --noEmit && tsx --test tests/foundation/*.test.ts`): Passed with 0 errors and 110/110 unit tests passing.
+- `npm run check:client-bundle`: Passed with 1060 Android modules and 1062 iOS modules bundled cleanly.
+
+## Phase 19: Landing Page Overhaul, Facebook-Style Auth Redirect & Public Exposure Cleanup (2026-11-12)
 
 ### Completed Work
 - **Guest-Only Root Landing Page & Signed-In Redirect (`components/portal/LandingPage.tsx`, `app/index.tsx`, `app/(mobile)/portal.tsx`)**:
@@ -46,10 +683,15 @@
   - Redesigned `store-login.tsx` to match the asymmetric two-column layout of `SystemAdminGate.tsx` on a bright `#F8FAFC` / white merchant surface theme paired with lively Mati Karenderia showcase art (`assets/merchant-bg.jpg`, `810x1080`), top-left `Back to Home`, `Merchant Portal` header above the `Log In` card, and store approval gating (`pending` → `verification.tsx`, `rejected` → signed out with notice) mirrored in `app/(web)/dashboard/_layout.tsx`.
   - Replaced the non-functional `store-register.tsx` shell with a light-themed Store Registration flow (`Back to Home` top-left, dismissible `NotificationBanner`) collecting store details (`name`, `Meals`/`Karenderias`/`Seafood`/`BBQ & Grill`/`Merienda`/`Beverages` category, `description`, `public_phone`, `operating_hours`), `barangay`, `address_text`, an interactive **OpenStreetMap + Leaflet** map pinpoint picker (`components/auth/StoreMapPicker.web.tsx` with draggable `#EA5410` pin, click-to-pin, Barangay centroid snap, and `"Use Current Location"` two-stage GPS fallback + stale-request/error clearing), owner account fields, storefront/permit upload (`uploadStoreVerificationDocument`), and automatic 6-digit email OTP verification.
   - Added and pushed migrations `20261112000100_merchant_store_registration.sql` (`stores.verification_document_url` + `public.merchant_submit_store_application`) and `20261112000200_store_categories_and_strict_registration.sql` (`stores.categories text[]` multi-category storage + strict backend validation for name, Mati barangay, street address, PH mobile/(087) landline, structured hours/`Open 24 Hours`, Mati coordinate bounds, and HTTPS storage URL) with `types/database.ts`, `services/catalog.ts`, `mock/restaurants.ts`, and `app/(mobile)/(tabs)/discover.tsx` synced for multi-category Discovery filtering.
-  - Upgraded `app/(web)/auth/store-register.tsx` with top-left `Back to Home` + top-right `Mati FoodFinder` branding (removing the redundant top-right `Log In`), multi-select **Choose Store Categories** (`categories: string[]`), curated 30-min AM/PM dropdown selectors (`05:00 AM`–`11:30 PM`, default `07:00 AM – 08:00 PM`) plus `Open 24 Hours` toggle, strict field character masking/sanitization (`filterOwnerNameInput`, `filterPhoneInput`, `filterEmailInput`, `filterOtpInput`), `0912 345 6789` phone placeholders, inline per-field validation, a Confirm Password field with live match status, and an animated per-requirement inline password strength sentence (`12+ characters`, `uppercase`, `lowercase`, `a number.`).
+  - Upgraded `app/(web)/auth/store-register.tsx` with top-left `Back to Home` + top-right `Mati FoodFinder` branding (removing the redundant top-right `Log In`), multi-select **Choose Store Categories** (`categories: string[]`), curated 30-min AM/PM dropdown selectors (`05:00 AM`–`11:30 PM`, default `07:00 AM – 08:00 PM`) plus `Open 24 Hours` toggle, strict field character masking/sanitization (`filterOwnerNameInput`, `filterPhoneInput` enforcing 11-digit `09XX XXX XXXX` across all phone inputs in `store-register.tsx`, `AccountForm.tsx`, `rider-register.tsx`, `(tabs)/profile.tsx`, and `dashboard/profile.tsx`, `filterEmailInput`, `filterOtpInput`), `0912 345 6789` phone placeholders, inline per-field validation, a Confirm Password field with live match status, and an animated per-requirement inline password strength sentence (`12+ characters`, `uppercase`, `lowercase`, `a number.`, `useNativeDriver: Platform.OS !== "web"`).
+  - Hardened Store Registration **Option B Email OTP Verification, Drag-and-Drop Document Upload & Reload Draft Caching (`app/(web)/auth/store-register.tsx`, `context/SessionContext.tsx`, `services/auth.ts`, `services/merchant-registration.ts`)**: detected existing confirmed Supabase Auth emails via `signUp()` (`identities: []` -> `isExistingUser`), replaced cached `getSession()` checks with server-validated `getUser()`, updated `SessionContext` so background `ScopeMismatchError` refreshes do not clear a newly verified `"merchant"` applicant's token before `merchant_submit_store_application` creates `store_memberships`, updated `authMessage` so `500` email-send errors avoid false `"hourly limit"` text, added HTML5 drag-and-drop file upload (`dropZoneRef` / `processSelectedWebFile`) alongside click upload, matched Customer OTP UX (`mail-open-outline` badge, 6-box digit grid, 60s resend countdown, auto-scroll), and persisted 24-hour non-sensitive drafts (`localStorage`) + permit `Blob` (`IndexedDB`) with `"Clear Draft"`.
+  - Added **System Admin Delete User, Store Approvals Review Modal, Store Suspension & Unified Table Toolbars (`supabase/migrations/20261112000300_admin_delete_user.sql`, `20261112000400_admin_store_applications_review.sql`, `20261112000500_admin_store_applications_archived_at.sql`, `types/database.ts`, `services/admin.ts`, `services/merchant-registration.ts`, `lib/status-tokens.ts`, `app/(web)/system-admin/users.tsx`, `app/(web)/system-admin/approvals.tsx`, `app/(web)/auth/store-login.tsx`, `app/(web)/auth/verification.tsx`, `app/(web)/dashboard/_layout.tsx`)**: implemented and pushed `public.admin_delete_user(target_user)` and `public.admin_list_store_applications()` (including `archived_at`); upgraded `/system-admin/approvals` with permit photo thumbnails/viewer, category chips, hours, store/owner contact, coordinates + OpenStreetMap link, a `Review` inspection modal, semantic `Suspend` / `Reinstate` controls (`admin_set_store_archived`) + `Suspended` filter tab replacing `"Reject"` on Approved stores, and enforced suspended-store lockouts on `store-login`, `verification`, and `dashboard/_layout`; redesigned `/system-admin/users` with fixed compact columns, single-row actions ending in a `32×32px` danger trash icon button (`Protected` on Admin rows), aligned identical left-search (`lg:w-80 h-9`) + right-filter (`min-h-[36px]`) toolbars across both `Users` and `Store Approvals`, and removed nested `max-h-[540px]` table scrollbars.
   - Consolidated legacy mobile Kitchen Queue / partner routes (`app/(mobile)/merchant/index.tsx`, `app/(mobile)/auth/merchant-login.tsx`, `app/(mobile)/auth/merchant-register.tsx`) into the responsive Store Admin Dashboard (`app/(web)/dashboard/*`) and `store-login` / `store-register`, removed the broken `"Kitchen Queue App (Phone/Tablet)"` link from `components/portal/LandingPage.tsx`, eliminated the conditional-`Redirect`-before-hooks crash, and ported `PrintableTableQrModal` (`app/(web)/dashboard/index.tsx`) and live `calculateCodSettlement` / `confirmCodRemittance` reconciliation (`app/(web)/dashboard/billing.tsx`).
+  - Refined **Store Admin Dashboard Stability, Per-Store Isolation, Nav Highlight & Compact Scale (`context/SessionContext.tsx`, `app/(web)/dashboard/_layout.tsx`, `index.tsx`, `menu.tsx`, `profile.tsx`, `billing.tsx`)**: skipped web `AppState` focus refreshes and guarded `dashboard/_layout.tsx` via `checkedUserIdRef` so browser tab-switching/Alt+Tab no longer reloads pages while Supabase realtime (`subscribeToOrders`, `subscribeToStoreReservations`) stays live; fixed active nav highlighting via `isAdminNavItemActive` on a compact lively light sidebar (`w-56 bg-white`, `bg-orange-50/90 border-orange-200/90`); eliminated `DEFAULT_STORE_ID` / cross-store `fetchLiveMenuItems()` pre-loads so fresh Store Admin accounts start clean with `fetchStoreMenuItems(storeId, "merchant")`; and downscaled Store Admin typography, spacing, and card/button proportions to match System Admin.
+  - Upgraded **Store Admin Menu Item Overview Images, Profile/Cover Dual Dropzones & Strict Input Validation (`supabase/migrations/20261112000600_store_profile_logo_and_menu_item_image.sql`, `types/database.ts`, `types/restaurant.ts`, `services/storage.ts`, `services/catalog.ts`, `lib/merchant-validation.ts`, `components/merchant/ImageUploadDropzone.tsx`, `app/(web)/dashboard/menu.tsx`, `profile.tsx`, `index.tsx`)**: pushed remote migration adding `stores.logo_url` and `menu_items.image_url` with authenticated grants; built reusable `ImageUploadDropzone` with HTML5 drag-and-drop, MIME/size checks (`JPEG`/`PNG`/`WebP`), and live previews for Menu Item overview photos plus dual Store Profile (`logo_url`) and Cover (`cover_image_url`) photos; updated `"Add New Dish"` copy to `"Add New Item"` and reordered modal inputs (`Overview Image` -> `Item Name *` -> `Description` -> `Category` -> `Price (₱ PHP) *`); and enforced shared client-side validation + sanitization across Menu Manager (`filterMenuItemPriceInput`, `validateMenuItemForm`) and Store Profile (curated `STORE_OPERATING_TIME_OPTIONS` + `Open 24 Hours` toggle, `validateStoreProfileForm`, and inline field errors).
+  - Upgraded **Menu CRUD, Clear Open/Sold-Out Switches, Reservation Decline Messaging & Subscription Tiers (`supabase/migrations/20261112000700_menu_category_and_store_subscriptions.sql`, `lib/subscription-tiers.ts`, `lib/merchant-validation.ts`, `services/catalog.ts`, `app/(web)/dashboard/menu.tsx`, `index.tsx`, `billing.tsx`, `app/(mobile)/(tabs)/orders.tsx`)**: persisted `menu_items.category` with dedicated `MENU_ITEM_CATEGORIES` (removing `"Karenderias"`), replaced ambiguous pill badges with unmistakable sliding switch toggles for store Open/Closed and per-item Available/Sold Out states, added clickable item row containers to open the View modal alongside Edit / Delete (soft-archive `archived_at`) row actions on Menu Manager, removed hardcoded `Avg Prep Speed` (`12 mins`) and `TOTAL_TABLES_CAPACITY = 6` in favor of live `Menu Availability` and real `Pending • Confirmed` booking counts, added a required Decline Reason modal (`store_notes`) in `dashboard/index.tsx` surfaced directly to customers on declined cards in `(tabs)/orders.tsx`, and added DB-backed `Subscription Tiers — No Commission, Ever` (`Basic ₱99/mo` auto-activated as a 2-month free trial upon approval, `Standard ₱299/mo`, `Commercial ₱699/mo`) with suspension prevention countdown and `merchant_select_subscription_plan`.
 - **Updated Regression Coverage (`tests/foundation/responsive-layout.test.ts`, `tests/foundation/role-session-isolation.test.ts`, `tests/foundation/phaseE-analytics-offline-nav.test.ts`, `tests/foundation/phaseF-system-remediation.test.ts`)**:
-  - Verified guest-only `LandingPage` (without `Kitchen Queue App`), `app/index.tsx` & `portal.tsx` exclusive customer redirects, System Admin dark editorial gate + Store Merchant light auth/registration + interactive Leaflet map picker + GPS fallback + validation helpers, consolidated `/dashboard` Table QR & COD settlement reconciliation + legacy `/merchant` redirect bridges, Admin active tabs/CSV export + dotless nav, non-overlapping metrics plot, mockless admin services & moderation page, and 4-role storage/scope isolation.
+  - Verified guest-only `LandingPage` (without `Kitchen Queue App`), `app/index.tsx` & `portal.tsx` exclusive customer redirects, System Admin dark editorial gate + Delete User confirmation/RPC + Store Merchant light auth/registration + interactive Leaflet map picker + GPS fallback + Option B OTP/draft caching/validation helpers, consolidated `/dashboard` Table QR & COD settlement reconciliation + legacy `/merchant` redirect bridges, Admin active tabs/CSV export + dotless nav, non-overlapping metrics plot, mockless admin services & moderation page, and 4-role storage/scope isolation.
 
 ## Phase 18: Cross-Platform Responsive UI & Layout Overhaul (2026-11-10)
 
@@ -1066,7 +1708,17 @@ The platform has completely transitioned from in-memory prototypes and mock data
     - Added 3-way partner switcher (`merchant`, `rider`, `admin`) with direct links to web dashboards.
     - Updated bottom dock with full-width CTA to browse restaurants.
     - Updated `app/(web)/auth/verification.tsx` to link to `/portal`.
-- **Store Admin Web Dashboard Overhaul (`app/(web)/dashboard/*`)**:
+- **Driver Registration & Sign In Layout Alignment with Store Admin (`app/(mobile)/auth/*`)**:
+  - `rider-register.tsx`: Cleaned up to mirror the Store Admin Registration Page (`store-register.tsx`) layout directly — removed the overkill Honda Click banner and preset chips in favor of clean, standardized input cards on `max-w-[920px]` responsive canvas (`bg-[#F8FAFC]`) with top navigation strip (`Back to Home` + MFF logo).
+  - `rider-login.tsx`: Overhauled to mirror Store Admin's Sign In Page (`store-login.tsx`) — two-column responsive desktop layout (`max-w-[1160px]`), compact left column with clean login card (`Back to Home` pill, MFF logo, email & password inputs with icons, `#EA5410` primary button, `Apply to deliver` link), and right column with dedicated courier delivery showcase artwork (`assets/rider-bg.jpg`).
+- **Driver Registration Live Password Validator & Confirmation (`app/(mobile)/auth/rider-register.tsx`)**:
+  - Integrated `AnimatedRulePhrase` and `LivePasswordSentence` (using `evaluateMerchantPassword` from `services/merchant-registration.ts`) providing real-time animated requirement tracking (`12+ characters`, `uppercase`, `lowercase`, `a number.`, and no edge spaces) as the driver types.
+  - Added live `Passwords match.` / `Passwords do not match.` indicator on the Confirm Password field.
+  - Updated `handleRegister` to validate `passwordEval.isValid` with clear, user-friendly guidance.
+- **Hook Dispatcher & Early Return Guard Resolution (`app/(mobile)/_layout.tsx` & `app/(mobile)/(tabs)/_layout.tsx`)**:
+  - Resolved the React 19 / Expo 57 error `"Rendered fewer hooks than expected. This may be caused by an accidental early return statement."`.
+  - Replaced conditional early returns (`if (guard) return <Redirect href="/" />`) with `useEffect(() => { if (guard) router.replace("/"); }, [width, ...])`.
+  - Guarantees `<Stack>` and `<Tabs>` mount unconditionally with an invariant hook call count on every render pass across desktop and mobile.
   - `app/(web)/auth/store-login.tsx`: Modern brand orange card, password reveal toggle, return-to-portal link; embedded password and Auto-fill helper removed before the GitHub backup. Fixed `store_memberships` query bug: the table uses composite primary key `(store_id, user_id)` without a separate `id` column; removed `id` from `.select("role, store_id, is_active")` to prevent Postgres error 42703 that previously blocked store merchant logins.
   - `app/(web)/dashboard/_layout.tsx`: Desktop sidebar with brand orange `#EA5410` active pills, Ionicons, active store info badge, and sign-out action.
   - `app/(web)/dashboard/index.tsx`: Executive KPI stats (Today's Orders, COD Revenue, Store OPEN/CLOSED toggle), live recent orders feed with status chips, and top selling dishes.

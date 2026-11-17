@@ -171,15 +171,13 @@ export function estimateRoadDistanceKm(straightLineKm: number): number {
 }
 
 /**
- * Estimates motorcycle / tricycle delivery route transit time in minutes.
- * Average city transit speed in Mati is ~25-30 km/h (2.5 min/km), plus
- * a standard 10-minute food kitchen preparation and dispatch window.
+ * Estimates motorcycle / tricycle / car road transit time in minutes.
+ * Average city transit speed in Mati is ~25-30 km/h (~2.65 min/road km),
+ * representing realistic travel and ride time across Mati City streets.
  */
 export function estimateRoadRouteMinutes(straightLineKm: number): number {
   const roadKm = estimateRoadDistanceKm(straightLineKm);
-  const transitMinutes = roadKm * 2.5;
-  const prepBuffer = 10;
-  return Math.round(transitMinutes + prepBuffer);
+  return Math.max(1, Math.round(roadKm * 2.65));
 }
 
 /**
@@ -193,11 +191,15 @@ export function formatStraightLineDistance(straightLineKm: number): string {
 }
 
 /**
- * Formats realistic road travel & delivery ETA.
+ * Formats realistic road travel & transit ETA.
  */
 export function formatRoadRouteEta(estMinutes: number): string {
-  const minRange = Math.max(10, estMinutes - 4);
-  const maxRange = estMinutes + 4;
+  const safeMin = Math.max(1, Math.round(estMinutes));
+  if (safeMin <= 2) {
+    return "~1–3 min road trip";
+  }
+  const minRange = Math.max(1, Math.round(safeMin * 0.8));
+  const maxRange = Math.max(minRange + 1, Math.round(safeMin * 1.2));
   return `~${minRange}–${maxRange} min road trip`;
 }
 

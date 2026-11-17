@@ -14,6 +14,7 @@ export interface SocialPost {
   id: string;
   author: string;
   authorInitial: string;
+  authorAvatarUrl?: string;
   avatarBg: string;
   roleBadge?: string;
   timestamp: string;

@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { Tabs, Redirect, useRouter } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../context/AuthContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -13,10 +13,6 @@ import {
 
 export default function MobileTabsLayout() {
   const { width } = useWindowDimensions();
-  if (ENFORCE_STRICT_PLATFORM_GUARDS && isDesktopDevice(width)) {
-    return <Redirect href="/" />;
-  }
-
   const router = useRouter();
   const { isLoggedIn, user } = useAuth();
   const insets = useSafeAreaInsets();
@@ -32,6 +28,12 @@ export default function MobileTabsLayout() {
     return () => unsub();
   }, [isLoggedIn, user?.id]);
 
+  useEffect(() => {
+    if (ENFORCE_STRICT_PLATFORM_GUARDS && isDesktopDevice(width)) {
+      router.replace("/");
+    }
+  }, [width, router]);
+
   // Ensure ample bottom clearance so Android 3-button navigation doesn't overlap the tabs
   const bottomInset = insets.bottom > 0 ? insets.bottom : (Platform.OS === "android" ? 16 : 8);
   const tabHeight = 60 + bottomInset;
@@ -41,6 +43,7 @@ export default function MobileTabsLayout() {
   return (
     <Tabs
       initialRouteName="discover"
+      backBehavior="history"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: "#EA5410", // prototype --brand

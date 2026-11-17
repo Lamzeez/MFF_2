@@ -12,7 +12,7 @@ interface RestaurantProfileSheetProps {
   onClose: () => void;
   restaurant: RestaurantProfile | null;
   onBookTable: (restaurantName: string) => void;
-  onViewMap: () => void;
+  onViewMap?: () => void;
   menuItems?: FoodItem[];
   onSelectDish?: (dish: FoodItem) => void;
   onOpenBasket?: () => void;
@@ -42,6 +42,7 @@ export function RestaurantProfileSheet({
   const [customizingDish, setCustomizingDish] = useState<FoodItem | null>(null);
   const [selectedSpice, setSelectedSpice] = useState<string>("Regular");
   const [selectedAddon, setSelectedAddon] = useState<string>("None");
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
 
   if (!restaurant) return null;
 
@@ -90,11 +91,11 @@ export function RestaurantProfileSheet({
   };
 
   return (
-    <BottomSheetModal visible={visible} onClose={onClose} heightPercent={0.88}>
+    <BottomSheetModal visible={visible} onClose={onClose} heightPercent={0.94}>
       {({ handleDismiss }) => (
         <View className="flex-1 bg-white">
-          {/* 1. HERO COVER BANNER WITH DRAG PILL & BADGES */}
-          <View className="h-52 w-full relative bg-gray-100">
+          {/* 1. HERO COVER BANNER WITH DRAG PILL & BADGES (Scaled from h-52 to h-40) */}
+          <View className="h-44 w-full relative bg-gray-100">
             {/* Visual Drag Handle Pill */}
             <View className="absolute top-2.5 self-center z-20 w-12 h-1.5 rounded-full bg-white/80 shadow-xs" />
 
@@ -111,31 +112,31 @@ export function RestaurantProfileSheet({
             <View className="absolute inset-0 bg-black/25" />
 
             {/* Top Bar with Badges and Close Button */}
-            <View className="absolute top-5 left-4 right-4 flex-row items-center justify-between z-10">
-              <View className="flex-row items-center gap-2">
-                <View className="bg-white/95 px-3 py-1 rounded-full shadow-sm flex-row items-center gap-1.5">
-                  <Ionicons name="star" size={13} color="#D97706" />
-                  <Text className="text-xs font-black text-gray-900">{restaurant.rating}</Text>
-                  <Text className="text-[10px] font-bold text-gray-500">
+            <View className="absolute top-4 left-3.5 right-3.5 flex-row items-center justify-between z-10">
+              <View className="flex-row items-center gap-1.5 flex-wrap">
+                <View className="bg-white/95 px-2.5 py-0.5 rounded-full shadow-xs flex-row items-center gap-1">
+                  <Ionicons name="star" size={11} color="#D97706" />
+                  <Text className="text-[11px] font-black text-gray-900">{restaurant.rating}</Text>
+                  <Text className="text-[9px] font-bold text-gray-500">
                     ({restaurant.reviews || 120})
                   </Text>
                 </View>
 
-                <View className="bg-white/95 px-3 py-1 rounded-full shadow-sm flex-row items-center gap-1">
-                  <Ionicons name="time-outline" size={13} color="#EA5410" />
-                  <Text className="text-xs font-bold text-gray-800">
+                <View className="bg-white/95 px-2.5 py-0.5 rounded-full shadow-xs flex-row items-center gap-1">
+                  <Ionicons name="time-outline" size={11} color="#EA5410" />
+                  <Text className="text-[11px] font-bold text-gray-800">
                     {restaurant.deliveryTime || "20-30 min"}
                   </Text>
                 </View>
 
                 {/* Real-time Open/Closed Badge */}
                 <View
-                  className={`px-3 py-1 rounded-full shadow-sm flex-row items-center gap-1.5 ${
+                  className={`px-2.5 py-0.5 rounded-full shadow-xs flex-row items-center gap-1 ${
                     isCurrentlyOpen ? "bg-emerald-600" : "bg-rose-600"
                   }`}
                 >
                   <View className="w-1.5 h-1.5 rounded-full bg-white" />
-                  <Text className="text-xs font-black text-white uppercase tracking-wider">
+                  <Text className="text-[10px] font-black text-white uppercase tracking-wider">
                     {isCurrentlyOpen ? "Open" : "Closed"}
                   </Text>
                 </View>
@@ -146,76 +147,54 @@ export function RestaurantProfileSheet({
                 onPress={handleDismiss}
                 accessibilityRole="button"
                 accessibilityLabel="Close restaurant sheet"
-                className="w-9 h-9 rounded-full bg-white/95 items-center justify-center shadow-md active:bg-white"
+                className="w-8 h-8 rounded-full bg-white/95 items-center justify-center shadow-xs active:bg-white"
               >
-                <Ionicons name="close" size={20} color="#1F2937" />
+                <Ionicons name="close" size={18} color="#1F2937" />
               </Pressable>
-            </View>
-
-            {/* Bottom Overlay Pill: Delivery Fee */}
-            <View className="absolute bottom-3 left-4 bg-gray-900/90 px-3 py-1 rounded-full flex-row items-center gap-1.5">
-              <Ionicons name="bicycle" size={13} color="#EA5410" />
-              <Text className="text-[11px] font-extrabold text-white">
-                ₱{restaurant.deliveryFee || 35} Flat Mati Delivery
-              </Text>
             </View>
           </View>
 
           {/* 2. SCROLLABLE RESTAURANT BODY */}
           <ScrollView
-            className="flex-1 px-5 pt-4"
+            className="flex-1 px-4 pt-3.5"
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: cartTotalCount > 0 ? 90 : 40 }}
+            contentContainerStyle={{ paddingBottom: cartTotalCount > 0 ? 80 : 35 }}
           >
             {/* Store Name, Badges & Category */}
-            <View className="mb-3">
-              <View className="flex-row items-center justify-between mb-1.5">
-                <Text className="text-2xl font-black text-gray-900 tracking-tight flex-1 mr-2">
+            <View className="mb-2.5">
+              <View className="flex-row items-center justify-between mb-1">
+                <Text className="text-lg font-black text-gray-900 tracking-tight flex-1 mr-2">
                   {restaurant.name}
                 </Text>
-                <View className="bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full flex-row items-center gap-1">
-                  <Ionicons name="checkmark-circle" size={13} color="#047857" />
-                  <Text className="text-[11px] font-bold text-emerald-800">Verified</Text>
+                <View className="bg-emerald-50 border border-emerald-200 px-2 py-0.2 rounded-full flex-row items-center gap-1">
+                  <Ionicons name="checkmark-circle" size={11} color="#047857" />
+                  <Text className="text-[10px] font-bold text-emerald-800">Verified</Text>
                 </View>
               </View>
 
-              <View className="flex-row items-center gap-2">
-                <View className="bg-orange-50 border border-orange-200 px-2.5 py-0.5 rounded-full">
-                  <Text className="text-[11px] font-bold text-[#EA5410]">
+              <View className="flex-row items-center gap-1.5">
+                <View className="bg-orange-50 border border-orange-200 px-2 py-0.2 rounded-full">
+                  <Text className="text-[10px] font-bold text-[#EA5410]">
                     {restaurant.category}
                   </Text>
                 </View>
-                <Text className="text-xs text-gray-500 font-medium">· Mati City Local Partner</Text>
+                <Text className="text-[11px] text-gray-500 font-medium">· Mati City Local Partner</Text>
               </View>
             </View>
 
             {/* Store Description */}
-            <Text className="text-xs text-gray-600 leading-relaxed mb-4">
+            <Text className="text-xs text-gray-600 leading-snug mb-3">
               {restaurant.description}
             </Text>
 
-            {/* Store Information Grid */}
-            <View className="bg-gray-50 border border-gray-200 rounded-2xl p-3.5 mb-5 gap-2.5">
-              <View className="flex-row items-center gap-2.5">
-                <View className="w-8 h-8 rounded-xl bg-orange-100/70 items-center justify-center">
-                  <Ionicons name="location-outline" size={16} color="#EA5410" />
+            {/* Store Information Grid (Operating Hours, Contact, Table Availability) */}
+            <View className="bg-gray-50 border border-gray-200 rounded-xl p-3 mb-4 gap-2">
+              <View className="flex-row items-center gap-2">
+                <View className="w-7 h-7 rounded-lg bg-orange-100/70 items-center justify-center">
+                  <Ionicons name="time-outline" size={14} color="#EA5410" />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                    Location / Address
-                  </Text>
-                  <Text className="text-xs font-bold text-gray-800" numberOfLines={1}>
-                    {restaurant.address}
-                  </Text>
-                </View>
-              </View>
-
-              <View className="flex-row items-center gap-2.5">
-                <View className="w-8 h-8 rounded-xl bg-orange-100/70 items-center justify-center">
-                  <Ionicons name="time-outline" size={16} color="#EA5410" />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                  <Text className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
                     Operating Hours
                   </Text>
                   <Text className="text-xs font-bold text-gray-800">
@@ -223,7 +202,7 @@ export function RestaurantProfileSheet({
                   </Text>
                 </View>
                 <View
-                  className={`px-2.5 py-1 rounded-full flex-row items-center gap-1.5 border ${
+                  className={`px-2 py-0.5 rounded-full flex-row items-center gap-1 border ${
                     isCurrentlyOpen
                       ? "bg-emerald-50 border-emerald-200"
                       : "bg-rose-50 border-rose-200"
@@ -235,7 +214,7 @@ export function RestaurantProfileSheet({
                     }`}
                   />
                   <Text
-                    className={`text-[10px] font-black uppercase tracking-wider ${
+                    className={`text-[9px] font-black uppercase tracking-wider ${
                       isCurrentlyOpen ? "text-emerald-800" : "text-rose-700"
                     }`}
                   >
@@ -248,59 +227,105 @@ export function RestaurantProfileSheet({
                 onPress={() => callPhoneNumber(restaurant.phone, restaurant.name)}
                 accessibilityRole="button"
                 accessibilityLabel={`Call ${restaurant.name}`}
-                className="flex-row items-center gap-2.5 active:opacity-70 p-1.5 -m-1.5 rounded-xl"
+                className="flex-row items-center gap-2 active:opacity-70 p-1 -m-1 rounded-lg"
               >
-                <View className="w-8 h-8 rounded-xl bg-orange-100/70 items-center justify-center">
-                  <Ionicons name="call-outline" size={16} color="#EA5410" />
+                <View className="w-7 h-7 rounded-lg bg-orange-100/70 items-center justify-center">
+                  <Ionicons name="call-outline" size={14} color="#EA5410" />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                  <Text className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
                     Contact / Inquiries
                   </Text>
                   <Text className="text-xs font-bold text-gray-800">
                     {restaurant.phone || "No phone listed"}
                   </Text>
                 </View>
-                <View className="px-2.5 py-1 rounded-full bg-orange-50 border border-orange-200 flex-row items-center gap-1">
-                  <Ionicons name="call" size={11} color="#EA5410" />
-                  <Text className="text-[10px] font-bold text-orange-600">Tap to Call</Text>
+                <View className="px-2 py-0.5 rounded-full bg-orange-50 border border-orange-200 flex-row items-center gap-1">
+                  <Ionicons name="call" size={10} color="#EA5410" />
+                  <Text className="text-[9px] font-bold text-orange-600">Tap to Call</Text>
                 </View>
               </Pressable>
 
-              <View className="flex-row items-center gap-2.5 pt-2 border-t border-gray-200">
-                <View className="w-8 h-8 rounded-xl bg-emerald-100/80 items-center justify-center">
-                  <Ionicons name="restaurant-outline" size={16} color="#047857" />
+              {/* Pillar 5: Real-time Table Capacity Indicator */}
+              <View className="flex-row items-center gap-2 pt-2 border-t border-gray-200">
+                <View className={`w-7 h-7 rounded-lg items-center justify-center ${
+                  (restaurant.availableTables ?? 0) > 0 ? "bg-emerald-100" : "bg-rose-100"
+                }`}>
+                  <Ionicons
+                    name="restaurant"
+                    size={14}
+                    color={(restaurant.availableTables ?? 0) > 0 ? "#047857" : "#e11d48"}
+                  />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                    Table Reservation
+                  <Text className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
+                    Live Table Availability
                   </Text>
-                  <Text className="text-xs font-extrabold text-emerald-800">
-                    {restaurant.availableTables} Tables Available for Dine-in
+                  <Text className={`text-xs font-black ${
+                    (restaurant.availableTables ?? 0) > 0 ? "text-emerald-800" : "text-rose-700"
+                  }`}>
+                    {(restaurant.availableTables ?? 0) > 0
+                      ? `🟢 ${restaurant.availableTables} Tables Open · Instant Booking`
+                      : "🔴 Tables Fully Booked Tonight"}
                   </Text>
                 </View>
               </View>
             </View>
 
-            {/* 3. SIGNATURE DISHES & MENU SECTION */}
-            <View className="mb-5">
-              <View className="mb-3">
-                <Text className="text-base font-black text-gray-900 tracking-tight">
-                  Signature Menu & Popular Dishes
+            {/* 3. STORE MENU & CATEGORY FILTER */}
+            <View className="mb-4">
+              <View className="mb-2">
+                <Text className="text-sm font-black text-gray-900 tracking-tight">
+                  Full Menu & Specialties
                 </Text>
-                <Text className="text-[11px] text-gray-500">
+                <Text className="text-[10px] text-gray-500">
                   Select dishes & drinks to add to your basket
                 </Text>
               </View>
 
+              {/* Menu Category Filter Tabs */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                className="mb-2.5 -mx-1"
+                contentContainerStyle={{ paddingHorizontal: 4, gap: 6 }}
+              >
+                {["All", "Meals", "Seafood", "BBQ & Grill", "Merienda", "Beverages"].map((cat) => (
+                  <Pressable
+                    key={cat}
+                    onPress={() => setSelectedCategory(cat)}
+                    className={`px-3 py-1 rounded-full border ${
+                      selectedCategory === cat
+                        ? "bg-[#EA5410] border-[#EA5410]"
+                        : "bg-gray-100 border-gray-200"
+                    }`}
+                  >
+                    <Text
+                      className={`text-[11px] font-bold ${
+                        selectedCategory === cat ? "text-white" : "text-gray-700"
+                      }`}
+                    >
+                      {cat}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+
               {menuItems && menuItems.length > 0 ? (
-                <View className="gap-2.5">
-                  {menuItems.map((dish) => {
+                <View className="gap-2">
+                  {menuItems
+                    .filter((dish) => {
+                      if (selectedCategory === "All") return true;
+                      const target = selectedCategory.toLowerCase().trim().replace(/s$/, "");
+                      const cat = (dish.category || "").toLowerCase().trim().replace(/s$/, "");
+                      return cat === target || cat.includes(target) || target.includes(cat);
+                    })
+                    .map((dish) => {
                     const itemQty = getItemQuantity(dish.id);
                     return (
                       <View
                         key={dish.id}
-                        className={`bg-white border rounded-2xl p-3 flex-row items-center gap-3 shadow-xs ${
+                        className={`bg-white border rounded-xl p-2.5 flex-row items-center gap-2.5 shadow-xs ${
                           itemQty > 0 ? "border-[#EA5410]/50 bg-orange-50/20" : "border-gray-200"
                         }`}
                       >
@@ -310,42 +335,43 @@ export function RestaurantProfileSheet({
                               dish.imageUrl ||
                               "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&auto=format&fit=crop&q=80",
                           }}
-                          className="w-18 h-18 rounded-xl bg-gray-100"
+                          className="w-14 h-14 rounded-lg bg-gray-100"
+                          style={{ width: 56, height: 56 }}
                           resizeMode="cover"
                         />
                         <View className="flex-1">
                           <Text className="text-xs font-black text-gray-900 leading-tight" numberOfLines={1}>
                             {dish.name}
                           </Text>
-                          <Text className="text-[11px] text-gray-500 mt-0.5" numberOfLines={1}>
+                          <Text className="text-[10px] text-gray-500 mt-0.5" numberOfLines={1}>
                             {dish.category}
                           </Text>
-                          <Text className="text-sm font-black text-[#EA5410] mt-1">
+                          <Text className="text-xs font-black text-[#EA5410] mt-0.5">
                             ₱{dish.price.toFixed(2)}
                           </Text>
                         </View>
 
                         {/* Quantity Stepper or Add Button */}
                         {itemQty > 0 ? (
-                          <View className="flex-row items-center bg-orange-50 border border-orange-200 rounded-xl p-1 gap-2">
+                          <View className="flex-row items-center bg-orange-50 border border-orange-200 rounded-lg p-0.5 gap-1.5">
                             <Pressable
                               onPress={() => updateQuantity(dish.id, itemQty - 1)}
                               accessibilityRole="button"
                               accessibilityLabel={`Decrease quantity of ${dish.name}`}
-                              className="w-7 h-7 rounded-lg bg-white items-center justify-center active:bg-orange-100 border border-orange-100"
+                              className="w-6 h-6 rounded bg-white items-center justify-center active:bg-orange-100 border border-orange-100"
                             >
-                              <Ionicons name="remove" size={14} color="#EA5410" />
+                              <Ionicons name="remove" size={12} color="#EA5410" />
                             </Pressable>
-                            <Text className="text-xs font-black text-gray-900 min-w-[16px] text-center">
+                            <Text className="text-xs font-black text-gray-900 min-w-[14px] text-center">
                               {itemQty}
                             </Text>
                             <Pressable
                               onPress={() => addItem(dish, 1)}
                               accessibilityRole="button"
                               accessibilityLabel={`Increase quantity of ${dish.name}`}
-                              className="w-7 h-7 rounded-lg bg-[#EA5410] items-center justify-center active:opacity-90"
+                              className="w-6 h-6 rounded bg-[#EA5410] items-center justify-center active:opacity-90"
                             >
-                              <Ionicons name="add" size={14} color="white" />
+                              <Ionicons name="add" size={12} color="white" />
                             </Pressable>
                           </View>
                         ) : (
@@ -353,9 +379,9 @@ export function RestaurantProfileSheet({
                             onPress={() => handleAddDish(dish)}
                             accessibilityRole="button"
                             accessibilityLabel={`Add ${dish.name} to basket`}
-                            className="bg-orange-50 border border-orange-200 px-3 py-1.5 rounded-xl flex-row items-center gap-1 active:bg-orange-100"
+                            className="bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-lg flex-row items-center gap-1 active:bg-orange-100"
                           >
-                            <Ionicons name="add" size={14} color="#EA5410" />
+                            <Ionicons name="add" size={13} color="#EA5410" />
                             <Text className="text-xs font-black text-[#EA5410]">Add</Text>
                           </Pressable>
                         )}
@@ -364,34 +390,24 @@ export function RestaurantProfileSheet({
                   })}
                 </View>
               ) : (
-                <View className="bg-gray-50 border border-gray-200 rounded-2xl p-4 items-center">
-                  <Ionicons name="restaurant-outline" size={24} color="#9CA3AF" />
-                  <Text className="text-xs text-gray-500 font-medium mt-1">
+                <View className="bg-gray-50 border border-gray-200 rounded-xl p-3 items-center">
+                  <Ionicons name="restaurant-outline" size={20} color="#9CA3AF" />
+                  <Text className="text-[11px] text-gray-500 font-medium mt-1">
                     Authentic daily specials served at the counter
                   </Text>
                 </View>
               )}
             </View>
 
-            {/* 4. ACTIONS: BOOK TABLE & EXPLORE MAP */}
-            <View className="gap-2.5">
+            {/* 4. ACTIONS: MAKE RESERVATION */}
+            <View className="gap-2">
               <Pressable
                 onPress={() => onBookTable(restaurant.name)}
-                className="bg-[#EA5410] py-3.5 rounded-2xl flex-row items-center justify-center gap-2 shadow-sm active:opacity-95"
+                className="bg-[#EA5410] py-3 rounded-xl flex-row items-center justify-center gap-1.5 shadow-xs active:opacity-95"
               >
-                <Ionicons name="calendar-outline" size={18} color="white" />
-                <Text className="text-white font-black text-sm">
-                  Book a Dining Table Here
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={onViewMap}
-                className="bg-gray-100 py-3 rounded-2xl flex-row items-center justify-center gap-2 active:bg-gray-200"
-              >
-                <Ionicons name="navigate-outline" size={16} color="#374151" />
-                <Text className="text-gray-800 font-bold text-xs">
-                  View Location on Map 🗺️
+                <Ionicons name="calendar-outline" size={16} color="white" />
+                <Text className="text-white font-black text-xs">
+                  Make Reservation
                 </Text>
               </Pressable>
             </View>

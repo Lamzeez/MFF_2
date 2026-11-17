@@ -1,8 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, View, Text, Pressable } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSession } from "../../../context/SessionContext";
-import { fetchStoreById, fetchUserStoreId } from "../../../services/catalog";
+import {
+  fetchStoreById,
+  fetchUserStoreId,
+  selectMerchantSubscriptionPlan,
+  type LiveStoreProfile,
+} from "../../../services/catalog";
 import {
   calculateCodSettlement,
   confirmCodRemittance,
@@ -10,71 +15,139 @@ import {
   type LiveOrder,
 } from "../../../services/orders";
 import { NotificationBanner, type BannerMessage } from "../../../components/ui/NotificationBanner";
+import {
+  SUBSCRIPTION_TIERS,
+  resolveStoreSubscriptionSummary,
+} from "../../../lib/subscription-tiers";
+import type { StoreSubscriptionTier } from "../../../types/restaurant";
 
 export default function StoreBilling() {
   const { identity } = useSession("merchant");
-  const [storeName, setStoreName] = useState("Your Store");
+  const [storeId, setStoreId] = useState<string | null>(null);
+  const [storeProfile, setStoreProfile] = useState<LiveStoreProfile | null>(null);
   const [orders, setOrders] = useState<LiveOrder[]>([]);
-  const [loadingSettlement, setLoadingSettlement] = useState(true);
-  const [refreshingSettlement, setRefreshingSettlement] = useState(false);
+  const [loadingBilling, setLoadingBilling] = useState(true);
+  const [refreshingBilling, setRefreshingBilling] = useState(false);
+  const [updatingTier, setUpdatingTier] = useState<StoreSubscriptionTier | null>(null);
   const [pendingConfirmOrderId, setPendingConfirmOrderId] = useState<string | null>(null);
   const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
   const [banner, setBanner] = useState<BannerMessage | null>(null);
 
-  const loadSettlementOrders = useCallback(async (isRefresh = false) => {
-    if (!identity?.id) {
-      setLoadingSettlement(false);
-      return;
-    }
-
-    if (isRefresh) {
-      setRefreshingSettlement(true);
-    } else {
-      setLoadingSettlement(true);
-    }
-
-    try {
-      const targetStoreId = await fetchUserStoreId(identity.id);
-      if (!targetStoreId) {
-        setOrders([]);
+  const loadBillingData = useCallback(
+    async (isRefresh = false) => {
+      if (!identity?.id) {
+        setLoadingBilling(false);
         return;
       }
 
-      const [storeProfile, storeOrders] = await Promise.all([
-        fetchStoreById(targetStoreId),
-        fetchStoreOrders(targetStoreId),
-      ]);
-      if (storeProfile?.name) {
-        setStoreName(storeProfile.name);
+      if (isRefresh) {
+        setRefreshingBilling(true);
+      } else {
+        setLoadingBilling(true);
       }
-      setOrders(storeOrders || []);
+
+      try {
+        const targetStoreId = await fetchUserStoreId(identity.id);
+        setStoreId(targetStoreId);
+        if (!targetStoreId) {
+          setOrders([]);
+          setStoreProfile(null);
+          return;
+        }
+
+        const [fetchedStore, storeOrders] = await Promise.all([
+          fetchStoreById(targetStoreId),
+          fetchStoreOrders(targetStoreId),
+        ]);
+        if (fetchedStore) {
+          setStoreProfile(fetchedStore);
+        }
+        setOrders(storeOrders || []);
+      } catch (err: any) {
+        setBanner({
+          type: "error",
+          message: `Could not load store billing details: ${err?.message || "Unknown error"}`,
+        });
+      } finally {
+        setLoadingBilling(false);
+        setRefreshingBilling(false);
+      }
+    },
+    [identity?.id]
+  );
+
+  useEffect(() => {
+    void loadBillingData(false);
+  }, [loadBillingData]);
+
+  const settlementData = useMemo(() => calculateCodSettlement(orders), [orders]);
+
+  const subscriptionSummary = useMemo(
+    () =>
+      resolveStoreSubscriptionSummary({
+        subscriptionTier: storeProfile?.subscription_tier,
+        subscriptionStatus: storeProfile?.subscription_status,
+        trialStartedAt: storeProfile?.trial_started_at,
+        trialEndsAt: storeProfile?.trial_ends_at,
+        subscribedAt: storeProfile?.subscribed_at,
+      }),
+    [storeProfile]
+  );
+
+  const handleSelectPlan = async (tier: StoreSubscriptionTier) => {
+    if (!storeId) return;
+    setUpdatingTier(tier);
+    setBanner(null);
+    try {
+      const res = await selectMerchantSubscriptionPlan(storeId, tier);
+      if (res.success && res.data) {
+        setStoreProfile((prev) =>
+          prev
+            ? {
+                ...prev,
+                subscription_tier: res.data!.subscription_tier,
+                subscription_status: res.data!.subscription_status,
+                trial_started_at: res.data!.trial_started_at,
+                trial_ends_at: res.data!.trial_ends_at,
+                subscribed_at: res.data!.subscribed_at,
+              }
+            : prev
+        );
+        const wasOffline = subscriptionSummary.isTemporarilyOffline;
+        const chosen = SUBSCRIPTION_TIERS.find((item) => item.id === tier);
+        setBanner({
+          type: "success",
+          message: wasOffline
+            ? `Store Successfully Reactivated! Subscribed to ${chosen?.name || tier} Plan (₱${chosen?.pricePhp || 0}/month). Your storefront is now live across Mati FoodFinder.`
+            : `Subscribed to ${chosen?.name || tier} Plan (₱${chosen?.pricePhp || 0}/month). Your store stays active with zero commission.`,
+        });
+      } else {
+        setBanner({
+          type: "error",
+          message: res.error || "Could not update subscription plan.",
+        });
+      }
     } catch (err: any) {
       setBanner({
         type: "error",
-        message: `Could not load COD settlement records: ${err?.message || "Unknown error"}`,
+        message: err?.message || "Failed to update subscription plan.",
       });
     } finally {
-      setLoadingSettlement(false);
-      setRefreshingSettlement(false);
+      setUpdatingTier(null);
     }
-  }, [identity?.id]);
-
-  useEffect(() => {
-    void loadSettlementOrders(false);
-  }, [loadSettlementOrders]);
-
-  const settlementData = useMemo(() => calculateCodSettlement(orders), [orders]);
+  };
 
   const handleConfirmRemittance = async (orderId: string, foodAmount: number) => {
     setConfirmingOrderId(orderId);
     try {
-      await confirmCodRemittance(orderId, storeName);
+      const label = storeProfile?.name || "Your Store";
+      await confirmCodRemittance(orderId, label);
       setPendingConfirmOrderId(null);
       setBanner({
         type: "success",
-        message: `₱${foodAmount.toFixed(2)} food cash recorded as remitted to ${storeName}.`,
+        message: `₱${foodAmount.toFixed(2)} food cash recorded as remitted to ${label}.`,
       });
-      await loadSettlementOrders(true);
+      await loadBillingData(true);
     } catch (err: any) {
       setBanner({
         type: "error",
@@ -85,52 +158,256 @@ export default function StoreBilling() {
     }
   };
 
+  const storeName = storeProfile?.name || "Your Store";
+
   return (
-    <View className="flex-1 p-4 sm:p-6 lg:p-10 w-full max-w-4xl self-center">
-      <View className="mb-6 sm:mb-8">
-        <View className="flex-row items-center gap-2 mb-1">
-          <Text className="text-[11px] font-black text-[#EA5410] uppercase tracking-wider">
-            SUBSCRIPTION & BILLING
-          </Text>
-        </View>
-        <Text className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">Billing & Plans</Text>
-        <Text className="text-gray-500 text-sm mt-1">
-          Manage your Mati FoodFinder merchant partner plan, COD courier reconciliation, and payout settings.
+    <View className="flex-1 p-4 lg:p-6 w-full max-w-5xl self-center">
+      <View className="mb-5">
+        <Text className="text-[10px] font-bold text-[#EA5410] uppercase tracking-wider mb-0.5">
+          Subscription & Billing
+        </Text>
+        <Text className="text-xl lg:text-2xl font-bold text-gray-900 tracking-tight">
+          Billing & Plans
+        </Text>
+        <Text className="text-gray-500 text-xs mt-0.5">
+          View your current plan status, compare merchant tiers, and reconcile COD cash handovers.
         </Text>
       </View>
 
-      {/* Notification Banner */}
       <NotificationBanner banner={banner} onDismiss={() => setBanner(null)} />
 
+      {/* Current Availed Plan Status Banner */}
+      <View className="bg-white p-5 rounded-2xl shadow-2xs border border-gray-200/80 mb-5">
+        <View className="flex-col md:flex-row justify-between items-start md:items-center gap-3 pb-3.5 border-b border-gray-100 mb-3.5">
+          <View className="flex-1">
+            <Text className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">
+              Currently Availed Plan • {storeName}
+            </Text>
+            <Text className="text-lg font-bold text-gray-900">
+              {loadingBilling ? "Loading plan..." : subscriptionSummary.headline}
+            </Text>
+          </View>
+          {!loadingBilling ? (
+            <View
+              className={`px-3 py-1 rounded-full border flex-row items-center gap-1.5 ${
+                subscriptionSummary.isTemporarilyOffline
+                  ? "bg-rose-50 border-rose-300"
+                  : subscriptionSummary.isGracePeriod
+                    ? "bg-amber-50 border-amber-300"
+                    : subscriptionSummary.isActivePaid
+                      ? "bg-blue-50 border-blue-200"
+                      : "bg-emerald-50 border-emerald-200"
+              }`}
+            >
+              <View
+                className={`w-1.5 h-1.5 rounded-full ${
+                  subscriptionSummary.isTemporarilyOffline
+                    ? "bg-rose-600"
+                    : subscriptionSummary.isGracePeriod
+                      ? "bg-amber-500"
+                      : subscriptionSummary.isActivePaid
+                        ? "bg-blue-500"
+                        : "bg-emerald-500"
+                }`}
+              />
+              <Text
+                className={`font-bold text-[11px] ${
+                  subscriptionSummary.isTemporarilyOffline
+                    ? "text-rose-800"
+                    : subscriptionSummary.isGracePeriod
+                      ? "text-amber-800"
+                      : subscriptionSummary.isActivePaid
+                        ? "text-blue-800"
+                        : "text-emerald-800"
+                }`}
+              >
+                {subscriptionSummary.isTemporarilyOffline
+                  ? "Temporarily Offline"
+                  : subscriptionSummary.isGracePeriod
+                    ? `Grace Period (${subscriptionSummary.graceDaysRemaining}d left)`
+                    : subscriptionSummary.isActivePaid
+                      ? "Active Subscription"
+                      : "Free Trial Active"}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+
+        <View
+          className={`p-3.5 rounded-xl border flex-row items-start gap-2.5 ${
+            subscriptionSummary.isTemporarilyOffline
+              ? "bg-rose-50/90 border-rose-300"
+              : subscriptionSummary.isGracePeriod
+                ? "bg-amber-50/90 border-amber-300"
+                : "bg-orange-50/70 border-orange-200/80"
+          }`}
+        >
+          <Ionicons
+            name={
+              subscriptionSummary.isTemporarilyOffline
+                ? "alert-circle"
+                : subscriptionSummary.isGracePeriod
+                  ? "warning"
+                  : "information-circle"
+            }
+            size={18}
+            color={
+              subscriptionSummary.isTemporarilyOffline
+                ? "#e11d48"
+                : subscriptionSummary.isGracePeriod
+                  ? "#D97706"
+                  : "#EA5410"
+            }
+            style={{ marginTop: 1 }}
+          />
+          <View className="flex-1">
+            <Text className="text-xs text-gray-800 leading-relaxed">
+              {subscriptionSummary.detailMessage}
+            </Text>
+            {subscriptionSummary.isTemporarilyOffline && (
+              <Text className="text-[11px] font-bold text-rose-700 mt-1">
+                ⚡ 1-Click Reactivation: Selecting and confirming any plan below immediately reactivates your store.
+              </Text>
+            )}
+          </View>
+        </View>
+      </View>
+
+      {/* Subscription Tiers — No Commission, Ever */}
+      <View className="bg-slate-50/90 p-5 rounded-2xl border border-slate-200/90 mb-5">
+        <Text className="text-lg font-extrabold text-slate-900 tracking-tight mb-3">
+          Subscription Tiers — No Commission, Ever
+        </Text>
+
+        {/* Highlight Banner */}
+        <View className="bg-[#F59E0B] rounded-xl px-4 py-2.5 mb-5 flex-row items-center justify-center gap-2">
+          <Ionicons name="sparkles" size={15} color="#111827" />
+          <Text className="text-xs font-bold text-slate-950 text-center">
+            2-Month FREE TRIAL for all new stores — no credit card, no commission, no catch.
+          </Text>
+        </View>
+
+        {/* 3 Tier Cards */}
+        <View className="flex-col lg:flex-row gap-4">
+          {SUBSCRIPTION_TIERS.map((tier) => {
+            const isCurrentTier = subscriptionSummary.tier === tier.id;
+            const isSubmittingThis = updatingTier === tier.id;
+            const isActiveAndCurrent = isCurrentTier && subscriptionSummary.isActivePaid;
+            const isFreeTrialCurrent = isCurrentTier && subscriptionSummary.isTrialActive;
+
+            return (
+              <View
+                key={tier.id}
+                className={`flex-1 bg-white rounded-xl overflow-hidden shadow-xs border-2 flex-col justify-between ${
+                  isCurrentTier ? "border-[#EA5410]" : "border-slate-200/90"
+                }`}
+              >
+                <View>
+                  {/* Colored Header */}
+                  <View
+                    style={{ backgroundColor: tier.headerBgHex }}
+                    className="px-4 py-4 items-center"
+                  >
+                    <View className="flex-row items-center gap-1.5 mb-1">
+                      <Text className="text-sm font-bold text-white">{tier.name}</Text>
+                      {isCurrentTier ? (
+                        <View className="bg-white/20 px-2 py-0.5 rounded-full">
+                          <Text className="text-[9px] font-bold text-white uppercase">
+                            {isFreeTrialCurrent ? "Current • Free Trial" : "Current Plan"}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <View className="flex-row items-baseline justify-center">
+                      <Text className="text-2xl font-extrabold text-white tabular-nums">
+                        ₱{tier.pricePhp}
+                      </Text>
+                      <Text className="text-xs font-medium text-white/90 ml-0.5">
+                        {tier.periodLabel}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Feature List */}
+                  <View className="px-5 py-4 gap-2.5">
+                    {tier.features.map((feature) => (
+                      <View
+                        key={feature}
+                        className="pb-2 border-b border-gray-100 last:border-b-0 flex-row items-center gap-2"
+                      >
+                        <Ionicons name="checkmark" size={13} color={tier.headerBgHex} />
+                        <Text className="text-xs text-gray-700 flex-1">{feature}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Plan Action Footer */}
+                <View className="px-4 pb-4 pt-1">
+                  <Pressable
+                    disabled={loadingBilling || Boolean(updatingTier) || isActiveAndCurrent || !storeId}
+                    onPress={() => void handleSelectPlan(tier.id)}
+                    className={`h-9 rounded-lg items-center justify-center flex-row gap-1.5 cursor-pointer ${
+                      isActiveAndCurrent
+                        ? "bg-emerald-50 border border-emerald-200"
+                        : isCurrentTier
+                          ? "bg-[#EA5410] hover:bg-[#D04508]"
+                          : "bg-gray-900 hover:bg-black"
+                    }`}
+                  >
+                    {isSubmittingThis ? (
+                      <ActivityIndicator size="small" color="white" />
+                    ) : null}
+                    <Text
+                      className={`text-xs font-bold ${
+                        isActiveAndCurrent ? "text-emerald-800" : "text-white"
+                      }`}
+                    >
+                      {isSubmittingThis
+                        ? "Updating..."
+                        : isActiveAndCurrent
+                          ? "Subscribed (Current)"
+                          : isFreeTrialCurrent
+                            ? `Subscribe to ${tier.name} (₱${tier.pricePhp}/mo)`
+                            : `Select ${tier.name} (₱${tier.pricePhp}/mo)`}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      </View>
+
       {/* COD Settlement & Cash Remittance Reconciliation */}
-      <View className="bg-white p-5 sm:p-8 rounded-3xl shadow-sm border border-gray-200/80 mb-6 sm:mb-8">
-        <View className="flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-gray-100 mb-5">
+      <View className="bg-white p-5 rounded-2xl shadow-2xs border border-gray-200/80 mb-6">
+        <View className="flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3.5 border-b border-gray-100 mb-4">
           <View>
-            <Text className="text-lg font-black text-gray-900">COD Courier Cash Settlement</Text>
-            <Text className="text-xs text-gray-400">
+            <Text className="text-sm font-bold text-gray-900">COD Courier Cash Settlement</Text>
+            <Text className="text-[11px] text-gray-400">
               {storeName} • Rolling reconciliation of food cash collected by independent couriers
             </Text>
           </View>
           <Pressable
-            onPress={() => void loadSettlementOrders(true)}
-            disabled={refreshingSettlement || loadingSettlement}
-            className="px-3.5 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 flex-row items-center gap-1.5"
+            onPress={() => void loadBillingData(true)}
+            disabled={refreshingBilling || loadingBilling}
+            className="h-8 px-3 rounded-lg bg-gray-100 hover:bg-gray-200 flex-row items-center gap-1.5 cursor-pointer"
           >
-            {refreshingSettlement ? (
+            {refreshingBilling ? (
               <ActivityIndicator size="small" color="#374151" />
             ) : (
-              <Ionicons name="refresh" size={14} color="#374151" />
+              <Ionicons name="refresh" size={13} color="#374151" />
             )}
-            <Text className="text-xs font-bold text-gray-700">Refresh</Text>
+            <Text className="text-[11px] font-semibold text-gray-700">Refresh</Text>
           </Pressable>
         </View>
 
-        <View className="flex-row flex-wrap gap-3 mb-5">
-          <View className="flex-1 min-w-[160px] bg-gray-50 border border-gray-200 p-4 rounded-2xl">
-            <Text className="text-[10px] font-extrabold text-gray-500 uppercase tracking-wider">
+        <View className="flex-row flex-wrap gap-3 mb-4">
+          <View className="flex-1 min-w-[160px] bg-gray-50 border border-gray-200 p-3.5 rounded-xl">
+            <Text className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
               Delivered COD Food Sales
             </Text>
-            <Text className="text-xl font-black text-gray-900 mt-1">
+            <Text className="text-lg font-bold text-gray-900 mt-1 tabular-nums">
               ₱{settlementData.totalFoodSubtotalToRemit.toFixed(2)}
             </Text>
             <Text className="text-[11px] text-gray-500 mt-0.5">
@@ -138,42 +415,44 @@ export default function StoreBilling() {
             </Text>
           </View>
 
-          <View className="flex-1 min-w-[160px] bg-emerald-50 border border-emerald-200 p-4 rounded-2xl">
-            <Text className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-wider">
+          <View className="flex-1 min-w-[160px] bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl">
+            <Text className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">
               Cash Remitted
             </Text>
-            <Text className="text-xl font-black text-emerald-900 mt-1">
+            <Text className="text-lg font-bold text-emerald-900 mt-1 tabular-nums">
               ₱{settlementData.totalRemitted.toFixed(2)}
             </Text>
             <Text className="text-[11px] text-emerald-700 mt-0.5">Confirmed by cashier</Text>
           </View>
 
-          <View className="flex-1 min-w-[160px] bg-amber-50 border border-amber-200 p-4 rounded-2xl">
-            <Text className="text-[10px] font-extrabold text-amber-800 uppercase tracking-wider">
+          <View className="flex-1 min-w-[160px] bg-amber-50 border border-amber-200 p-3.5 rounded-xl">
+            <Text className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">
               Pending Courier Turnover
             </Text>
-            <Text className="text-xl font-black text-amber-900 mt-1">
+            <Text className="text-lg font-bold text-amber-900 mt-1 tabular-nums">
               ₱{settlementData.totalPendingRemittance.toFixed(2)}
             </Text>
             <Text className="text-[11px] text-amber-700 mt-0.5">Awaiting cash handover</Text>
           </View>
         </View>
 
-        {loadingSettlement ? (
-          <View className="py-10 items-center justify-center">
+        {loadingBilling ? (
+          <View className="py-8 items-center justify-center">
             <ActivityIndicator size="small" color="#EA5410" />
-            <Text className="text-xs text-gray-400 mt-2">Loading COD settlement ledger...</Text>
+            <Text className="text-[11px] text-gray-400 mt-2">
+              Loading COD settlement ledger...
+            </Text>
           </View>
         ) : settlementData.orders.length === 0 ? (
-          <View className="bg-gray-50 border border-gray-200 p-6 rounded-2xl items-center">
-            <Ionicons name="receipt-outline" size={28} color="#9CA3AF" />
+          <View className="bg-gray-50 border border-gray-200 p-5 rounded-xl items-center">
+            <Ionicons name="receipt-outline" size={24} color="#9CA3AF" />
             <Text className="text-xs font-bold text-gray-600 mt-2">No delivered COD orders yet</Text>
-            <Text className="text-[11px] text-gray-400 text-center mt-1 max-w-sm">
+            <Text className="text-[11px] text-gray-400 text-center mt-0.5 max-w-sm">
               Completed COD deliveries will appear here so your cashier can record courier cash handovers.
             </Text>
           </View>
         ) : (
-          <View className="gap-3">
+          <View className="gap-2.5">
             {settlementData.orders.map((ord) => {
               const isPendingConfirm = pendingConfirmOrderId === ord.orderId;
               const isConfirming = confirmingOrderId === ord.orderId;
@@ -181,11 +460,11 @@ export default function StoreBilling() {
               return (
                 <View
                   key={ord.orderId}
-                  className="bg-gray-50/70 border border-gray-200/90 p-4 rounded-2xl flex-col sm:flex-row justify-between items-start sm:items-center gap-3"
+                  className="bg-gray-50/70 border border-gray-200/90 p-3.5 rounded-xl flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5"
                 >
                   <View className="flex-1">
                     <View className="flex-row items-center gap-2 flex-wrap">
-                      <Text className="text-sm font-black text-gray-900">{ord.orderNumber}</Text>
+                      <Text className="text-xs font-bold text-gray-900">{ord.orderNumber}</Text>
                       <Text className="text-xs text-gray-500 font-medium">{ord.customerName}</Text>
                       <View
                         className={`px-2 py-0.5 rounded-full ${
@@ -193,7 +472,7 @@ export default function StoreBilling() {
                         }`}
                       >
                         <Text
-                          className={`text-[10px] font-black uppercase ${
+                          className={`text-[9px] font-bold uppercase ${
                             ord.isRemitted ? "text-emerald-800" : "text-amber-800"
                           }`}
                         >
@@ -201,30 +480,30 @@ export default function StoreBilling() {
                         </Text>
                       </View>
                     </View>
-                    <Text className="text-xs text-gray-500 mt-1">
+                    <Text className="text-[11px] text-gray-500 mt-0.5">
                       Courier: {ord.riderName || "Independent Rider"} • Collected ₱{ord.total.toFixed(2)} • Food Due:{" "}
                       <Text className="font-bold text-gray-900">₱{ord.subtotal.toFixed(2)}</Text>
                     </Text>
                   </View>
 
                   {!ord.isRemitted && (
-                    <View className="flex-row items-center gap-2 shrink-0">
+                    <View className="flex-row items-center gap-1.5 shrink-0">
                       {isPendingConfirm ? (
                         <>
                           <Pressable
                             onPress={() => setPendingConfirmOrderId(null)}
                             disabled={isConfirming}
-                            className="px-3 py-2 rounded-xl bg-white border border-gray-200 hover:bg-gray-100"
+                            className="h-8 px-3 rounded-lg bg-white border border-gray-200 hover:bg-gray-100 items-center justify-center cursor-pointer"
                           >
-                            <Text className="text-xs font-bold text-gray-700">Cancel</Text>
+                            <Text className="text-[11px] font-semibold text-gray-700">Cancel</Text>
                           </Pressable>
                           <Pressable
                             onPress={() => void handleConfirmRemittance(ord.orderId, ord.subtotal)}
                             disabled={isConfirming}
-                            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 flex-row items-center gap-1.5"
+                            className="h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 flex-row items-center gap-1.5 cursor-pointer"
                           >
                             {isConfirming && <ActivityIndicator size="small" color="white" />}
-                            <Text className="text-xs font-bold text-white">
+                            <Text className="text-[11px] font-bold text-white">
                               Confirm ₱{ord.subtotal.toFixed(2)}
                             </Text>
                           </Pressable>
@@ -232,10 +511,12 @@ export default function StoreBilling() {
                       ) : (
                         <Pressable
                           onPress={() => setPendingConfirmOrderId(ord.orderId)}
-                          className="px-3.5 py-2 rounded-xl bg-[#111827] hover:bg-black flex-row items-center gap-1.5"
+                          className="h-8 px-3 rounded-lg bg-[#111827] hover:bg-black flex-row items-center gap-1.5 cursor-pointer"
                         >
-                          <Ionicons name="checkmark-done" size={14} color="white" />
-                          <Text className="text-xs font-bold text-white">Confirm Cash Received</Text>
+                          <Ionicons name="checkmark-done" size={13} color="white" />
+                          <Text className="text-[11px] font-bold text-white">
+                            Confirm Cash Received
+                          </Text>
                         </Pressable>
                       )}
                     </View>
@@ -245,73 +526,6 @@ export default function StoreBilling() {
             })}
           </View>
         )}
-      </View>
-
-      {/* Subscription Card */}
-      <View className="bg-white p-5 sm:p-8 rounded-3xl shadow-sm border border-gray-200/80 mb-6 sm:mb-8">
-        <View className="flex-col md:flex-row justify-between items-start md:items-center mb-6 pb-6 border-b border-gray-100">
-          <View className="flex-1">
-            <Text className="text-xs font-extrabold text-gray-400 uppercase tracking-wider mb-1">Current Merchant Plan</Text>
-            <Text className="text-2xl font-black text-gray-900">Partner Pioneer Trial</Text>
-            <Text className="text-xs text-gray-500 mt-1">Unlimited orders, live menu management, and zero commission on COD.</Text>
-          </View>
-          <View className="bg-emerald-50 border border-emerald-200 px-4 py-1.5 rounded-full mt-4 md:mt-0 flex-row items-center gap-1.5">
-            <View className="w-2 h-2 rounded-full bg-emerald-500" />
-            <Text className="text-emerald-800 font-extrabold text-xs">Active Trial</Text>
-          </View>
-        </View>
-
-        <View className="bg-orange-50/70 p-4 rounded-2xl border border-orange-200/80 mb-6 flex-row items-center gap-3">
-          <Ionicons name="information-circle" size={20} color="#EA5410" />
-          <Text className="text-xs text-gray-700 leading-snug flex-1">
-            Your pioneer trial period is active for <Text className="font-bold text-[#EA5410]">45 more days</Text>. No card charges or deduction fees will be applied during this period.
-          </Text>
-        </View>
-
-        <View className="flex-row flex-wrap gap-4">
-          <Pressable
-            onPress={() =>
-              setBanner({
-                type: "info",
-                message: "PayMongo Portal: In production, opens PayMongo checkout for GCash, Maya, and Card settlements.",
-              })
-            }
-            className="flex-1 min-w-[200px] py-4 px-4 bg-[#111827] rounded-2xl hover:bg-black transition-colors items-center shadow-sm"
-          >
-            <Text className="text-white font-extrabold text-xs text-center">Upgrade to Pro Merchant (₱499/mo)</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      {/* Payment Methods */}
-      <View className="bg-white p-5 sm:p-8 rounded-3xl shadow-sm border border-gray-200/80">
-        <View className="flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6 border-b border-gray-100 pb-4">
-          <View>
-            <Text className="text-lg font-black text-gray-900">Payment & Payout Methods</Text>
-            <Text className="text-xs text-gray-400">GCash, Maya, and local bank transfers</Text>
-          </View>
-          <Pressable
-            onPress={() =>
-              setBanner({
-                type: "info",
-                message: "Add Method: Configure GCash number or Bank Account for automated merchant settlements.",
-              })
-            }
-            className="px-4 py-2 bg-[#EA5410]/10 border border-[#EA5410]/20 rounded-xl"
-          >
-            <Text className="text-[#EA5410] font-bold text-xs">+ Add Payout Account</Text>
-          </Pressable>
-        </View>
-
-        <View className="items-center py-10">
-          <View className="w-16 h-16 rounded-2xl bg-gray-100 items-center justify-center mb-3">
-            <Ionicons name="card-outline" size={30} color="#9CA3AF" />
-          </View>
-          <Text className="text-gray-700 font-bold text-sm">No payout method added yet</Text>
-          <Text className="text-gray-400 text-xs mt-1 text-center max-w-xs">
-            Add a GCash or Bank account to receive weekly payouts for non-COD platform transactions.
-          </Text>
-        </View>
       </View>
     </View>
   );

@@ -34,6 +34,7 @@ import {
 import { uploadDishPhoto } from "../../../services/storage";
 import { BottomSheetModal } from "../../../components/ui/BottomSheetModal";
 import { GuestGateModal } from "../../../components/auth/GuestGateModal";
+import { getCustomerProfile } from "../../../lib/customer-profile";
 
 const DEFAULT_MATI_STORES = [
   "Mama Letty's Karenderia",
@@ -50,6 +51,7 @@ export default function MobileCommunityScreen() {
   // Social Posts & Pagination State
   const [socialPosts, setSocialPosts] = useState<SocialPost[]>([]);
   const [availableStores, setAvailableStores] = useState<string[]>(DEFAULT_MATI_STORES);
+  const [currentUserAvatarUrl, setCurrentUserAvatarUrl] = useState<string | null>(null);
   const [feedSort, setFeedSort] = useState<FeedSortOption>("trending");
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -127,11 +129,16 @@ export default function MobileCommunityScreen() {
 
   useEffect(() => {
     loadInitialPosts();
+    if (isLoggedIn && user?.id) {
+      getCustomerProfile(user.id).then((p) => {
+        if (p?.avatarUrl) setCurrentUserAvatarUrl(p.avatarUrl);
+      });
+    }
     const unsub = subscribeToCommunityFeed(() => {
       loadInitialPosts();
     });
     return () => unsub();
-  }, [isLoggedIn]);
+  }, [isLoggedIn, user?.id]);
 
   useEffect(() => {
     fetchLiveStores()
@@ -311,106 +318,114 @@ export default function MobileCommunityScreen() {
   // Render Post Card Item for Virtualized FlatList
   const renderPostCard = ({ item: post }: { item: SocialPost }) => (
     <View className="w-full max-w-2xl self-center px-4">
-    <View className="bg-white rounded-3xl border border-gray-200 p-4 shadow-sm mb-4">
+    <View className="bg-white rounded-2xl border border-gray-200/90 p-3 shadow-xs mb-2.5">
       {/* Author & Header Row */}
-      <View className="flex-row items-center justify-between mb-3 gap-2">
-        <View className="flex-row items-center gap-2.5 flex-1 min-w-0">
-          <View
-            className={`w-9 h-9 rounded-full items-center justify-center shrink-0 ${
-              post.avatarBg || "bg-[#EA5410]"
-            }`}
-          >
-            <Text className="text-white font-black text-xs">{post.authorInitial}</Text>
-          </View>
+      <View className="flex-row items-center justify-between mb-2 gap-2">
+        <View className="flex-row items-center gap-2 flex-1 min-w-0">
+          {post.authorAvatarUrl || (post.author === user?.name && currentUserAvatarUrl) ? (
+            <Image
+              source={{ uri: post.authorAvatarUrl || currentUserAvatarUrl! }}
+              className="w-7.5 h-7.5 rounded-full shrink-0 border border-orange-200"
+              resizeMode="cover"
+            />
+          ) : (
+            <View
+              className={`w-7.5 h-7.5 rounded-full items-center justify-center shrink-0 ${
+                post.avatarBg || "bg-[#EA5410]"
+              }`}
+            >
+              <Text className="text-white font-black text-[11px]">{post.authorInitial}</Text>
+            </View>
+          )}
           <View className="flex-1 min-w-0">
-            <View className="flex-row items-center gap-1.5 flex-wrap">
-              <Text className="text-sm font-extrabold text-gray-900">{post.author}</Text>
+            <View className="flex-row items-center gap-1 flex-wrap">
+              <Text className="text-xs font-black text-gray-900">{post.author}</Text>
               {post.roleBadge ? (
-                <View className="bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-md">
-                  <Text className="text-[9px] font-bold text-[#EA5410]">{post.roleBadge}</Text>
+                <View className="bg-orange-50 border border-orange-200 px-1 py-0.2 rounded">
+                  <Text className="text-[8px] font-bold text-[#EA5410]">{post.roleBadge}</Text>
                 </View>
               ) : null}
               {post.isTrending ? (
-                <View className="bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded-md flex-row items-center gap-0.5">
-                  <Ionicons name="flame" size={10} color="#E11D48" />
-                  <Text className="text-[9px] font-black text-rose-600">Trending</Text>
+                <View className="bg-rose-50 border border-rose-200 px-1 py-0.2 rounded flex-row items-center gap-0.5">
+                  <Ionicons name="flame" size={9} color="#E11D48" />
+                  <Text className="text-[8px] font-black text-rose-600">Trending</Text>
                 </View>
               ) : null}
             </View>
-            <Text className="text-[11px] text-gray-400 font-medium">{post.timestamp}</Text>
+            <Text className="text-[10px] text-gray-400 font-medium">{post.timestamp}</Text>
           </View>
         </View>
 
         {/* Rating Badge & Report Flag Button */}
-        <View className="flex-row items-center gap-1.5">
+        <View className="flex-row items-center gap-1">
           {post.rating ? (
-            <View className="flex-row items-center bg-amber-50 px-2 py-1 rounded-xl border border-amber-200">
-              <Ionicons name="star" size={12} color="#D97706" />
-              <Text className="text-xs font-black text-amber-900 ml-1">{post.rating}.0</Text>
+            <View className="flex-row items-center bg-amber-50 px-1.5 py-0.5 rounded-lg border border-amber-200">
+              <Ionicons name="star" size={10} color="#D97706" />
+              <Text className="text-[11px] font-black text-amber-900 ml-0.5">{post.rating}.0</Text>
             </View>
           ) : null}
 
           {/* Report Post Action Button */}
           <Pressable
             onPress={() => handleInitiateReport(post)}
-            className="w-7 h-7 rounded-full items-center justify-center bg-gray-50 active:bg-gray-200 border border-gray-200/60"
+            className="w-6 h-6 rounded-full items-center justify-center bg-gray-50 active:bg-gray-200 border border-gray-200/60"
             accessibilityRole="button"
             accessibilityLabel="Report post"
           >
-            <Ionicons name="flag-outline" size={13} color="#9CA3AF" />
+            <Ionicons name="flag-outline" size={11} color="#9CA3AF" />
           </Pressable>
         </View>
       </View>
 
       {/* Tagged Restaurant / Dish Pill & Ranking Indicators */}
       {post.taggedRestaurant ? (
-        <View className="mb-2.5 flex-row items-center flex-wrap gap-1.5">
-          <View className="bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-xl flex-row items-center gap-1.5">
-            <Ionicons name="storefront" size={13} color="#EA5410" />
-            <Text className="text-xs font-black text-[#EA5410]">{post.taggedRestaurant}</Text>
+        <View className="mb-2 flex-row items-center flex-wrap gap-1">
+          <View className="bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-lg flex-row items-center gap-1">
+            <Ionicons name="storefront" size={11} color="#EA5410" />
+            <Text className="text-[11px] font-black text-[#EA5410]">{post.taggedRestaurant}</Text>
             {post.taggedDish ? (
               <>
                 <Text className="text-orange-300 font-bold">•</Text>
-                <Text className="text-xs font-bold text-gray-700">{post.taggedDish}</Text>
+                <Text className="text-[11px] font-bold text-gray-700">{post.taggedDish}</Text>
               </>
             ) : null}
           </View>
           {post.isPopularEatery ? (
-            <View className="bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg flex-row items-center gap-1">
-              <Ionicons name="star" size={10} color="#D97706" />
-              <Text className="text-[10px] font-bold text-amber-800">Popular Spot</Text>
+            <View className="bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-md flex-row items-center gap-0.5">
+              <Ionicons name="star" size={9} color="#D97706" />
+              <Text className="text-[9px] font-bold text-amber-800">Popular</Text>
             </View>
           ) : null}
           {post.isPhotoVerified ? (
-            <View className="bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg flex-row items-center gap-1">
-              <Ionicons name="camera" size={10} color="#059669" />
-              <Text className="text-[10px] font-bold text-emerald-800">Photo Verified</Text>
+            <View className="bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md flex-row items-center gap-0.5">
+              <Ionicons name="camera" size={9} color="#059669" />
+              <Text className="text-[9px] font-bold text-emerald-800">Verified Photo</Text>
             </View>
           ) : null}
         </View>
       ) : post.isPhotoVerified ? (
-        <View className="mb-2.5 flex-row items-center">
-          <View className="bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg flex-row items-center gap-1">
-            <Ionicons name="camera" size={10} color="#059669" />
-            <Text className="text-[10px] font-bold text-emerald-800">Photo Verified Review</Text>
+        <View className="mb-2 flex-row items-center">
+          <View className="bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md flex-row items-center gap-0.5">
+            <Ionicons name="camera" size={9} color="#059669" />
+            <Text className="text-[9px] font-bold text-emerald-800">Photo Verified Review</Text>
           </View>
         </View>
       ) : null}
 
       {/* Post Text Content */}
-      <Text className="text-sm text-gray-800 leading-relaxed mb-3 font-medium">
+      <Text className="text-xs text-gray-800 leading-relaxed mb-2.5 font-medium">
         {post.content}
       </Text>
 
       {/* Visual Food Photo Banner */}
       {post.imageUrl ? (
-        <View className="h-52 w-full rounded-2xl overflow-hidden mb-3 relative bg-gray-100">
+        <View className="h-40 w-full rounded-xl overflow-hidden mb-2.5 relative bg-gray-100">
           <Image source={{ uri: post.imageUrl }} className="w-full h-full" resizeMode="cover" />
           <View className="absolute inset-0 bg-black/15" />
           {post.photoCaption && (
-            <View className="absolute bottom-2.5 left-2.5 right-2.5 bg-black/60 px-3 py-1.5 rounded-xl flex-row items-center gap-1.5">
-              <Ionicons name="camera" size={13} color="white" />
-              <Text className="text-white text-[11px] font-bold flex-1" numberOfLines={1}>
+            <View className="absolute bottom-2 left-2 right-2 bg-black/60 px-2.5 py-1 rounded-lg flex-row items-center gap-1">
+              <Ionicons name="camera" size={11} color="white" />
+              <Text className="text-white text-[10px] font-bold flex-1" numberOfLines={1}>
                 {post.photoCaption}
               </Text>
             </View>
@@ -418,32 +433,32 @@ export default function MobileCommunityScreen() {
         </View>
       ) : post.photoEmoji ? (
         <View
-          className={`h-40 rounded-2xl ${
+          className={`h-28 rounded-xl ${
             post.photoBg || "bg-orange-950"
-          } mb-3 items-center justify-center p-4 relative overflow-hidden`}
+          } mb-2.5 items-center justify-center p-3 relative overflow-hidden`}
         >
-          <Text className="text-5xl mb-2">{post.photoEmoji}</Text>
-          <Text className="text-white text-xs font-bold text-center px-4">
+          <Text className="text-4xl mb-1">{post.photoEmoji}</Text>
+          <Text className="text-white text-[11px] font-bold text-center px-3">
             {post.photoCaption || "Local Mati Delicacy"}
           </Text>
         </View>
       ) : null}
 
       {/* Engagement Row: Like, Comments, Share */}
-      <View className="flex-row items-center justify-between pt-2.5 border-t border-gray-100">
-        <View className="flex-row items-center gap-5">
+      <View className="flex-row items-center justify-between pt-2 border-t border-gray-100">
+        <View className="flex-row items-center gap-4">
           {/* Like Button */}
           <Pressable
             onPress={() => handleToggleLike(post.id)}
-            className="flex-row items-center gap-1.5 py-1 active:opacity-75"
+            className="flex-row items-center gap-1 py-0.5 active:opacity-75"
           >
             <Ionicons
               name={post.hasLiked ? "heart" : "heart-outline"}
-              size={18}
+              size={15}
               color={post.hasLiked ? "#EF4444" : "#6B7280"}
             />
             <Text
-              className={`text-xs font-bold ${
+              className={`text-[11px] font-bold ${
                 post.hasLiked ? "text-red-600" : "text-gray-700"
               }`}
             >
@@ -454,10 +469,10 @@ export default function MobileCommunityScreen() {
           {/* Comments Button */}
           <Pressable
             onPress={() => handleOpenComments(post)}
-            className="flex-row items-center gap-1.5 py-1 active:opacity-75"
+            className="flex-row items-center gap-1 py-0.5 active:opacity-75"
           >
-            <Ionicons name="chatbubble-outline" size={17} color="#6B7280" />
-            <Text className="text-xs font-bold text-gray-700">{post.comments.length}</Text>
+            <Ionicons name="chatbubble-outline" size={14} color="#6B7280" />
+            <Text className="text-[11px] font-bold text-gray-700">{post.comments.length}</Text>
           </Pressable>
         </View>
 
@@ -469,10 +484,10 @@ export default function MobileCommunityScreen() {
               `Link to review by ${post.author} copied to clipboard.`
             );
           }}
-          className="flex-row items-center gap-1 py-1 active:opacity-75"
+          className="flex-row items-center gap-1 py-0.5 active:opacity-75"
         >
-          <Ionicons name="share-social-outline" size={16} color="#6B7280" />
-          <Text className="text-xs font-semibold text-gray-500">Share</Text>
+          <Ionicons name="share-social-outline" size={13} color="#6B7280" />
+          <Text className="text-[11px] font-semibold text-gray-500">Share</Text>
         </Pressable>
       </View>
     </View>
@@ -484,76 +499,76 @@ export default function MobileCommunityScreen() {
     <View className="w-full max-w-2xl self-center">
       {/* GUEST WELCOME BANNER OR REGISTERED USER COMPOSE BOX */}
       {!isLoggedIn ? (
-        <View className="mx-4 mt-3 mb-4 p-4 bg-orange-50 border border-orange-200 rounded-2xl">
-          <View className="flex-row items-center justify-between flex-wrap gap-2 mb-1.5">
-            <View className="flex-row items-center gap-1.5 flex-1 min-w-[180px]">
-              <Ionicons name="sparkles" size={15} color="#EA5410" />
-              <Text className="text-sm font-black text-gray-900">
+        <View className="mx-4 mt-2.5 mb-3 p-3 bg-orange-50 border border-orange-200 rounded-xl">
+          <View className="flex-row items-center justify-between flex-wrap gap-1.5 mb-1">
+            <View className="flex-row items-center gap-1 flex-1 min-w-[160px]">
+              <Ionicons name="sparkles" size={13} color="#EA5410" />
+              <Text className="text-xs font-black text-gray-900">
                 Mati Foodie Community 🍽️
               </Text>
             </View>
-            <View className="bg-orange-100 px-2 py-0.5 rounded-full">
-              <Text className="text-[10px] font-black text-[#EA5410]">GUEST MODE</Text>
+            <View className="bg-orange-100 px-1.5 py-0.2 rounded-full">
+              <Text className="text-[9px] font-black text-[#EA5410]">GUEST MODE</Text>
             </View>
           </View>
-          <Text className="text-xs text-gray-600 leading-relaxed mb-3">
+          <Text className="text-[11px] text-gray-600 leading-relaxed mb-2.5">
             Browse authentic food photos and reviews by Mati locals. Sign in to post reviews, snap dish photos, and join the food discussion.
           </Text>
           <Pressable
             onPress={() => router.push("/(mobile)/auth/customer-login")}
-            className="py-2.5 bg-[#EA5410] rounded-xl items-center shadow-sm active:opacity-90"
+            className="py-2 bg-[#EA5410] rounded-lg items-center shadow-xs active:opacity-90"
           >
-            <Text className="text-white font-extrabold text-xs">Join the Community / Sign In</Text>
+            <Text className="text-white font-extrabold text-[11px]">Join the Community / Sign In</Text>
           </Pressable>
         </View>
       ) : (
-        <View className="mx-4 mt-3 mb-4 p-4 bg-white border border-gray-200 rounded-2xl shadow-xs">
-          <View className="flex-row items-center gap-3 mb-2.5">
-            <View className="w-10 h-10 rounded-full bg-[#EA5410] items-center justify-center shrink-0">
-              <Text className="text-white font-black text-sm">
+        <View className="mx-4 mt-2.5 mb-3 p-3 bg-white border border-gray-200 rounded-xl shadow-xs">
+          <View className="flex-row items-center gap-2 mb-2">
+            <View className="w-8 h-8 rounded-full bg-[#EA5410] items-center justify-center shrink-0">
+              <Text className="text-white font-black text-xs">
                 {user?.name?.charAt(0).toUpperCase() || "F"}
               </Text>
             </View>
             <Pressable
               onPress={() => setShowCreateModal(true)}
-              className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5"
+              className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5"
             >
-              <Text className="text-xs text-gray-400 font-medium" numberOfLines={1}>
+              <Text className="text-[11px] text-gray-400 font-medium" numberOfLines={1}>
                 Tried something delicious in Mati? Share it...
               </Text>
             </Pressable>
           </View>
-          <View className="flex-row flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-100">
+          <View className="flex-row flex-wrap items-center justify-between gap-1.5 pt-1.5 border-t border-gray-100">
             <Pressable
               onPress={() => setShowCreateModal(true)}
-              className="flex-row items-center gap-1.5"
+              className="flex-row items-center gap-1"
             >
-              <Ionicons name="camera" size={16} color="#EA5410" />
-              <Text className="text-xs font-bold text-gray-700">Add Dish Photo</Text>
+              <Ionicons name="camera" size={14} color="#EA5410" />
+              <Text className="text-[11px] font-bold text-gray-700">Add Photo</Text>
             </Pressable>
             <Pressable
               onPress={() => setShowCreateModal(true)}
-              className="flex-row items-center gap-1.5"
+              className="flex-row items-center gap-1"
             >
-              <Ionicons name="star" size={16} color="#D97706" />
-              <Text className="text-xs font-bold text-gray-700">Rate Restaurant</Text>
+              <Ionicons name="star" size={14} color="#D97706" />
+              <Text className="text-[11px] font-bold text-gray-700">Rate Restaurant</Text>
             </Pressable>
             <Pressable
               onPress={() => setShowCreateModal(true)}
-              className="bg-orange-50 px-3 py-1 rounded-full border border-orange-200"
+              className="bg-orange-50 px-2.5 py-0.5 rounded-full border border-orange-200"
             >
-              <Text className="text-xs font-black text-[#EA5410]">Share</Text>
+              <Text className="text-[11px] font-black text-[#EA5410]">Share</Text>
             </Pressable>
           </View>
         </View>
       )}
 
       {/* FEED FILTER / RANKING SELECTOR */}
-      <View className="mx-4 mb-3 flex-row flex-wrap items-center justify-between gap-2">
-        <View className="flex-row items-center gap-2">
+      <View className="mx-4 mb-2.5 flex-row flex-wrap items-center justify-between gap-1.5">
+        <View className="flex-row items-center gap-1.5">
           <Pressable
             onPress={() => handleSwitchFeedSort("trending")}
-            className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border ${
+            className={`flex-row items-center gap-1 px-2.5 py-1 rounded-full border ${
               feedSort === "trending"
                 ? "bg-orange-50 border-[#EA5410]"
                 : "bg-white border-gray-200"
@@ -561,11 +576,11 @@ export default function MobileCommunityScreen() {
           >
             <Ionicons
               name="flame"
-              size={13}
+              size={12}
               color={feedSort === "trending" ? "#EA5410" : "#6B7280"}
             />
             <Text
-              className={`text-xs font-bold ${
+              className={`text-[11px] font-bold ${
                 feedSort === "trending" ? "text-[#EA5410]" : "text-gray-600"
               }`}
             >
@@ -575,7 +590,7 @@ export default function MobileCommunityScreen() {
 
           <Pressable
             onPress={() => handleSwitchFeedSort("recent")}
-            className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border ${
+            className={`flex-row items-center gap-1 px-2.5 py-1 rounded-full border ${
               feedSort === "recent"
                 ? "bg-orange-50 border-[#EA5410]"
                 : "bg-white border-gray-200"
@@ -583,11 +598,11 @@ export default function MobileCommunityScreen() {
           >
             <Ionicons
               name="time"
-              size={13}
+              size={12}
               color={feedSort === "recent" ? "#EA5410" : "#6B7280"}
             />
             <Text
-              className={`text-xs font-bold ${
+              className={`text-[11px] font-bold ${
                 feedSort === "recent" ? "text-[#EA5410]" : "text-gray-600"
               }`}
             >
@@ -596,8 +611,8 @@ export default function MobileCommunityScreen() {
           </Pressable>
         </View>
 
-        <View className="bg-gray-100 px-2.5 py-1 rounded-full">
-          <Text className="text-[10px] font-bold text-gray-600">
+        <View className="bg-gray-100 px-2 py-0.5 rounded-full">
+          <Text className="text-[9px] font-bold text-gray-600">
             {socialPosts.length} reviews
           </Text>
         </View>
@@ -608,13 +623,13 @@ export default function MobileCommunityScreen() {
   return (
     <SafeAreaView edges={["top"]} className="flex-1 bg-[#F8FAFC]">
       {/* 1. TOP APP BAR */}
-      <View className="px-4 pt-2 pb-3 bg-white border-b border-gray-100 shadow-xs">
+      <View className="px-4 pt-1.5 pb-2.5 bg-white border-b border-gray-100 shadow-xs">
         <View className="w-full max-w-2xl self-center flex-row items-center justify-between gap-2">
           <View className="flex-1 min-w-0">
-            <Text className="text-[10px] font-bold text-gray-400 tracking-wider uppercase">
+            <Text className="text-[9px] font-bold text-gray-400 tracking-wider uppercase">
               MATI COMMUNITY
             </Text>
-            <Text className="text-xl font-black text-gray-900 tracking-tight mt-0.5" numberOfLines={1}>
+            <Text className="text-base font-black text-gray-900 tracking-tight" numberOfLines={1}>
               Foodie Reviews & Feed
             </Text>
           </View>
@@ -622,18 +637,18 @@ export default function MobileCommunityScreen() {
           {isLoggedIn ? (
             <Pressable
               onPress={() => setShowCreateModal(true)}
-              className="bg-[#EA5410] px-3.5 py-1.5 rounded-full flex-row items-center gap-1.5 shadow-sm active:opacity-90 shrink-0"
+              className="bg-[#EA5410] px-3 py-1.5 rounded-xl flex-row items-center gap-1 shadow-xs active:opacity-90 shrink-0"
             >
-              <Ionicons name="create-outline" size={15} color="white" />
-              <Text className="text-white font-black text-xs">Write Review</Text>
+              <Ionicons name="create-outline" size={13} color="white" />
+              <Text className="text-white font-black text-[11px]">Write Review</Text>
             </Pressable>
           ) : (
             <Pressable
               onPress={() => router.push("/(mobile)/auth/customer-login")}
-              className="bg-[#EA5410] px-3.5 py-1.5 rounded-full flex-row items-center gap-1 shadow-sm active:opacity-90 shrink-0"
+              className="bg-[#EA5410] px-3 py-1.5 rounded-xl flex-row items-center gap-1 shadow-xs active:opacity-90 shrink-0"
             >
-              <Ionicons name="log-in-outline" size={14} color="white" />
-              <Text className="text-white text-xs font-black">Sign In</Text>
+              <Ionicons name="log-in-outline" size={13} color="white" />
+              <Text className="text-white text-[11px] font-black">Sign In</Text>
             </Pressable>
           )}
         </View>
@@ -710,18 +725,18 @@ export default function MobileCommunityScreen() {
         {({ handleDismiss }) => (
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : undefined}
-            className="flex-1 bg-white p-5 flex-col"
+            className="flex-1 bg-white p-4 flex-col"
           >
             {/* Visual Drag Handle Pill */}
-            <View className="w-12 h-1.5 rounded-full bg-gray-300 self-center mb-3" />
+            <View className="w-10 h-1 rounded-full bg-gray-300 self-center mb-2.5" />
 
             {/* Header */}
-            <View className="flex-row justify-between items-center pb-3 border-b border-gray-100">
+            <View className="flex-row justify-between items-center pb-2.5 border-b border-gray-100">
               <View>
-                <Text className="text-xl font-black text-gray-900 tracking-tight">
+                <Text className="text-base font-black text-gray-900 tracking-tight">
                   Share Food Review
                 </Text>
-                <Text className="text-xs text-gray-500 font-medium">
+                <Text className="text-[11px] text-gray-500 font-medium">
                   Posting as {user?.name || "Mati Foodie"}
                 </Text>
               </View>
@@ -729,34 +744,34 @@ export default function MobileCommunityScreen() {
                 onPress={handleDismiss}
                 accessibilityRole="button"
                 accessibilityLabel="Close create post sheet"
-                className="w-9 h-9 rounded-full bg-gray-100 items-center justify-center active:bg-gray-200"
+                className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center active:bg-gray-200"
               >
-                <Ionicons name="close" size={20} color="#374151" />
+                <Ionicons name="close" size={18} color="#374151" />
               </Pressable>
             </View>
 
-            <ScrollView className="flex-1 mt-3.5" showsVerticalScrollIndicator={false}>
-              <Text className="text-xs font-bold text-gray-700 mb-1.5">
+            <ScrollView className="flex-1 mt-2.5" showsVerticalScrollIndicator={false}>
+              <Text className="text-[11px] font-bold text-gray-700 mb-1">
                 Your Food Experience *
               </Text>
               <TextInput
                 multiline
-                numberOfLines={4}
+                numberOfLines={3}
                 placeholder="What did you eat? How was the taste, price, and vibe in Mati City?"
                 value={newPostText}
                 onChangeText={setNewPostText}
-                className="bg-gray-50 border border-gray-200 rounded-2xl p-3.5 text-sm text-gray-900 min-h-[90px] mb-3.5 font-medium"
+                className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-900 min-h-[75px] mb-3 font-medium"
                 placeholderTextColor="#9CA3AF"
                 textAlignVertical="top"
               />
 
               {/* Real Media Photo Upload Picker */}
-              <View className="mb-4">
-                <Text className="text-xs font-bold text-gray-700 mb-1.5">
+              <View className="mb-3">
+                <Text className="text-[11px] font-bold text-gray-700 mb-1">
                   Dish Photo (Supabase Storage)
                 </Text>
                 {selectedImageUri ? (
-                  <View className="relative rounded-2xl overflow-hidden border border-gray-200 bg-gray-100 h-44 mb-2">
+                  <View className="relative rounded-xl overflow-hidden border border-gray-200 bg-gray-100 h-36 mb-2">
                     <Image
                       source={{ uri: selectedImageUri }}
                       className="w-full h-full"
@@ -764,34 +779,34 @@ export default function MobileCommunityScreen() {
                     />
                     <Pressable
                       onPress={() => setSelectedImageUri(null)}
-                      className="absolute top-2.5 right-2.5 bg-black/70 w-8 h-8 rounded-full items-center justify-center active:opacity-80"
+                      className="absolute top-2 right-2 bg-black/70 w-7 h-7 rounded-full items-center justify-center active:opacity-80"
                     >
-                      <Ionicons name="close" size={18} color="white" />
+                      <Ionicons name="close" size={16} color="white" />
                     </Pressable>
-                    <View className="absolute bottom-2 left-2 bg-emerald-700/90 px-2 py-0.5 rounded-lg">
-                      <Text className="text-[10px] font-bold text-white">Photo Ready for Upload</Text>
+                    <View className="absolute bottom-2 left-2 bg-emerald-700/90 px-1.5 py-0.2 rounded-md">
+                      <Text className="text-[9px] font-bold text-white">Photo Ready for Upload</Text>
                     </View>
                   </View>
                 ) : (
                   <Pressable
                     onPress={handlePickDishPhoto}
-                    className="border-2 border-dashed border-orange-200 bg-orange-50/60 rounded-2xl p-4 items-center justify-center flex-row gap-2 active:bg-orange-100/50"
+                    className="border-2 border-dashed border-orange-200 bg-orange-50/60 rounded-xl p-3 items-center justify-center flex-row gap-1.5 active:bg-orange-100/50"
                   >
-                    <Ionicons name="camera-outline" size={20} color="#EA5410" />
-                    <Text className="text-xs font-bold text-[#EA5410]">
+                    <Ionicons name="camera-outline" size={17} color="#EA5410" />
+                    <Text className="text-[11px] font-bold text-[#EA5410]">
                       Attach Real Dish Photo (Camera / Gallery)
                     </Text>
                   </Pressable>
                 )}
               </View>
 
-              <Text className="text-xs font-bold text-gray-700 mb-2">
+              <Text className="text-[11px] font-bold text-gray-700 mb-1.5">
                 Tag a Mati Restaurant (Optional)
               </Text>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                className="mb-4"
+                className="mb-3"
                 contentContainerStyle={{ paddingRight: 10 }}
               >
                 {["None", ...availableStores].map((resto) => {
@@ -800,14 +815,14 @@ export default function MobileCommunityScreen() {
                     <Pressable
                       key={resto}
                       onPress={() => setNewPostRestaurant(resto)}
-                      className={`mr-2 px-3.5 py-2 rounded-xl border ${
+                      className={`mr-1.5 px-3 py-1.5 rounded-xl border ${
                         isSelected
                           ? "bg-[#EA5410] border-[#EA5410] shadow-xs"
                           : "bg-gray-100 border-gray-200"
                       }`}
                     >
                       <Text
-                        className={`text-xs font-bold ${
+                        className={`text-[11px] font-bold ${
                           isSelected ? "text-white" : "text-gray-700"
                         }`}
                       >
@@ -820,33 +835,33 @@ export default function MobileCommunityScreen() {
 
               {newPostRestaurant !== "None" && (
                 <>
-                  <Text className="text-xs font-bold text-gray-700 mb-1.5">
+                  <Text className="text-[11px] font-bold text-gray-700 mb-1">
                     Specific Dish Name (Optional)
                   </Text>
                   <TextInput
                     placeholder="e.g. Grilled Tuna Belly, Classic Pork Humba..."
                     value={newPostDish}
                     onChangeText={setNewPostDish}
-                    className="bg-gray-50 border border-gray-200 rounded-2xl px-3.5 py-2.5 text-sm text-gray-900 mb-4 font-medium"
+                    className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-900 mb-3 font-medium"
                     placeholderTextColor="#9CA3AF"
                   />
 
-                  <Text className="text-xs font-bold text-gray-700 mb-1.5">Food Rating</Text>
-                  <View className="flex-row items-center gap-2 mb-5">
+                  <Text className="text-[11px] font-bold text-gray-700 mb-1">Food Rating</Text>
+                  <View className="flex-row items-center gap-1.5 mb-4">
                     {[1, 2, 3, 4, 5].map((star) => (
                       <Pressable
                         key={star}
                         onPress={() => setNewPostRating(star)}
-                        className="p-1"
+                        className="p-0.5"
                       >
                         <Ionicons
                           name={newPostRating >= star ? "star" : "star-outline"}
-                          size={28}
+                          size={22}
                           color={newPostRating >= star ? "#D97706" : "#D1D5DB"}
                         />
                       </Pressable>
                     ))}
-                    <Text className="text-sm font-black text-amber-900 ml-2">
+                    <Text className="text-xs font-black text-amber-900 ml-1.5">
                       {newPostRating}.0 / 5.0
                     </Text>
                   </View>
@@ -856,15 +871,15 @@ export default function MobileCommunityScreen() {
               <Pressable
                 onPress={() => handleCreatePost(handleDismiss)}
                 disabled={isUploadingImage}
-                className="bg-[#EA5410] py-3.5 rounded-2xl items-center mb-6 shadow-sm active:opacity-95 flex-row justify-center gap-2"
+                className="bg-[#EA5410] py-2.5 rounded-xl items-center mb-5 shadow-xs active:opacity-95 flex-row justify-center gap-1.5"
               >
                 {isUploadingImage ? (
                   <>
                     <ActivityIndicator size="small" color="white" />
-                    <Text className="text-white font-black text-sm">Uploading Photo & Publishing...</Text>
+                    <Text className="text-white font-black text-xs">Uploading Photo & Publishing...</Text>
                   </>
                 ) : (
-                  <Text className="text-white font-black text-sm">
+                  <Text className="text-white font-black text-xs">
                     Publish to Foodie Community 🚀
                   </Text>
                 )}
@@ -883,16 +898,16 @@ export default function MobileCommunityScreen() {
         {({ handleDismiss }) => (
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : undefined}
-            className="flex-1 bg-white p-5 flex-col"
+            className="flex-1 bg-white p-4 flex-col"
           >
             {/* Visual Drag Handle Pill */}
-            <View className="w-12 h-1.5 rounded-full bg-gray-300 self-center mb-3" />
+            <View className="w-10 h-1 rounded-full bg-gray-300 self-center mb-2.5" />
 
             {/* Header */}
-            <View className="flex-row justify-between items-center pb-3 border-b border-gray-100">
+            <View className="flex-row justify-between items-center pb-2.5 border-b border-gray-100">
               <View>
-                <Text className="text-xl font-black text-gray-900 tracking-tight">Comments</Text>
-                <Text className="text-xs text-gray-500 font-medium">
+                <Text className="text-base font-black text-gray-900 tracking-tight">Comments</Text>
+                <Text className="text-[11px] text-gray-500 font-medium">
                   Review by {activePostForComments?.author}
                 </Text>
               </View>
@@ -900,37 +915,37 @@ export default function MobileCommunityScreen() {
                 onPress={handleDismiss}
                 accessibilityRole="button"
                 accessibilityLabel="Close comments sheet"
-                className="w-9 h-9 rounded-full bg-gray-100 items-center justify-center active:bg-gray-200"
+                className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center active:bg-gray-200"
               >
-                <Ionicons name="close" size={20} color="#374151" />
+                <Ionicons name="close" size={18} color="#374151" />
               </Pressable>
             </View>
 
-            <ScrollView className="flex-1 my-3" showsVerticalScrollIndicator={false}>
+            <ScrollView className="flex-1 my-2.5" showsVerticalScrollIndicator={false}>
               {activePostForComments?.comments.length === 0 ? (
-                <View className="py-12 items-center justify-center">
-                  <Ionicons name="chatbubble-ellipses-outline" size={36} color="#9CA3AF" />
-                  <Text className="text-sm font-bold text-gray-400 mt-2">
+                <View className="py-10 items-center justify-center">
+                  <Ionicons name="chatbubble-ellipses-outline" size={32} color="#9CA3AF" />
+                  <Text className="text-xs font-bold text-gray-400 mt-2">
                     No comments yet on this review.
                   </Text>
-                  <Text className="text-xs text-gray-400 mt-1">Be the first Mati diner to reply!</Text>
+                  <Text className="text-[11px] text-gray-400 mt-0.5">Be the first Mati diner to reply!</Text>
                 </View>
               ) : (
-                <View className="gap-3">
+                <View className="gap-2">
                   {activePostForComments?.comments.map((comment) => (
                     <View
                       key={comment.id}
-                      className="bg-gray-50 border border-gray-200 p-3.5 rounded-2xl"
+                      className="bg-gray-50 border border-gray-200 p-2.5 rounded-xl"
                     >
-                      <View className="flex-row items-center justify-between mb-1">
-                        <Text className="text-xs font-extrabold text-gray-900">
+                      <View className="flex-row items-center justify-between mb-0.5">
+                        <Text className="text-xs font-black text-gray-900">
                           {comment.author}
                         </Text>
-                        <Text className="text-[10px] text-gray-400 font-medium">
+                        <Text className="text-[9px] text-gray-400 font-medium">
                           {comment.timestamp}
                         </Text>
                       </View>
-                      <Text className="text-xs text-gray-700 leading-relaxed font-medium">
+                      <Text className="text-[11px] text-gray-700 leading-relaxed font-medium">
                         {comment.text}
                       </Text>
                     </View>
@@ -940,7 +955,7 @@ export default function MobileCommunityScreen() {
             </ScrollView>
 
             {/* Comment Input */}
-            <View className="flex-row items-center gap-2 pt-2 border-t border-gray-100">
+            <View className="flex-row items-center gap-1.5 pt-1.5 border-t border-gray-100">
               <TextInput
                 placeholder={
                   isLoggedIn ? "Write a comment..." : "Sign in to join the conversation"
@@ -948,21 +963,21 @@ export default function MobileCommunityScreen() {
                 value={newCommentText}
                 onChangeText={setNewCommentText}
                 editable={isLoggedIn}
-                className="flex-1 bg-gray-100 border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-gray-900 font-medium"
+                className="flex-1 bg-gray-100 border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-900 font-medium"
                 placeholderTextColor="#9CA3AF"
               />
               <Pressable
                 onPress={handleAddComment}
-                className="bg-[#EA5410] px-4 py-2.5 rounded-xl items-center justify-center active:opacity-90"
+                className="bg-[#EA5410] px-3.5 py-2 rounded-xl items-center justify-center active:opacity-90"
               >
-                <Ionicons name="send" size={14} color="white" />
+                <Ionicons name="send" size={13} color="white" />
               </Pressable>
             </View>
           </KeyboardAvoidingView>
         )}
       </BottomSheetModal>
 
-      {/* 3. REPORT POST BOTTOM SHEET */}
+      {/* 5. REPORT POST BOTTOM SHEET */}
       <BottomSheetModal
         visible={showReportModal}
         onClose={() => setShowReportModal(false)}
@@ -971,20 +986,20 @@ export default function MobileCommunityScreen() {
         {({ handleDismiss }) => (
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : undefined}
-            className="flex-1 bg-white p-5 flex-col"
+            className="flex-1 bg-white p-4 flex-col"
           >
             {/* Visual Drag Handle Pill */}
-            <View className="w-12 h-1.5 rounded-full bg-gray-300 self-center mb-3" />
+            <View className="w-10 h-1 rounded-full bg-gray-300 self-center mb-2.5" />
 
             {/* Header */}
-            <View className="flex-row justify-between items-center pb-3 border-b border-gray-100">
+            <View className="flex-row justify-between items-center pb-2.5 border-b border-gray-100">
               <View className="flex-row items-center gap-2">
-                <View className="w-8 h-8 rounded-full bg-rose-50 border border-rose-200 items-center justify-center">
-                  <Ionicons name="flag" size={16} color="#E11D48" />
+                <View className="w-7 h-7 rounded-full bg-rose-50 border border-rose-200 items-center justify-center">
+                  <Ionicons name="flag" size={14} color="#E11D48" />
                 </View>
                 <View>
-                  <Text className="text-lg font-black text-gray-900 tracking-tight">Report Review</Text>
-                  <Text className="text-xs text-gray-500 font-medium">
+                  <Text className="text-base font-black text-gray-900 tracking-tight">Report Review</Text>
+                  <Text className="text-[11px] text-gray-500 font-medium">
                     Posted by {reportingPost?.author || "Mati Diner"}
                   </Text>
                 </View>
@@ -999,10 +1014,10 @@ export default function MobileCommunityScreen() {
               </Pressable>
             </View>
 
-            <ScrollView className="flex-1 my-3" showsVerticalScrollIndicator={false}>
+            <ScrollView className="flex-1 my-2.5" showsVerticalScrollIndicator={false}>
               {/* Snippet preview */}
               {reportingPost?.content ? (
-                <View className="bg-gray-50 border border-gray-200 p-3 rounded-2xl mb-4">
+                <View className="bg-gray-50 border border-gray-200 p-2.5 rounded-xl mb-3">
                   <Text className="text-[11px] text-gray-500 font-medium italic" numberOfLines={2}>
                     "{reportingPost.content}"
                   </Text>
@@ -1010,27 +1025,27 @@ export default function MobileCommunityScreen() {
               ) : null}
 
               {/* Reason Selector */}
-              <Text className="text-xs font-black text-gray-900 uppercase tracking-wider mb-2">
+              <Text className="text-[11px] font-black text-gray-900 uppercase tracking-wider mb-1.5">
                 Reason for Reporting
               </Text>
 
-              <View className="gap-2 mb-4">
+              <View className="gap-1.5 mb-3">
                 {COMMUNITY_REPORT_REASONS.map((reason) => {
                   const isSelected = reportReason === reason;
                   return (
                     <Pressable
                       key={reason}
                       onPress={() => setReportReason(reason)}
-                      className={`p-3.5 rounded-2xl border flex-row items-center justify-between ${
+                      className={`p-2.5 rounded-xl border flex-row items-center justify-between ${
                         isSelected
                           ? "bg-rose-50/80 border-rose-300"
                           : "bg-white border-gray-200 active:bg-gray-50"
                       }`}
                     >
-                      <View className="flex-row items-center gap-2.5">
+                      <View className="flex-row items-center gap-2">
                         <Ionicons
                           name={isSelected ? "radio-button-on" : "radio-button-off"}
-                          size={18}
+                          size={16}
                           color={isSelected ? "#E11D48" : "#9CA3AF"}
                         />
                         <Text
@@ -1047,7 +1062,7 @@ export default function MobileCommunityScreen() {
               </View>
 
               {/* Optional Details Input */}
-              <Text className="text-xs font-black text-gray-900 uppercase tracking-wider mb-2">
+              <Text className="text-[11px] font-black text-gray-900 uppercase tracking-wider mb-1.5">
                 Additional Details (Optional)
               </Text>
               <TextInput
@@ -1057,23 +1072,23 @@ export default function MobileCommunityScreen() {
                 placeholderTextColor="#9CA3AF"
                 multiline
                 numberOfLines={3}
-                className="bg-gray-50 border border-gray-200 rounded-2xl p-3 text-xs text-gray-900 font-medium mb-4 min-h-[70px]"
+                className="bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 font-medium mb-3 min-h-[60px]"
                 textAlignVertical="top"
               />
             </ScrollView>
 
             {/* Action Buttons */}
-            <View className="pt-2 border-t border-gray-100 flex-row gap-2.5">
+            <View className="pt-2 border-t border-gray-100 flex-row gap-2">
               <Pressable
                 onPress={handleDismiss}
-                className="flex-1 py-3.5 bg-gray-100 rounded-2xl items-center active:bg-gray-200"
+                className="flex-1 py-2.5 bg-gray-100 rounded-xl items-center active:bg-gray-200"
               >
                 <Text className="text-xs font-bold text-gray-700">Cancel</Text>
               </Pressable>
               <Pressable
                 onPress={handleSubmitReport}
                 disabled={isSubmittingReport}
-                className="flex-1 py-3.5 bg-rose-600 rounded-2xl items-center active:bg-rose-700"
+                className="flex-1 py-2.5 bg-rose-600 rounded-xl items-center active:bg-rose-700"
               >
                 {isSubmittingReport ? (
                   <ActivityIndicator size="small" color="white" />

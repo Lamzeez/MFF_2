@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
   generateUpcomingReservationDates,
   formatReservationDate,
+  parseOperatingWindow,
+  generateAvailableTimeSlots,
 } from "../../lib/reservation-dates";
 
 // Simulated Cart state model matching context/CartContext.tsx implementation
@@ -217,4 +219,41 @@ test("formatReservationDate gracefully formats legacy strings and ISO dates", ()
   assert.equal(formatReservationDate("2026-10-15", refDate), "Tomorrow (Oct 15)");
   assert.equal(formatReservationDate("2026-10-16", refDate), "Fri, Oct 16");
 });
+
+test("parseOperatingWindow correctly calculates open, close, and last booking time (15 mins prior)", () => {
+  const window1 = parseOperatingWindow("7:00 AM - 9:00 PM Daily");
+  assert.equal(window1.openMinutes, 420, "7:00 AM is 420 minutes");
+  assert.equal(window1.closeMinutes, 1260, "9:00 PM is 1260 minutes");
+  assert.equal(window1.lastBookingMinutes, 1245, "Last booking for 9:00 PM is 8:45 PM (1245 min)");
+
+  const window2 = parseOperatingWindow("10:30 AM - 10:00 PM Daily");
+  assert.equal(window2.openMinutes, 630, "10:30 AM is 630 minutes");
+  assert.equal(window2.closeMinutes, 1320, "10:00 PM is 1320 minutes");
+  assert.equal(window2.lastBookingMinutes, 1305, "Last booking for 10:00 PM is 9:45 PM (1305 min)");
+});
+
+test("generateAvailableTimeSlots enforces dynamic relationship between date and operating hours", () => {
+  // Scenario 1: User selects Tomorrow (isToday = false) on 7AM-9PM store
+  // Should allow any time from opening (7:00 AM) to 15 mins before close (8:45 PM)
+  const tomorrowSlots = generateAvailableTimeSlots("7:00 AM - 9:00 PM Daily", false);
+  assert.ok(tomorrowSlots.length > 0, "Should generate available slots for tomorrow");
+  assert.equal(tomorrowSlots[0], "7:00 AM", "First slot for tomorrow must be opening time (7:00 AM)");
+  assert.equal(tomorrowSlots[tomorrowSlots.length - 1], "8:45 PM", "Last slot for tomorrow must be 8:45 PM");
+
+  // Scenario 2: User selects Today (isToday = true), and current time is 5:00 PM (17:00)
+  // Should only allow times after 5:00 PM up to 8:45 PM
+  const simulated5pm = new Date(2026, 10, 17, 17, 0, 0); // 5:00 PM
+  const todayAt5pmSlots = generateAvailableTimeSlots("7:00 AM - 9:00 PM Daily", true, simulated5pm, 15);
+  assert.ok(todayAt5pmSlots.length > 0, "Should have slots available after 5:00 PM");
+  assert.equal(todayAt5pmSlots[0], "5:15 PM", "First available slot after 5:00 PM is 5:15 PM");
+  assert.equal(todayAt5pmSlots[todayAt5pmSlots.length - 1], "8:45 PM", "Last available slot must be 8:45 PM");
+  assert.ok(!todayAt5pmSlots.includes("7:00 AM"), "Past morning times must not be included for today");
+  assert.ok(!todayAt5pmSlots.includes("4:45 PM"), "Past afternoon times must not be included for today");
+
+  // Scenario 3: User selects Today (isToday = true), and it's late night (e.g. 9:15 PM, after closing)
+  const simulatedLateNight = new Date(2026, 10, 17, 21, 15, 0); // 9:15 PM
+  const lateNightSlots = generateAvailableTimeSlots("7:00 AM - 9:00 PM Daily", true, simulatedLateNight, 15);
+  assert.equal(lateNightSlots.length, 0, "No same-day slots should be available after store hours");
+});
+
 

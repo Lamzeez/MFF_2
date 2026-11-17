@@ -104,101 +104,16 @@ export function PrototypeDataProvider({ children }: { children: ReactNode }) {
   const [personalizationEnabled, setPersonalizationEnabled] = useState(false);
 
   // In-Store Visits Tracker (For Statistical ML "Most Visited" Personalization)
-  const [storeVisits, setStoreVisits] = useState<Record<string, number>>(() => {
-    const visits: Record<string, number> = isLoggedIn
-      ? {
-          "Mama Letty's Karenderia": 5,
-          "Mati Baywalk Seafood Grill": 2,
-          "Subangan Street Grills": 1,
-        }
-      : {};
-    return visits;
-  });
+  const [storeVisits, setStoreVisits] = useState<Record<string, number>>({});
 
-  // Notifications State (Guest starts with 0 notifications)
-  const [notifications, setNotifications] = useState<AppNotification[]>(() =>
-    isLoggedIn
-      ? [
-          {
-            id: "notif-1",
-            type: "order",
-            title: "🛵 Order #MFF-2041 On The Way",
-            message: "Rider Jun has picked up your Classic Pork Humba from Mama Letty's and is ~12 mins away.",
-            timestamp: "10m ago",
-            isRead: false,
-          },
-          {
-            id: "notif-2",
-            type: "community",
-            title: "💬 Bea Santos commented",
-            message: "Bea commented: 'Lami kaayo na ilaha timpla!' on your Tuna Panga review.",
-            timestamp: "18m ago",
-            isRead: false,
-          },
-          {
-            id: "notif-3",
-            type: "system",
-            title: "🎉 Welcome to Mati FoodFinder",
-            message: "Discover local Karenderias, reserve tables, and enjoy Cash-on-Delivery across Mati City!",
-            timestamp: "1h ago",
-            isRead: true,
-          },
-        ]
-      : []
-  );
+  // Notifications State (Guest and new users start with 0 notifications)
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
-  // Table Reservations State (Guest starts with 0 reservations)
-  const [reservations, setReservations] = useState<TableReservation[]>(() =>
-    isLoggedIn
-      ? [
-          {
-            id: "res-104",
-            restaurantName: "Mati Baywalk Seafood Grill",
-            date: "Tonight",
-            time: "7:30 PM",
-            partySize: 4,
-            specialNotes: "Outdoor seating facing the bay breeze please.",
-            status: "confirmed",
-            createdAt: "1h ago",
-          },
-          {
-            id: "res-105",
-            restaurantName: "Mama Letty's Karenderia",
-            date: "Tomorrow",
-            time: "12:00 PM",
-            partySize: 2,
-            specialNotes: "Lunch reservation for two with pork humba reserved.",
-            status: "pending",
-            createdAt: "15m ago",
-          },
-        ]
-      : []
-  );
+  // Table Reservations State (Guest and new users start with 0 reservations)
+  const [reservations, setReservations] = useState<TableReservation[]>([]);
 
-  // Active Orders State (Guest starts with 0 orders)
-  const [orders, setOrders] = useState<ActiveOrder[]>(() =>
-    isLoggedIn
-      ? [
-          {
-            id: "order-1",
-            orderNumber: "#MFF-2041",
-            restaurantName: "Mama Letty's Karenderia",
-            items: [
-              { name: "Classic Pork Humba", quantity: 2, price: 90 },
-              { name: "Extra Rice", quantity: 2, price: 20 },
-            ],
-            subtotal: 220,
-            deliveryFee: 35,
-            total: 255,
-            status: "on_the_way",
-            deliveryAddress: "Near Baywalk Pavilion, blue gate",
-            barangay: "Central (Poblacion)",
-            notes: "Extra spicy sauce please",
-            createdAt: "15 mins ago",
-          },
-        ]
-      : []
-  );
+  // Active Orders State (Guest and new users start with 0 orders)
+  const [orders, setOrders] = useState<ActiveOrder[]>([]);
 
   const unreadCount = isLoggedIn ? notifications.filter((n) => !n.isRead).length : 0;
 

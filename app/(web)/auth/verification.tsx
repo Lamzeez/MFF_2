@@ -22,7 +22,7 @@ export default function VerificationPending() {
     try {
       const next = await fetchMerchantMembershipStatus(identity.id);
       setMembership(next);
-      if (next.hasMembership && next.approvalStatus === "approved") {
+      if (next.hasMembership && next.approvalStatus === "approved" && !next.isSuspended) {
         router.replace("/(web)/dashboard");
       }
     } catch {
@@ -41,7 +41,9 @@ export default function VerificationPending() {
     router.replace("/");
   };
 
+  const isSuspended = Boolean(membership?.isSuspended);
   const isRejected = membership?.approvalStatus === "rejected";
+  const isBlocked = isSuspended || isRejected;
 
   return (
     <View className="flex-1 bg-[#F8FAFC] items-center justify-center px-5 py-8">
@@ -61,20 +63,30 @@ export default function VerificationPending() {
         <View className="bg-white border border-gray-200/90 rounded-2xl p-6 items-center shadow-sm">
           <View
             className={`w-12 h-12 rounded-xl items-center justify-center mb-4 border ${
-              isRejected
+              isBlocked
                 ? "bg-red-50 border-red-200"
                 : "bg-orange-50 border-orange-200"
             }`}
           >
             <Ionicons
-              name={isRejected ? "close-circle-outline" : "hourglass-outline"}
+              name={
+                isSuspended
+                  ? "ban-outline"
+                  : isRejected
+                    ? "close-circle-outline"
+                    : "hourglass-outline"
+              }
               size={24}
-              color={isRejected ? "#DC2626" : "#EA5410"}
+              color={isBlocked ? "#DC2626" : "#EA5410"}
             />
           </View>
 
           <Text className="text-lg font-bold text-gray-900 text-center mb-1.5">
-            {isRejected ? "Application Not Approved" : "Application Under Review"}
+            {isSuspended
+              ? "Store Temporarily Suspended"
+              : isRejected
+                ? "Application Not Approved"
+                : "Application Under Review"}
           </Text>
 
           {membership?.storeName ? (
@@ -86,13 +98,15 @@ export default function VerificationPending() {
           ) : null}
 
           <Text className="text-gray-500 text-xs text-center leading-relaxed mb-5">
-            {isRejected
-              ? "Your store application was declined during review. Please contact platform support for details before reapplying."
-              : "Your store details and verification photo have been submitted. An administrator will review your application before opening your merchant dashboard."}
+            {isSuspended
+              ? "Your store has been temporarily suspended pending a compliance review and is hidden from customers. Please contact platform support for details."
+              : isRejected
+                ? "Your store application was declined during review. Please contact platform support for details before reapplying."
+                : "Your store details and verification photo have been submitted. An administrator will review your application before opening your merchant dashboard."}
           </Text>
 
           <View className="w-full gap-2.5">
-            {status === "authenticated" && !isRejected ? (
+            {status === "authenticated" && !isBlocked ? (
               <Pressable
                 onPress={checkStatus}
                 disabled={checking}

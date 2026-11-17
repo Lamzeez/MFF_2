@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Modal } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
   fetchAdminUsersWithStatus,
   setAdminUserAccountStatus,
   setAdminUserPlatformRole,
   adminResetCustomerCodStrikes,
+  deleteAdminUser,
   type AdminUserItem,
 } from "../../../services/admin";
 import { getUserAccountStatusTheme, getUserRoleTheme } from "../../../lib/status-tokens";
@@ -31,6 +32,8 @@ export default function UsersPage() {
   const [users, setUsers] = useState<AdminUserItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [deleteCandidate, setDeleteCandidate] = useState<AdminUserItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [banner, setBanner] = useState<BannerMessage | null>(null);
 
   const loadUsers = async () => {
@@ -127,6 +130,43 @@ export default function UsersPage() {
     }
   };
 
+  const handleConfirmDeleteUser = async () => {
+    if (!deleteCandidate) return;
+    const target = deleteCandidate;
+    setDeleting(true);
+    setProcessingId(target.id);
+    try {
+      const res = await deleteAdminUser(target.id);
+      if (res.success) {
+        setDeleteCandidate(null);
+        setUsers((prev) => prev.filter((u) => u.id !== target.id));
+        const storeNote =
+          res.deletedStoresCount && res.deletedStoresCount > 0
+            ? ` and ${res.deletedStoresCount} owned store(s)`
+            : "";
+        setBanner({
+          type: "success",
+          message: `Deleted ${target.display_name} (${target.email})${storeNote} permanently.`,
+        });
+      } else {
+        setDeleteCandidate(null);
+        setBanner({
+          type: "error",
+          message: `Failed to delete user: ${res.error || "Unknown error"}`,
+        });
+      }
+    } catch (err: any) {
+      setDeleteCandidate(null);
+      setBanner({
+        type: "error",
+        message: `Delete user error: ${err?.message || "Unknown error"}`,
+      });
+    } finally {
+      setDeleting(false);
+      setProcessingId(null);
+    }
+  };
+
   const filteredUsers = users.filter((user) => {
     const matchesSearch =
       user.display_name.toLowerCase().includes(search.toLowerCase()) ||
@@ -144,11 +184,29 @@ export default function UsersPage() {
   return (
     <View className="flex-1 p-4 lg:p-6 w-full max-w-6xl self-center">
       {/* Header */}
-      <View className="mb-5">
-        <Text className="text-xl lg:text-2xl font-bold text-gray-900 tracking-tight">Users</Text>
-        <Text className="text-gray-500 text-xs mt-0.5">
-          Manage customer, merchant, and rider accounts.
-        </Text>
+      <View className="flex-row flex-wrap items-center justify-between gap-3 mb-5">
+        <View>
+          <Text className="text-xl lg:text-2xl font-bold text-gray-900 tracking-tight">Users</Text>
+          <Text className="text-gray-500 text-xs mt-0.5">
+            Manage customer, merchant, and rider accounts.
+          </Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Refresh users list"
+          disabled={loading}
+          onPress={loadUsers}
+          className="h-8 px-3 rounded-lg bg-white border border-gray-200 hover:bg-gray-50 flex-row items-center gap-1.5 shadow-2xs cursor-pointer"
+        >
+          <Ionicons
+            name="refresh"
+            size={13}
+            color={loading ? "#9CA3AF" : "#4B5563"}
+          />
+          <Text className="text-[11px] font-semibold text-gray-700">
+            {loading ? "Refreshing..." : "Refresh"}
+          </Text>
+        </Pressable>
       </View>
 
       {/* Notification Banner */}
@@ -156,55 +214,83 @@ export default function UsersPage() {
 
       {/* Summary Cards */}
       <View className="flex-row flex-wrap gap-3.5 mb-5">
-        <View className="w-full sm:w-auto sm:flex-1 sm:min-w-[175px] bg-white p-4 rounded-2xl border border-gray-200/80 shadow-2xs">
-          <Text className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
-            Total Users
-          </Text>
-          <Text className="text-xl lg:text-2xl font-bold text-gray-900">{users.length}</Text>
-          <Text className="text-[11px] text-gray-500 mt-1">Registered accounts</Text>
+        <View className="w-full sm:w-auto sm:flex-1 sm:min-w-[175px] bg-white p-4 rounded-2xl border border-gray-200/80 shadow-2xs flex-row items-start justify-between">
+          <View>
+            <Text className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+              Total Users
+            </Text>
+            <Text className="text-xl lg:text-2xl font-bold text-gray-900 tabular-nums">
+              {users.length}
+            </Text>
+            <Text className="text-[11px] text-gray-500 mt-1">Registered accounts</Text>
+          </View>
+          <View className="w-8 h-8 rounded-xl bg-gray-100 items-center justify-center">
+            <Ionicons name="people-outline" size={16} color="#4B5563" />
+          </View>
         </View>
 
-        <View className="w-full sm:w-auto sm:flex-1 sm:min-w-[175px] bg-white p-4 rounded-2xl border border-gray-200/80 shadow-2xs">
-          <Text className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
-            Active Riders
-          </Text>
-          <Text className="text-xl lg:text-2xl font-bold text-blue-600">{totalRiders}</Text>
-          <Text className="text-[11px] text-gray-500 mt-1">Approved delivery riders</Text>
+        <View className="w-full sm:w-auto sm:flex-1 sm:min-w-[175px] bg-white p-4 rounded-2xl border border-gray-200/80 shadow-2xs flex-row items-start justify-between">
+          <View>
+            <Text className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+              Active Riders
+            </Text>
+            <Text className="text-xl lg:text-2xl font-bold text-blue-600 tabular-nums">
+              {totalRiders}
+            </Text>
+            <Text className="text-[11px] text-gray-500 mt-1">Approved delivery riders</Text>
+          </View>
+          <View className="w-8 h-8 rounded-xl bg-blue-50 items-center justify-center">
+            <Ionicons name="bicycle-outline" size={16} color="#2563EB" />
+          </View>
         </View>
 
-        <View className="w-full sm:w-auto sm:flex-1 sm:min-w-[175px] bg-white p-4 rounded-2xl border border-gray-200/80 shadow-2xs">
-          <Text className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
-            Flagged Accounts
-          </Text>
-          <Text className="text-xl lg:text-2xl font-bold text-amber-600">{strikedCustomers}</Text>
-          <Text className="text-[11px] text-gray-500 mt-1">Cash on delivery restrictions</Text>
+        <View className="w-full sm:w-auto sm:flex-1 sm:min-w-[175px] bg-white p-4 rounded-2xl border border-gray-200/80 shadow-2xs flex-row items-start justify-between">
+          <View>
+            <Text className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+              Flagged Accounts
+            </Text>
+            <Text className="text-xl lg:text-2xl font-bold text-amber-600 tabular-nums">
+              {strikedCustomers}
+            </Text>
+            <Text className="text-[11px] text-gray-500 mt-1">Cash on delivery restrictions</Text>
+          </View>
+          <View className="w-8 h-8 rounded-xl bg-amber-50 items-center justify-center">
+            <Ionicons name="alert-circle-outline" size={16} color="#D97706" />
+          </View>
         </View>
       </View>
 
       {/* Search and Filters */}
       <View className="flex-col lg:flex-row justify-between items-start lg:items-center gap-3 mb-4">
-        <View className="w-full lg:w-72 bg-white border border-gray-200/90 rounded-xl px-3 py-2 shadow-2xs flex-row items-center gap-2">
-          <Ionicons name="search" size={14} color="#9CA3AF" />
-          <TextInput
-            placeholder="Search name, email, or phone..."
-            value={search}
-            onChangeText={setSearch}
-            className="flex-1 text-xs text-gray-900 outline-none"
-            placeholderTextColor="#9ca3af"
-          />
-          {search ? (
-            <Pressable onPress={() => setSearch("")}>
-              <Ionicons name="close-circle" size={14} color="#9CA3AF" />
-            </Pressable>
-          ) : null}
+        <View className="flex-row items-center gap-3 w-full lg:w-auto">
+          <View className="flex-1 lg:flex-none lg:w-80 h-9 bg-white border border-gray-200/90 rounded-xl px-3 shadow-2xs flex-row items-center gap-2">
+            <Ionicons name="search" size={14} color="#9CA3AF" />
+            <TextInput
+              placeholder="Search name, email, or phone..."
+              value={search}
+              onChangeText={setSearch}
+              className="flex-1 text-xs text-gray-900 outline-none"
+              placeholderTextColor="#9ca3af"
+            />
+            {search ? (
+              <Pressable onPress={() => setSearch("")}>
+                <Ionicons name="close-circle" size={14} color="#9CA3AF" />
+              </Pressable>
+            ) : null}
+          </View>
+          {!loading && (
+            <Text className="text-[11px] font-medium text-gray-400 hidden sm:flex tabular-nums">
+              Showing {filteredUsers.length} of {users.length}
+            </Text>
+          )}
         </View>
 
-        <View className="flex-row flex-wrap gap-1 bg-gray-100 p-1 rounded-xl">
+        <View className="flex-row flex-wrap items-center gap-1 bg-gray-100 p-1 rounded-xl min-h-[36px] self-start lg:self-auto">
           {USER_ROLE_FILTERS.map((role) => (
             <Pressable
               key={role.value}
               onPress={() => setRoleFilter(role.value)}
-              className={`px-3 py-1 rounded-lg transition-colors ${
+              className={`h-7 px-3 rounded-lg items-center justify-center transition-colors cursor-pointer ${
                 roleFilter === role.value ? "bg-white shadow-2xs" : "bg-transparent"
               }`}
             >
@@ -221,14 +307,24 @@ export default function UsersPage() {
       </View>
 
       {/* Users Table */}
-      <View className="bg-white rounded-2xl shadow-2xs border border-gray-200/80 overflow-hidden">
+      <View className="bg-white rounded-2xl shadow-2xs border border-gray-200/80 overflow-hidden mb-6">
         {/* Table Header */}
-        <View className="flex-row bg-gray-50/80 px-5 py-3 border-b border-gray-200 hidden lg:flex">
-          <Text className="flex-[2] font-bold text-[11px] text-gray-400 uppercase tracking-wider">User</Text>
-          <Text className="flex-1 font-bold text-[11px] text-gray-400 uppercase tracking-wider">Role</Text>
-          <Text className="flex-1 font-bold text-[11px] text-gray-400 uppercase tracking-wider">Phone</Text>
-          <Text className="flex-1 font-bold text-[11px] text-gray-400 uppercase tracking-wider">Status</Text>
-          <Text className="flex-[1.5] font-bold text-[11px] text-gray-400 uppercase tracking-wider text-right">Actions</Text>
+        <View className="hidden lg:flex flex-row items-center bg-gray-50/90 px-5 py-3 border-b border-gray-200 gap-4">
+          <Text className="flex-1 min-w-[200px] font-bold text-[11px] text-gray-400 uppercase tracking-wider">
+            User
+          </Text>
+          <Text className="w-[100px] shrink-0 font-bold text-[11px] text-gray-400 uppercase tracking-wider">
+            Role
+          </Text>
+          <Text className="w-[122px] shrink-0 font-bold text-[11px] text-gray-400 uppercase tracking-wider">
+            Phone
+          </Text>
+          <Text className="w-[96px] shrink-0 font-bold text-[11px] text-gray-400 uppercase tracking-wider">
+            Status
+          </Text>
+          <Text className="w-[264px] xl:w-[310px] shrink-0 font-bold text-[11px] text-gray-400 uppercase tracking-wider text-right">
+            Actions
+          </Text>
         </View>
 
         {loading ? (
@@ -245,22 +341,25 @@ export default function UsersPage() {
             </Text>
           </View>
         ) : (
-          <ScrollView className="max-h-[540px]">
-            {filteredUsers.map((user) => {
+          <View>
+            {filteredUsers.map((user, index) => {
               const isRider = user.role === "Rider";
               const isCustomer = user.role === "Customer";
               const hasStrikes =
                 (user.cod_strikes && user.cod_strikes > 0) || user.cod_eligible === false;
               const isProcessing = processingId === user.id;
+              const isLast = index === filteredUsers.length - 1;
 
               return (
                 <View
                   key={user.id}
-                  className="flex-col lg:flex-row px-5 py-3 items-start lg:items-center border-b border-gray-100 hover:bg-gray-50/70 transition-colors gap-2.5 lg:gap-0"
+                  className={`flex-col lg:flex-row px-5 py-3.5 items-start lg:items-center gap-3 lg:gap-4 hover:bg-gray-50/70 transition-colors ${
+                    isLast ? "" : "border-b border-gray-100"
+                  }`}
                 >
                   {/* User Info */}
-                  <View className="w-full lg:w-auto lg:flex-[2] flex-row items-center gap-3">
-                    <View className="w-8 h-8 rounded-xl bg-gray-100 items-center justify-center border border-gray-200/60">
+                  <View className="w-full lg:w-auto lg:flex-1 lg:min-w-[200px] min-w-0 flex-row items-center gap-3">
+                    <View className="w-9 h-9 shrink-0 rounded-xl bg-gray-100 items-center justify-center border border-gray-200/60">
                       <Ionicons
                         name={
                           user.role === "Superadmin"
@@ -283,9 +382,11 @@ export default function UsersPage() {
                         }
                       />
                     </View>
-                    <View className="flex-1 pr-2">
+                    <View className="flex-1 min-w-0">
                       <View className="flex-row items-center gap-1.5 flex-wrap">
-                        <Text className="font-bold text-gray-900 text-xs">{user.display_name}</Text>
+                        <Text className="font-bold text-gray-900 text-xs" numberOfLines={1}>
+                          {user.display_name}
+                        </Text>
                         {hasStrikes && (
                           <View className="bg-rose-100 px-1.5 py-0.5 rounded">
                             <Text className="text-[9px] font-bold text-rose-800 uppercase">
@@ -295,12 +396,14 @@ export default function UsersPage() {
                           </View>
                         )}
                       </View>
-                      <Text className="text-[11px] text-gray-400 font-mono">{user.email}</Text>
+                      <Text className="text-[11px] text-gray-500 font-mono" numberOfLines={1}>
+                        {user.email}
+                      </Text>
                     </View>
                   </View>
 
                   {/* Role Pill */}
-                  <View className="lg:flex-1">
+                  <View className="lg:w-[100px] lg:shrink-0">
                     {(() => {
                       const roleTheme = getUserRoleTheme(user.role);
                       return (
@@ -314,12 +417,18 @@ export default function UsersPage() {
                   </View>
 
                   {/* Contact */}
-                  <Text className="lg:flex-1 text-gray-600 text-[11px] font-medium">
-                    {user.phone_number || "Not provided"}
-                  </Text>
+                  <View className="lg:w-[122px] lg:shrink-0">
+                    {user.phone_number ? (
+                      <Text className="text-gray-700 text-xs font-medium tabular-nums" numberOfLines={1}>
+                        {user.phone_number}
+                      </Text>
+                    ) : (
+                      <Text className="text-gray-400 text-[11px] italic">Not provided</Text>
+                    )}
+                  </View>
 
                   {/* Status Indicator */}
-                  <View className="lg:flex-1">
+                  <View className="lg:w-[96px] lg:shrink-0">
                     {(() => {
                       const accountTheme = getUserAccountStatusTheme(user.account_status);
                       return (
@@ -333,16 +442,18 @@ export default function UsersPage() {
                     })()}
                   </View>
 
-                  {/* Actions */}
-                  <View className="lg:flex-[1.5] flex-row flex-wrap gap-1.5 lg:justify-end w-full lg:w-auto items-center">
+                  {/* Actions — Single horizontal row on desktop */}
+                  <View className="w-full lg:w-[264px] xl:w-[310px] lg:shrink-0 flex-row flex-wrap xl:flex-nowrap items-center gap-1.5 lg:justify-end">
                     {hasStrikes && (
                       <Pressable
                         disabled={isProcessing}
                         onPress={() => handleResetCodStrikes(user.id)}
-                        className="px-2.5 py-1 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 items-center flex-row gap-1 cursor-pointer"
+                        className="h-8 px-2.5 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 items-center justify-center flex-row gap-1 cursor-pointer"
                       >
                         <Ionicons name="refresh" size={11} color="#B45309" />
-                        <Text className="text-[11px] font-semibold text-amber-900">Reset Strikes</Text>
+                        <Text className="text-[11px] font-semibold text-amber-900">
+                          Reset Strikes
+                        </Text>
                       </Pressable>
                     )}
 
@@ -350,7 +461,7 @@ export default function UsersPage() {
                       <Pressable
                         disabled={isProcessing}
                         onPress={() => handleToggleRiderRole(user.id, isRider)}
-                        className={`px-2.5 py-1 rounded-lg border items-center flex-row gap-1 cursor-pointer ${
+                        className={`h-8 px-2.5 rounded-lg border items-center justify-center flex-row gap-1.5 cursor-pointer ${
                           isRider
                             ? "bg-blue-50 border-blue-200 hover:bg-blue-100"
                             : "bg-gray-50 border-gray-200 hover:bg-gray-100"
@@ -358,7 +469,7 @@ export default function UsersPage() {
                       >
                         <Ionicons
                           name={isRider ? "bicycle" : "bicycle-outline"}
-                          size={11}
+                          size={12}
                           color={isRider ? "#1D4ED8" : "#4B5563"}
                         />
                         <Text
@@ -371,32 +482,121 @@ export default function UsersPage() {
                       </Pressable>
                     )}
 
-                    {user.role !== "Superadmin" && (
-                      <Pressable
-                        disabled={isProcessing}
-                        onPress={() => toggleStatus(user.id, user.account_status)}
-                        className={`px-2.5 py-1 rounded-lg border transition-colors items-center cursor-pointer ${
-                          user.account_status === "active"
-                            ? "bg-red-50 border-red-200 hover:bg-red-100"
-                            : "bg-emerald-50 border-emerald-200 hover:bg-emerald-100"
-                        }`}
-                      >
-                        <Text
-                          className={`font-semibold text-[11px] ${
-                            user.account_status === "active" ? "text-red-700" : "text-emerald-700"
+                    {user.role === "Superadmin" ? (
+                      <View className="h-8 px-2.5 rounded-lg bg-gray-50 border border-gray-200/80 flex-row items-center gap-1.5">
+                        <Ionicons name="lock-closed-outline" size={11} color="#9CA3AF" />
+                        <Text className="text-[11px] font-medium text-gray-400">Protected</Text>
+                      </View>
+                    ) : (
+                      <>
+                        <Pressable
+                          disabled={isProcessing}
+                          onPress={() => toggleStatus(user.id, user.account_status)}
+                          className={`h-8 px-3 rounded-lg border transition-colors items-center justify-center cursor-pointer ${
+                            user.account_status === "active"
+                              ? "bg-amber-50 border-amber-200 hover:bg-amber-100"
+                              : "bg-emerald-50 border-emerald-200 hover:bg-emerald-100"
                           }`}
                         >
-                          {user.account_status === "active" ? "Suspend" : "Restore"}
-                        </Text>
-                      </Pressable>
+                          <Text
+                            className={`font-semibold text-[11px] ${
+                              user.account_status === "active" ? "text-amber-800" : "text-emerald-700"
+                            }`}
+                          >
+                            {user.account_status === "active" ? "Suspend" : "Restore"}
+                          </Text>
+                        </Pressable>
+
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Delete ${user.display_name}`}
+                          disabled={isProcessing}
+                          onPress={() => setDeleteCandidate(user)}
+                          className="w-8 h-8 rounded-lg border border-red-200/80 bg-white hover:bg-red-50 hover:border-red-300 items-center justify-center cursor-pointer transition-colors"
+                        >
+                          <Ionicons name="trash-outline" size={14} color="#DC2626" />
+                        </Pressable>
+                      </>
                     )}
                   </View>
                 </View>
               );
             })}
-          </ScrollView>
+          </View>
         )}
       </View>
+
+      {/* Delete User Confirmation Modal */}
+      <Modal
+        visible={Boolean(deleteCandidate)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!deleting) setDeleteCandidate(null);
+        }}
+      >
+        <Pressable
+          onPress={() => {
+            if (!deleting) setDeleteCandidate(null);
+          }}
+          className="flex-1 bg-black/50 items-center justify-center p-4"
+        >
+          <Pressable
+            onPress={() => {}}
+            className="w-full max-w-md bg-white rounded-2xl border border-gray-200 p-6 shadow-xl"
+          >
+            <View className="flex-row items-center gap-3 mb-3">
+              <View className="w-10 h-10 rounded-xl bg-red-50 border border-red-200 items-center justify-center">
+                <Ionicons name="warning-outline" size={20} color="#DC2626" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-base font-bold text-gray-900">Permanently Delete User</Text>
+                <Text className="text-xs text-gray-500">This action cannot be undone</Text>
+              </View>
+            </View>
+
+            {deleteCandidate ? (
+              <View className="bg-gray-50 border border-gray-200 rounded-xl p-3.5 mb-4">
+                <Text className="text-xs font-bold text-gray-900">{deleteCandidate.display_name}</Text>
+                <Text className="text-[11px] text-gray-500 font-mono mt-0.5">{deleteCandidate.email}</Text>
+                <Text className="text-[11px] font-semibold text-gray-600 mt-1">
+                  Role: {displayRoleLabel(deleteCandidate.role, deleteCandidate.role)}
+                </Text>
+              </View>
+            ) : null}
+
+            <Text className="text-xs text-gray-600 leading-relaxed mb-5">
+              Deleting this account permanently removes their login credentials along with their
+              profile, orders, table reservations, community posts, notifications, and any store
+              exclusively owned by this account.
+            </Text>
+
+            <View className="flex-row justify-end gap-2.5">
+              <Pressable
+                disabled={deleting}
+                onPress={() => setDeleteCandidate(null)}
+                className="px-4 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-100"
+              >
+                <Text className="text-xs font-semibold text-gray-700">Cancel</Text>
+              </Pressable>
+              <Pressable
+                disabled={deleting}
+                onPress={handleConfirmDeleteUser}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 flex-row items-center gap-1.5"
+              >
+                {deleting ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Ionicons name="trash-outline" size={13} color="white" />
+                )}
+                <Text className="text-xs font-bold text-white">
+                  {deleting ? "Deleting..." : "Delete User"}
+                </Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }

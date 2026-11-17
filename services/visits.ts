@@ -92,7 +92,7 @@ export async function fetchUserVisits(): Promise<StoreVisitWithStore[]> {
       *,
       stores (
         name,
-        address
+        address_text
       )
     `)
     .eq("user_id", session.user.id)
@@ -106,7 +106,7 @@ export async function fetchUserVisits(): Promise<StoreVisitWithStore[]> {
   return (data || []).map((row: any) => ({
     ...row,
     storeName: row.stores?.name,
-    storeAddress: row.stores?.address,
+    storeAddress: row.stores?.address_text,
   }));
 }
 

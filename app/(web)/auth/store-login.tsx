@@ -44,7 +44,13 @@ export default function StoreLogin() {
           setRedirectHref(null);
           return;
         }
-        if (membership.approvalStatus === "pending") {
+        if (membership.isSuspended) {
+          void logoutToGuest();
+          setErrorMessage(
+            "This store is currently suspended due to policy review. Contact platform support."
+          );
+          setRedirectHref(null);
+        } else if (membership.approvalStatus === "pending") {
           setRedirectHref("/(web)/auth/verification");
         } else if (membership.approvalStatus === "rejected") {
           void logoutToGuest();
@@ -87,6 +93,14 @@ export default function StoreLogin() {
       if (!membership.hasMembership) {
         await logoutToGuest();
         setErrorMessage("This account does not have an active store merchant role.");
+        return;
+      }
+
+      if (membership.isSuspended) {
+        await logoutToGuest();
+        setErrorMessage(
+          "This store is currently suspended due to policy review. Contact platform support."
+        );
         return;
       }
 

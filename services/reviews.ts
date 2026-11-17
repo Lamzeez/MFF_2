@@ -253,6 +253,152 @@ export async function fetchRiderRatingSummary(riderId: string): Promise<RiderRat
   };
 }
 
+export interface StoreReviewItem {
+  id: string;
+  orderId: string;
+  customerId: string;
+  customerName: string;
+  foodRating: number;
+  reviewText: string | null;
+  postedToCommunity: boolean;
+  createdAt: string;
+}
+
+export interface StoreDetailedRatingSummary {
+  averageRating: number;
+  totalReviews: number;
+  starCounts: {
+    5: number;
+    4: number;
+    3: number;
+    2: number;
+    1: number;
+  };
+  starPercentages: {
+    5: number;
+    4: number;
+    3: number;
+    2: number;
+    1: number;
+  };
+  positivePercentage: number;
+}
+
+/**
+ * Computes detailed star rating breakdown (5★ to 1★), percentage distribution,
+ * and overall customer sentiment from a list of numerical ratings.
+ */
+export function computeStoreDetailedRatingSummary(ratings: number[]): StoreDetailedRatingSummary {
+  const valid = ratings.filter((r) => typeof r === "number" && r >= 1 && r <= 5);
+  const total = valid.length;
+  const starCounts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+
+  for (const r of valid) {
+    const star = Math.round(r) as 1 | 2 | 3 | 4 | 5;
+    if (star in starCounts) {
+      starCounts[star]++;
+    }
+  }
+
+  const starPercentages = {
+    5: total > 0 ? Math.round((starCounts[5] / total) * 100) : 0,
+    4: total > 0 ? Math.round((starCounts[4] / total) * 100) : 0,
+    3: total > 0 ? Math.round((starCounts[3] / total) * 100) : 0,
+    2: total > 0 ? Math.round((starCounts[2] / total) * 100) : 0,
+    1: total > 0 ? Math.round((starCounts[1] / total) * 100) : 0,
+  };
+
+  const positiveCount = starCounts[5] + starCounts[4];
+  const positivePercentage = total > 0 ? Math.round((positiveCount / total) * 100) : 100;
+  const summary = computeRatingSummary(valid);
+
+  return {
+    averageRating: summary.averageRating,
+    totalReviews: total,
+    starCounts,
+    starPercentages,
+    positivePercentage,
+  };
+}
+
+/**
+ * Fetches all customer reviews submitted for a store, ordered by newest first.
+ */
+export async function fetchStoreReviews(storeId: string): Promise<StoreReviewItem[]> {
+  const supabase = getSupabaseClient("merchant");
+
+  try {
+    const { data, error } = await supabase
+      .from("order_reviews")
+      .select("id, order_id, customer_id, food_rating, review_text, posted_to_community, created_at, profiles(display_name, full_name)")
+      .eq("store_id", storeId)
+      .order("created_at", { ascending: false });
+
+    if (!error && data) {
+      return (data as any[]).map((r) => {
+        const profile = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
+        const name = profile?.display_name || profile?.full_name || "Mati Diner";
+        return {
+          id: r.id,
+          orderId: r.order_id,
+          customerId: r.customer_id,
+          customerName: name,
+          foodRating: r.food_rating,
+          reviewText: r.review_text,
+          postedToCommunity: Boolean(r.posted_to_community),
+          createdAt: r.created_at,
+        };
+      });
+    }
+  } catch (err) {
+    console.warn("[services/reviews] fetchStoreReviews joined query failed, retrying simple:", err);
+  }
+
+  // Graceful fallback without foreign key join
+  const { data: rawData, error: rawError } = await supabase
+    .from("order_reviews")
+    .select("id, order_id, customer_id, food_rating, review_text, posted_to_community, created_at")
+    .eq("store_id", storeId)
+    .order("created_at", { ascending: false });
+
+  if (rawError || !rawData) {
+    return [];
+  }
+
+  return rawData.map((r) => ({
+    id: r.id,
+    orderId: r.order_id,
+    customerId: r.customer_id,
+    customerName: "Mati Diner",
+    foodRating: r.food_rating,
+    reviewText: r.review_text,
+    postedToCommunity: Boolean(r.posted_to_community),
+    createdAt: r.created_at,
+  }));
+}
+
+/**
+ * Fetches detailed aggregate star ratings and counts for a store.
+ */
+export async function fetchStoreDetailedRatingSummary(
+  storeId: string
+): Promise<StoreDetailedRatingSummary> {
+  const supabase = getSupabaseClient("merchant");
+  const { data, error } = await supabase
+    .from("order_reviews")
+    .select("food_rating")
+    .eq("store_id", storeId);
+
+  if (error || !data) {
+    return computeStoreDetailedRatingSummary([]);
+  }
+
+  const ratings = data
+    .map((d) => d.food_rating)
+    .filter((r): r is number => typeof r === "number");
+  return computeStoreDetailedRatingSummary(ratings);
+}
+
 /**
  * Fetches aggregate rating statistics for a store.
  */

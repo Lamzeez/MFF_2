@@ -7,13 +7,13 @@ export type Database = {
           Tables: {
             "menu_items": {
                   Row: {
-                    "archived_at": string | null,"created_at": string,"currency": string,"description": string,"id": string,"is_available": boolean,"is_published": boolean,"name": string,"price_centavos": number,"store_id": string,"updated_at": string
+                    "archived_at": string | null,"category"?: string | null,"created_at": string,"currency": string,"description": string,"id": string,"image_url": string | null,"is_available": boolean,"is_published": boolean,"name": string,"price_centavos": number,"store_id": string,"updated_at": string,"modifiers"?: Json | null
                   }
                   Insert: {
-                    "archived_at"?: string | null,"created_at"?: string,"currency"?: string,"description"?: string,"id"?: string,"is_available"?: boolean,"is_published"?: boolean,"name": string,"price_centavos": number,"store_id": string,"updated_at"?: string
+                    "archived_at"?: string | null,"category"?: string | null,"created_at"?: string,"currency"?: string,"description"?: string,"id"?: string,"image_url"?: string | null,"is_available"?: boolean,"is_published"?: boolean,"name": string,"price_centavos": number,"store_id": string,"updated_at"?: string,"modifiers"?: Json | null
                   }
                   Update: {
-                    "archived_at"?: string | null,"created_at"?: string,"currency"?: string,"description"?: string,"id"?: string,"is_available"?: boolean,"is_published"?: boolean,"name"?: string,"price_centavos"?: number,"store_id"?: string,"updated_at"?: string
+                    "archived_at"?: string | null,"category"?: string | null,"created_at"?: string,"currency"?: string,"description"?: string,"id"?: string,"image_url"?: string | null,"is_available"?: boolean,"is_published"?: boolean,"name"?: string,"price_centavos"?: number,"store_id"?: string,"updated_at"?: string,"modifiers"?: Json | null
                   }
                   Relationships: [
                     {
@@ -64,13 +64,13 @@ isOneToOne: false
                   ]
                 },"stores": {
                   Row: {
-                    "address_text": string,"approval_status": Database["public"]['Enums']["store_approval_status"],"archived_at": string | null,"barangay": string,"categories"?: string[],"cover_image_url": string | null,"created_at": string,"delivery_enabled": boolean,"description": string,"id": string,"is_open": boolean,"location": unknown,"name": string,"operating_hours": string,"public_phone": string | null,"slug": string,"updated_at": string,"verification_document_url"?: string | null
+                    "address_text": string,"approval_status": Database["public"]['Enums']["store_approval_status"],"archived_at": string | null,"barangay": string,"categories"?: string[],"cover_image_url": string | null,"created_at": string,"delivery_enabled": boolean,"description": string,"id": string,"is_open": boolean,"location": unknown,"logo_url"?: string | null,"name": string,"operating_hours": string,"public_phone": string | null,"reservations_enabled"?: boolean,"slug": string,"subscribed_at"?: string | null,"subscription_status"?: string,"subscription_tier"?: string,"table_capacity"?: number,"trial_ends_at"?: string | null,"trial_started_at"?: string | null,"updated_at": string,"verification_document_url"?: string | null
                   }
                   Insert: {
-                    "address_text": string,"approval_status"?: Database["public"]['Enums']["store_approval_status"],"archived_at"?: string | null,"barangay"?: string,"categories"?: string[],"cover_image_url"?: string | null,"created_at"?: string,"delivery_enabled"?: boolean,"description"?: string,"id"?: string,"is_open"?: boolean,"location"?: unknown,"name": string,"operating_hours"?: string,"public_phone"?: string | null,"slug": string,"updated_at"?: string,"verification_document_url"?: string | null
+                    "address_text": string,"approval_status"?: Database["public"]['Enums']["store_approval_status"],"archived_at"?: string | null,"barangay"?: string,"categories"?: string[],"cover_image_url"?: string | null,"created_at"?: string,"delivery_enabled"?: boolean,"description"?: string,"id"?: string,"is_open"?: boolean,"location"?: unknown,"logo_url"?: string | null,"name": string,"operating_hours"?: string,"public_phone"?: string | null,"reservations_enabled"?: boolean,"slug": string,"subscribed_at"?: string | null,"subscription_status"?: string,"subscription_tier"?: string,"table_capacity"?: number,"trial_ends_at"?: string | null,"trial_started_at"?: string | null,"updated_at"?: string,"verification_document_url"?: string | null
                   }
                   Update: {
-                    "address_text"?: string,"approval_status"?: Database["public"]['Enums']["store_approval_status"],"archived_at"?: string | null,"barangay"?: string,"categories"?: string[],"cover_image_url"?: string | null,"created_at"?: string,"delivery_enabled"?: boolean,"description"?: string,"id"?: string,"is_open"?: boolean,"location"?: unknown,"name"?: string,"operating_hours"?: string,"public_phone"?: string | null,"slug"?: string,"updated_at"?: string,"verification_document_url"?: string | null
+                    "address_text"?: string,"approval_status"?: Database["public"]['Enums']["store_approval_status"],"archived_at"?: string | null,"barangay"?: string,"categories"?: string[],"cover_image_url"?: string | null,"created_at"?: string,"delivery_enabled"?: boolean,"description"?: string,"id"?: string,"is_open"?: boolean,"location"?: unknown,"logo_url"?: string | null,"name"?: string,"operating_hours"?: string,"public_phone"?: string | null,"reservations_enabled"?: boolean,"slug"?: string,"subscribed_at"?: string | null,"subscription_status"?: string,"subscription_tier"?: string,"table_capacity"?: number,"trial_ends_at"?: string | null,"trial_started_at"?: string | null,"updated_at"?: string,"verification_document_url"?: string | null
                   }
                   Relationships: [
 
@@ -100,7 +100,14 @@ isOneToOne: false
                     "total_centavos": number,
                     "updated_at": string,
                     "voucher_code": string | null,
-                    "voucher_id": string | null
+                    "voucher_id": string | null,
+                    "courier_latitude"?: number | null,
+                    "courier_longitude"?: number | null,
+                    "courier_heading"?: number | null,
+                    "courier_updated_at"?: string | null,
+                    "cod_remitted"?: boolean,
+                    "cod_remitted_at"?: string | null,
+                    "cod_remitted_by"?: string | null
                   },
                   Insert: {
                     "barangay": string,
@@ -125,7 +132,14 @@ isOneToOne: false
                     "total_centavos": number,
                     "updated_at"?: string,
                     "voucher_code"?: string | null,
-                    "voucher_id"?: string | null
+                    "voucher_id"?: string | null,
+                    "courier_latitude"?: number | null,
+                    "courier_longitude"?: number | null,
+                    "courier_heading"?: number | null,
+                    "courier_updated_at"?: string | null,
+                    "cod_remitted"?: boolean,
+                    "cod_remitted_at"?: string | null,
+                    "cod_remitted_by"?: string | null
                   },
                   Update: {
                     "barangay"?: string,
@@ -150,7 +164,14 @@ isOneToOne: false
                     "total_centavos"?: number,
                     "updated_at"?: string,
                     "voucher_code"?: string | null,
-                    "voucher_id"?: string | null
+                    "voucher_id"?: string | null,
+                    "courier_latitude"?: number | null,
+                    "courier_longitude"?: number | null,
+                    "courier_heading"?: number | null,
+                    "courier_updated_at"?: string | null,
+                    "cod_remitted"?: boolean,
+                    "cod_remitted_at"?: string | null,
+                    "cod_remitted_by"?: string | null
                   },
                   Relationships: [
                     {
@@ -815,6 +836,29 @@ isOneToOne: false
     cod_eligible?: boolean;
   }[]
                            },
+"admin_list_store_applications":
+{ Args: Record<PropertyKey, never>; Returns: {
+    id: string;
+    name: string;
+    slug: string;
+    categories: string[];
+    description: string;
+    public_phone: string | null;
+    operating_hours: string;
+    address_text: string;
+    barangay: string;
+    latitude: number | null;
+    longitude: number | null;
+    verification_document_url: string | null;
+    cover_image_url: string | null;
+    approval_status: Database["public"]['Enums']["store_approval_status"];
+    archived_at: string | null;
+    created_at: string;
+    owner_name: string | null;
+    owner_email: string | null;
+    owner_phone: string | null;
+  }[]
+                           },
 "admin_get_platform_metrics":
 { Args: Record<PropertyKey, never>; Returns: {
     total_users: number;
@@ -897,6 +941,12 @@ isOneToOne: false
                            },
 "admin_reset_customer_cod_strikes":
 { Args: { "target_user": string }; Returns: { success: boolean; user_id: string; cod_strikes: number; cod_eligible: boolean }
+                           },
+"admin_delete_user":
+{ Args: { "target_user": string }; Returns: { success: boolean; deleted_user_id: string; deleted_stores_count: number }
+                           },
+"merchant_select_subscription_plan":
+{ Args: { "p_store_id": string; "p_tier": string }; Returns: { subscription_tier: string; subscription_status: string; trial_started_at: string | null; trial_ends_at: string | null; subscribed_at: string | null }
                            }
           }
           Enums: {

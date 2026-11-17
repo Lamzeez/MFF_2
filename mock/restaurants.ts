@@ -14,6 +14,7 @@ export const MATI_RESTAURANTS_DATA: Record<string, RestaurantProfile> = {
   "Mama Letty's Karenderia": {
     name: "Mama Letty's Karenderia",
     category: "Authentic Karenderia & Homecooked",
+    categories: ["Karenderias", "Meals"],
     rating: "4.8",
     address: "Magsaysay St, Brgy. Central, Mati City",
     phone: "+63 917 234 5678",
@@ -31,6 +32,7 @@ export const MATI_RESTAURANTS_DATA: Record<string, RestaurantProfile> = {
   "Mati Baywalk Seafood Grill": {
     name: "Mati Baywalk Seafood Grill",
     category: "Fresh Seafood & Seaside Dining",
+    categories: ["Seafood", "Meals"],
     rating: "4.9",
     address: "Baywalk Boulevard, Pujada Bay, Mati City",
     phone: "+63 928 345 6789",
@@ -48,6 +50,7 @@ export const MATI_RESTAURANTS_DATA: Record<string, RestaurantProfile> = {
   "Subangan Street Grills": {
     name: "Subangan Street Grills",
     category: "Barbecue & Night Market Specialties",
+    categories: ["BBQ & Grill", "Meals"],
     rating: "4.9",
     address: "Near Subangan Museum Grounds, Mati City",
     phone: "+63 939 456 7890",
@@ -65,6 +68,7 @@ export const MATI_RESTAURANTS_DATA: Record<string, RestaurantProfile> = {
   "Dahican Beach Bites": {
     name: "Dahican Beach Bites",
     category: "Coastal Quick Bites & Shakes",
+    categories: ["Merienda", "Beverages"],
     rating: "4.7",
     address: "Dahican Beach Coastline, Mati City",
     phone: "+63 908 567 8901",
@@ -82,6 +86,7 @@ export const MATI_RESTAURANTS_DATA: Record<string, RestaurantProfile> = {
   "Aling Nena's Kitchen": {
     name: "Aling Nena's Kitchen",
     category: "Traditional Filipino & Soups",
+    categories: ["Karenderias", "Meals"],
     rating: "4.6",
     address: "Rizal Extension, Brgy. Sainz, Mati City",
     phone: "+63 919 678 9012",

@@ -26,12 +26,22 @@ export interface StoreApplication {
   id: string;
   name: string;
   slug: string;
+  categories?: string[];
   address_text: string;
   barangay: string;
   approval_status: "pending" | "approved" | "rejected";
+  archived_at?: string | null;
   created_at: string;
   public_phone: string | null;
   description: string;
+  operating_hours?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  verification_document_url?: string | null;
+  cover_image_url?: string | null;
+  owner_name?: string | null;
+  owner_email?: string | null;
+  owner_phone?: string | null;
 }
 
 export interface StoreMetrics {
@@ -164,6 +174,34 @@ export async function adminResetCustomerCodStrikes(
 }
 
 /**
+ * Permanently deletes a user account and all associated database records via System Admin RPC.
+ */
+export async function deleteAdminUser(userId: string): Promise<{
+  success: boolean;
+  deletedStoresCount?: number;
+  error?: string;
+}> {
+  try {
+    const supabase = getSupabaseClient("admin");
+    const { data, error } = await supabase.rpc("admin_delete_user", {
+      target_user: userId,
+    });
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return {
+      success: true,
+      deletedStoresCount: (data as { deleted_stores_count?: number } | null)?.deleted_stores_count ?? 0,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err?.message || "Failed to delete user account.",
+    };
+  }
+}
+
+/**
  * Fetch all store applications for System Admin approval reviews
  */
 export async function fetchAdminStoreApplicationsWithStatus(): Promise<{
@@ -172,16 +210,26 @@ export async function fetchAdminStoreApplicationsWithStatus(): Promise<{
 }> {
   try {
     const supabase = getSupabaseClient("admin");
-    const { data, error } = await supabase
+    const { data, error } = await supabase.rpc("admin_list_store_applications");
+
+    if (!error && Array.isArray(data)) {
+      return { data: data as StoreApplication[] };
+    }
+
+    // Fallback to direct admin-scoped stores query if RPC isn't deployed yet
+    const fallback = await supabase
       .from("stores")
-      .select("id, name, slug, address_text, barangay, approval_status, created_at, public_phone, description")
+      .select(
+        "id, name, slug, categories, address_text, barangay, approval_status, archived_at, created_at, public_phone, description, operating_hours, verification_document_url, cover_image_url"
+      )
       .order("created_at", { ascending: false });
 
-    if (error || !data) {
-      console.warn("Could not fetch store applications:", error?.message);
-      return { data: [], error: error?.message || "Could not load store applications." };
+    if (fallback.error || !fallback.data) {
+      const errMsg = error?.message || fallback.error?.message || "Could not load store applications.";
+      console.warn("Could not fetch store applications:", errMsg);
+      return { data: [], error: errMsg };
     }
-    return { data: data as StoreApplication[] };
+    return { data: fallback.data as StoreApplication[] };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Could not load store applications.";
     console.warn("fetchAdminStoreApplications exception:", err);
@@ -211,6 +259,26 @@ export async function setStoreApproval(
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Suspend or reinstate an approved store using `admin_set_store_archived`.
+ */
+export async function setStoreSuspended(
+  storeId: string,
+  suspended: boolean
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = getSupabaseClient("admin");
+    const { error } = await supabase.rpc("admin_set_store_archived", {
+      target_store: storeId,
+      archived: suspended,
+    });
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || "Could not update store suspension status." };
   }
 }
 
@@ -499,5 +567,85 @@ export async function fetchDiscoveryChannelsTelemetry(): Promise<{
 export async function fetchDiscoveryChannels(): Promise<DiscoveryChannelsData> {
   const { data } = await fetchDiscoveryChannelsTelemetry();
   return data;
+}
+
+export interface RiderApplicationItem {
+  id: string;
+  display_name: string;
+  email: string;
+  phone_number: string;
+  account_status: "active" | "suspended";
+  created_at: string;
+  is_approved_rider: boolean;
+  vehicle_info?: string;
+  barangay?: string;
+  license_document_url?: string;
+  vehicle_document_url?: string;
+}
+
+/**
+ * Fetches rider applications across Mati City for System Admin courier onboarding review.
+ */
+export async function fetchAdminRiderApplicationsWithStatus(): Promise<{
+  data: RiderApplicationItem[];
+  error?: string;
+}> {
+  try {
+    const supabase = getSupabaseClient("admin");
+    const { data: users, error } = await supabase.rpc("admin_list_users");
+    if (error || !users) {
+      return { data: [], error: error?.message || "Could not load rider applications." };
+    }
+
+    const riderItems: RiderApplicationItem[] = (users as AdminUserItem[])
+      .filter((u) => u.role === "rider" || (u as any).platform_role === "rider")
+      .map((u) => ({
+        id: u.id,
+        display_name: u.display_name || "Mati Courier",
+        email: u.email || "",
+        phone_number: u.phone_number || "",
+        account_status: u.account_status,
+        created_at: u.created_at,
+        is_approved_rider: u.account_status === "active",
+        vehicle_info: (u as any).raw_user_meta_data?.motorcycle_info || "Motorcycle (Verified Delivery)",
+        barangay: (u as any).raw_user_meta_data?.barangay || "Mati City Wide",
+        license_document_url:
+          (u as any).raw_user_meta_data?.license_document_url ||
+          (u as any).license_document_url ||
+          "",
+        vehicle_document_url:
+          (u as any).raw_user_meta_data?.vehicle_document_url ||
+          (u as any).vehicle_document_url ||
+          "",
+      }));
+
+    return { data: riderItems };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Could not load rider applications.";
+    return { data: [], error: message };
+  }
+}
+
+export async function fetchAdminRiderApplications(): Promise<RiderApplicationItem[]> {
+  const { data } = await fetchAdminRiderApplicationsWithStatus();
+  return data;
+}
+
+/**
+ * Approves or suspends a rider application.
+ */
+export async function setRiderApproval(
+  userId: string,
+  approved: boolean
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const roleRes = await setAdminUserPlatformRole(userId, "rider", approved);
+    if (!roleRes.success) return roleRes;
+
+    const statusRes = await setAdminUserAccountStatus(userId, approved ? "active" : "suspended");
+    return statusRes;
+  } catch (err: any) {
+    return { success: false, error: err?.message || "Failed to update rider approval status." };
+  }
 }
 

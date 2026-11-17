@@ -28,48 +28,48 @@ export function GuestGateModal({
           accessibilityLabel="Close modal"
         />
 
-        <View className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-xl z-10">
-          <View className="w-14 h-14 bg-orange-50 border border-orange-100 rounded-2xl items-center justify-center self-center mb-3.5">
-            <Ionicons name="sparkles" size={26} color="#EA5410" />
+        <View className="bg-white rounded-2xl p-4.5 w-full max-w-xs shadow-xl z-10">
+          <View className="w-11 h-11 bg-orange-50 border border-orange-100 rounded-xl items-center justify-center self-center mb-2.5">
+            <Ionicons name="sparkles" size={22} color="#EA5410" />
           </View>
-          <Text className="text-xl font-black text-gray-900 text-center mb-1 tracking-tight">
+          <Text className="text-base font-black text-gray-900 text-center mb-0.5 tracking-tight">
             Join Mati FoodFinder
           </Text>
-          <Text className="text-xs text-gray-500 text-center mb-4 leading-relaxed">
+          <Text className="text-[11px] text-gray-500 text-center mb-3 leading-relaxed">
             Please sign in to {actionDescription}.
           </Text>
 
-          <View className="bg-gray-50 p-3.5 rounded-2xl mb-4 border border-gray-100 gap-2">
-            <View className="flex-row items-center gap-2">
+          <View className="bg-gray-50 p-2.5 rounded-xl mb-3 border border-gray-100 gap-1.5">
+            <View className="flex-row items-center gap-1.5">
               <Text className="text-xs text-[#EA5410] font-black">✓</Text>
-              <Text className="text-xs text-gray-700 font-medium">Live Cash on Delivery order tracking</Text>
+              <Text className="text-[11px] text-gray-700 font-medium">Live Cash on Delivery order tracking</Text>
             </View>
-            <View className="flex-row items-center gap-2">
+            <View className="flex-row items-center gap-1.5">
               <Text className="text-xs text-[#EA5410] font-black">✓</Text>
-              <Text className="text-xs text-gray-700 font-medium">Instant dining table reservations</Text>
+              <Text className="text-[11px] text-gray-700 font-medium">Instant dining table reservations</Text>
             </View>
-            <View className="flex-row items-center gap-2">
+            <View className="flex-row items-center gap-1.5">
               <Text className="text-xs text-[#EA5410] font-black">✓</Text>
-              <Text className="text-xs text-gray-700 font-medium">Personalized local food recommendations</Text>
+              <Text className="text-[11px] text-gray-700 font-medium">Personalized local food recommendations</Text>
             </View>
           </View>
 
           <Pressable
             onPress={onQuickSignIn}
-            className="w-full py-3.5 bg-[#EA5410] rounded-2xl items-center shadow-sm active:opacity-95 mb-2.5"
+            className="w-full py-2.5 bg-[#EA5410] rounded-xl items-center shadow-xs active:opacity-95 mb-2"
           >
-            <Text className="text-white font-black text-sm">Sign In to Your Account</Text>
+            <Text className="text-white font-black text-xs">Sign In to Your Account</Text>
           </Pressable>
 
           <Pressable
             onPress={onNavigateToAuth}
-            className="w-full py-3 bg-gray-100 rounded-2xl items-center mb-2 active:bg-gray-200"
+            className="w-full py-2 bg-gray-100 rounded-xl items-center mb-1.5 active:bg-gray-200"
           >
-            <Text className="text-gray-800 font-bold text-xs">Create New Account</Text>
+            <Text className="text-gray-800 font-bold text-[11px]">Create New Account</Text>
           </Pressable>
 
-          <Pressable onPress={onClose} className="py-2 items-center">
-            <Text className="text-xs text-gray-400 font-bold">Continue Browsing as Guest</Text>
+          <Pressable onPress={onClose} className="py-1.5 items-center">
+            <Text className="text-[11px] text-gray-400 font-bold">Continue Browsing as Guest</Text>
           </Pressable>
         </View>
       </View>

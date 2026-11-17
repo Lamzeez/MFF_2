@@ -1,7 +1,7 @@
 PROGRESS...
 
-> System Admin UI + Layout
-Store Merchants'
+System Admin UI + Layout
+> Store Merchants'
 Delivery Drivers'
 Customers'
 Guests'

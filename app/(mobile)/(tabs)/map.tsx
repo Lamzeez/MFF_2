@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   ActivityIndicator,
   Image,
   Alert,
+  Linking,
+  Platform,
   useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -26,6 +28,9 @@ import { CheckoutSheet, CheckoutConfirmedPayload } from "../../../components/che
 import { ReservationSheet } from "../../../components/reservation/ReservationSheet";
 import { GuestGateModal } from "../../../components/auth/GuestGateModal";
 import { FloatingCartBar } from "../../../components/cart/FloatingCartBar";
+import { useCart } from "../../../context/CartContext";
+import MatiInteractiveMap, { MapMarker } from "../../../components/map/MatiInteractiveMap";
+import { fetchMatiRoadRoute, MatiRouteResult } from "../../../lib/mati-routing";
 import {
   MATI_CITY_HALL_COORDS,
   projectGeoToMapPercent,
@@ -171,13 +176,23 @@ export default function MobileMapScreen() {
   );
   const [locationName, setLocationName] = useState("Mati City Center (GPS loading...)");
   const [isLocating, setIsLocating] = useState(false);
-  const [selectedSpotId, setSelectedSpotId] = useState<string | number>(
+  const [selectedSpotId, setSelectedSpotId] = useState<string | number | null>(
     EXPLORE_FALLBACK_SPOTS[0].id
   );
+  const [cameraFocus, setCameraFocus] = useState<{
+    latitude: number;
+    longitude: number;
+    zoom?: number;
+    key?: number | string;
+  } | null>(null);
   const [activeFilter, setActiveFilter] = useState<"closest" | "serviceable" | "open" | "all">(
     "closest"
   );
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
+
+  // Live Road Navigation & Routing State
+  const [activeRoute, setActiveRoute] = useState<MatiRouteResult | null>(null);
+  const [isRouting, setIsRouting] = useState(false);
 
   // Live Catalog State
   const [rawSpots, setRawSpots] = useState<ExploreSpotItem[]>(EXPLORE_FALLBACK_SPOTS);
@@ -193,14 +208,56 @@ export default function MobileMapScreen() {
   const [checkoutDish, setCheckoutDish] = useState<FoodItem | null>(null);
   const [showReservationModal, setShowReservationModal] = useState(false);
   const [reservationResto, setReservationResto] = useState("Mama Letty's Karenderia");
+  const { addItem } = useCart();
   const [showGuestGateModal, setShowGuestGateModal] = useState(false);
   const [guestGateAction, setGuestGateAction] = useState<string>("order food or reserve tables");
+  const [fitRouteKey, setFitRouteKey] = useState(0);
 
   // Fetch real device location on mount
   useEffect(() => {
     requestUserLocation();
     loadLiveCatalog();
   }, []);
+
+  // Live GPS tracking when an active route is open: keeps userLocation updated as device moves
+  useEffect(() => {
+    if (!activeRoute || !selectedSpotId) return;
+    let locationSubscription: Location.LocationSubscription | null = null;
+    let isMounted = true;
+
+    const startLiveTracking = async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status === "granted") {
+          locationSubscription = await Location.watchPositionAsync(
+            {
+              accuracy: Location.Accuracy.High,
+              timeInterval: 4000,
+              distanceInterval: 10,
+            },
+            (newLoc) => {
+              if (!isMounted) return;
+              setUserLocation({
+                latitude: newLoc.coords.latitude,
+                longitude: newLoc.coords.longitude,
+              });
+            }
+          );
+        }
+      } catch (e) {
+        console.warn("Live GPS tracking watch error:", e);
+      }
+    };
+
+    startLiveTracking();
+
+    return () => {
+      isMounted = false;
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
+    };
+  }, [Boolean(activeRoute), selectedSpotId]);
 
   // Handle incoming deep link navigation (e.g. from table reservation "Directions")
   useEffect(() => {
@@ -214,6 +271,7 @@ export default function MobileMapScreen() {
       if (target) {
         setSelectedSpotId(target.id);
         setViewMode("map");
+        void handleComputeRouteToSpot(target);
       }
     }
   }, [params.storeId, params.storeName, rawSpots]);
@@ -227,7 +285,6 @@ export default function MobileMapScreen() {
 
       if (liveStores.length > 0) {
         const storeMap: Record<string, RestaurantProfile> = {};
-        Object.assign(storeMap, MATI_RESTAURANTS_DATA);
         for (const s of liveStores) {
           storeMap[s.name] = s;
         }
@@ -265,28 +322,88 @@ export default function MobileMapScreen() {
     }
   };
 
-  const requestUserLocation = async () => {
+  const applyUserLocation = (lat: number, lng: number, accuracy?: number) => {
+    setUserLocation({ latitude: lat, longitude: lng });
+    const isMatiRegion = lat >= 6.88 && lat <= 7.02 && lng >= 126.15 && lng <= 126.32;
+    const accuracyNote = accuracy ? ` (±${Math.round(accuracy)}m)` : "";
+    if (isMatiRegion) {
+      setLocationName(`Your Location · Live GPS${accuracyNote}`);
+    } else {
+      setLocationName(`Your Location · ${lat.toFixed(4)}, ${lng.toFixed(4)}${accuracyNote}`);
+    }
+
+    // Immediately fly map camera right to the user's real coordinates
+    setCameraFocus({
+      latitude: lat,
+      longitude: lng,
+      zoom: 16,
+      key: Date.now(),
+    });
+    setSelectedSpotId(null);
+    setActiveRoute(null);
+    setIsLocating(false);
+  };
+
+  const fallbackExpoLocation = async () => {
     try {
-      setIsLocating(true);
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         setLocationName("Mati City Hall, Poblacion (Default GPS)");
         setIsLocating(false);
+        Alert.alert(
+          "Location Access Needed",
+          "Please enable location services in your browser or device settings to view restaurants near your exact position."
+        );
         return;
       }
 
       const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
+        accuracy: Location.Accuracy.High,
       });
 
-      setUserLocation({
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-      });
-      setLocationName("Your Current Location (Live GPS)");
-    } catch {
-      setLocationName("Mati City Hall, Poblacion");
-    } finally {
+      applyUserLocation(
+        position.coords.latitude,
+        position.coords.longitude,
+        position.coords.accuracy ?? undefined
+      );
+    } catch (err) {
+      console.warn("Expo location fallback error:", err);
+      setLocationName("Mati City Hall, Poblacion (Default GPS)");
+      setIsLocating(false);
+    }
+  };
+
+  const requestUserLocation = async () => {
+    try {
+      setIsLocating(true);
+
+      // Web: Direct HTML5 Geolocation API with high accuracy
+      if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            applyUserLocation(
+              pos.coords.latitude,
+              pos.coords.longitude,
+              pos.coords.accuracy
+            );
+          },
+          async (err) => {
+            console.warn("Web navigator.geolocation returned error, trying expo fallback:", err.message);
+            await fallbackExpoLocation();
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0,
+          }
+        );
+        return;
+      }
+
+      await fallbackExpoLocation();
+    } catch (e) {
+      console.warn("Location request failed:", e);
+      setLocationName("Mati City Hall, Poblacion (Default GPS)");
       setIsLocating(false);
     }
   };
@@ -334,11 +451,79 @@ export default function MobileMapScreen() {
     return a.evaluation.straightLineKm - b.evaluation.straightLineKm;
   });
 
-  const selectedSpot =
-    sortedSpots.find((s) => s.id === selectedSpotId) ||
-    spotsWithEvaluation.find((s) => s.id === selectedSpotId) ||
-    sortedSpots[0] ||
-    spotsWithEvaluation[0];
+  const selectedSpot = selectedSpotId
+    ? sortedSpots.find((s) => s.id === selectedSpotId) ||
+      spotsWithEvaluation.find((s) => s.id === selectedSpotId) ||
+      null
+    : null;
+
+  const mapMarkers: MapMarker[] = useMemo(() => {
+    const list: MapMarker[] = sortedSpots.map((spot) => ({
+      id: String(spot.id),
+      latitude: spot.latitude,
+      longitude: spot.longitude,
+      title: spot.name,
+      subtitle: `${spot.category} · ${spot.evaluation.roadDistanceKm.toFixed(1)} km (${spot.evaluation.roadRouteFormatted.replace(" road trip", "")})`,
+      type: "store",
+      color:
+        selectedSpot?.id === spot.id
+          ? "#EA5410"
+          : spot.evaluation.isServiceable
+          ? "#059669"
+          : "#6B7280",
+    }));
+
+    list.push({
+      id: "user-current-location",
+      latitude: userLocation.latitude,
+      longitude: userLocation.longitude,
+      title: "Your Location",
+      subtitle: locationName,
+      type: "customer",
+      color: "#2563EB",
+    });
+
+    return list;
+  }, [sortedSpots, selectedSpot?.id, userLocation.latitude, userLocation.longitude, locationName]);
+
+  const handleComputeRouteToSpot = async (spot: ExploreSpotItem) => {
+    setIsRouting(true);
+    try {
+      const route = await fetchMatiRoadRoute(userLocation, {
+        latitude: spot.latitude,
+        longitude: spot.longitude,
+      });
+      setActiveRoute(route);
+      // Auto-fit bounds so map zooms in or out to fit user and destination
+      setFitRouteKey((k) => k + 1);
+    } catch (err) {
+      console.warn("Mati road route calculation failed:", err);
+    } finally {
+      setIsRouting(false);
+    }
+  };
+
+  const handleMarkerPress = (markerId: string) => {
+    if (markerId === "user-current-location") {
+      setCameraFocus({
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        zoom: 16,
+        key: Date.now(),
+      });
+      return;
+    }
+    setCameraFocus(null);
+    const match = rawSpots.find(
+      (s) => String(s.id) === markerId || String(s.storeId) === markerId
+    );
+    if (match) {
+      setSelectedSpotId(match.id);
+      if (activeRoute) {
+        void handleComputeRouteToSpot(match);
+      }
+    }
+  };
 
   const userPositionMap = projectGeoToMapPercent(
     userLocation.latitude,
@@ -454,45 +639,81 @@ export default function MobileMapScreen() {
   return (
     <SafeAreaView edges={["top"]} className="flex-1 bg-[#F8FAFC]">
       {/* 1. TOP APP BAR */}
-      <View className="px-4 pt-2 pb-3 bg-white border-b border-gray-100 shadow-xs">
+      <View className="px-4 pt-1.5 pb-2.5 bg-white border-b border-gray-100 shadow-xs">
         <View className="w-full max-w-6xl self-center">
-        <View className="flex-row flex-wrap items-center justify-between gap-2 mb-2">
-          <View className="flex-1 min-w-[180px]">
-            <Text className="text-[10px] font-bold text-gray-400 tracking-wider uppercase">
+        <View className="flex-row flex-wrap items-center justify-between gap-2 mb-1.5">
+          <View className="flex-1 min-w-[160px]">
+            <Text className="text-[9px] font-bold text-gray-400 tracking-wider uppercase">
               MATI CITY EXPLORE
             </Text>
-            <Text className="text-xl font-black text-gray-900 tracking-tight mt-0.5" numberOfLines={1}>
+            <Text className="text-base font-black text-gray-900 tracking-tight" numberOfLines={1}>
               Live Food Map & Nearby
             </Text>
           </View>
 
-          <View className="flex-row items-center gap-2 shrink-0">
-            {/* View Mode Switcher */}
-            <Pressable
-              onPress={() => setViewMode(viewMode === "map" ? "list" : "map")}
-              className="flex-row items-center gap-1.5 bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200 active:bg-gray-200"
-            >
-              <Ionicons
-                name={viewMode === "map" ? "list" : "map"}
-                size={14}
-                color="#374151"
-              />
-              <Text className="text-xs font-black text-gray-800">
-                {viewMode === "map" ? "List" : "Map"}
-              </Text>
-            </Pressable>
+          <View className="flex-row items-center gap-1.5 shrink-0">
+            {/* View Mode Dual-Segmented Switcher (Map vs List) */}
+            <View className="flex-row items-center bg-gray-100 p-0.5 rounded-xl border border-gray-200">
+              <Pressable
+                onPress={() => setViewMode("map")}
+                className={`flex-row items-center gap-1 px-2.5 py-1 rounded-lg ${
+                  viewMode === "map"
+                    ? "bg-white shadow-2xs border border-gray-200/80"
+                    : "opacity-60"
+                }`}
+                accessibilityRole="button"
+                accessibilityLabel="Switch to Map View"
+              >
+                <Ionicons
+                  name="map"
+                  size={12}
+                  color={viewMode === "map" ? "#EA5410" : "#4B5563"}
+                />
+                <Text
+                  className={`text-[11px] font-black ${
+                    viewMode === "map" ? "text-gray-900" : "text-gray-600"
+                  }`}
+                >
+                  Map
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setViewMode("list")}
+                className={`flex-row items-center gap-1 px-2.5 py-1 rounded-lg ${
+                  viewMode === "list"
+                    ? "bg-white shadow-2xs border border-gray-200/80"
+                    : "opacity-60"
+                }`}
+                accessibilityRole="button"
+                accessibilityLabel="Switch to List View"
+              >
+                <Ionicons
+                  name="list"
+                  size={12}
+                  color={viewMode === "list" ? "#EA5410" : "#4B5563"}
+                />
+                <Text
+                  className={`text-[11px] font-black ${
+                    viewMode === "list" ? "text-gray-900" : "text-gray-600"
+                  }`}
+                >
+                  List
+                </Text>
+              </Pressable>
+            </View>
 
             {/* GPS Refresh */}
             <Pressable
               onPress={requestUserLocation}
               disabled={isLocating}
               accessibilityLabel="Refresh GPS location"
-              className="w-9 h-9 rounded-full bg-orange-50 items-center justify-center border border-orange-200 active:bg-orange-100"
+              className="w-7.5 h-7.5 rounded-full bg-orange-50 items-center justify-center border border-orange-200 active:bg-orange-100"
             >
               {isLocating ? (
                 <ActivityIndicator size="small" color="#EA5410" />
               ) : (
-                <Ionicons name="locate" size={17} color="#EA5410" />
+                <Ionicons name="locate" size={15} color="#EA5410" />
               )}
             </Pressable>
 
@@ -500,80 +721,75 @@ export default function MobileMapScreen() {
             {!isLoggedIn && (
               <Pressable
                 onPress={() => router.push("/(mobile)/auth/customer-login")}
-                className="bg-[#EA5410] px-3.5 py-1.5 rounded-full flex-row items-center gap-1 shadow-sm active:opacity-90"
+                className="bg-[#EA5410] px-3 py-1 rounded-xl flex-row items-center gap-1 shadow-xs active:opacity-90"
               >
-                <Ionicons name="log-in-outline" size={14} color="white" />
-                <Text className="text-white text-xs font-black">Sign In</Text>
+                <Ionicons name="log-in-outline" size={13} color="white" />
+                <Text className="text-white text-[11px] font-black">Sign In</Text>
               </Pressable>
             )}
           </View>
         </View>
 
         {/* Current Location Strip */}
-        <View className="flex-row items-center gap-2 bg-orange-50 px-3 py-2 rounded-2xl border border-orange-200">
-          <View className="w-2.5 h-2.5 rounded-full bg-blue-600 shrink-0" />
-          <Text className="text-xs font-bold text-gray-900 flex-1" numberOfLines={1}>
+        <View className="flex-row items-center gap-1.5 bg-orange-50 px-2.5 py-1.5 rounded-xl border border-orange-200">
+          <View className="w-2 h-2 rounded-full bg-blue-600 shrink-0" />
+          <Text className="text-[11px] font-bold text-gray-900 flex-1" numberOfLines={1}>
             {locationName}
           </Text>
-          <View className="bg-orange-100 px-2 py-0.5 rounded-full shrink-0">
-            <Text className="text-[10px] font-black text-[#EA5410] uppercase">
+          <View className="bg-orange-100 px-1.5 py-0.2 rounded-full shrink-0">
+            <Text className="text-[9px] font-black text-[#EA5410] uppercase">
               {spotsWithEvaluation.filter((s) => s.evaluation.isServiceable).length} deliverable
             </Text>
           </View>
         </View>
 
         {/* Proximity & Status Filter Chips */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2.5 flex-row">
-          <View className="flex-row gap-2 pr-4">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2 flex-row">
+          <View className="flex-row gap-1.5 pr-4">
+            <Pressable
+              onPress={() => setActiveFilter("all")}
+              className={`px-2.5 py-1 rounded-full border ${
+                activeFilter === "all"
+                  ? "bg-[#EA5410] border-[#EA5410] shadow-xs"
+                  : "bg-white border-gray-200"
+              }`}
+            >
+              <Text
+                className={`text-[11px] font-bold ${
+                  activeFilter === "all" ? "text-white" : "text-gray-700"
+                }`}
+              >
+                All ({spotsWithEvaluation.length})
+              </Text>
+            </Pressable>
+
             <Pressable
               onPress={() => setActiveFilter("closest")}
-              className={`px-3.5 py-1.5 rounded-full border ${
+              className={`px-2.5 py-1 rounded-full border ${
                 activeFilter === "closest"
                   ? "bg-[#EA5410] border-[#EA5410] shadow-xs"
                   : "bg-white border-gray-200"
               }`}
             >
               <Text
-                className={`text-xs font-bold ${
+                className={`text-[11px] font-bold ${
                   activeFilter === "closest" ? "text-white" : "text-gray-700"
                 }`}
               >
-                Closest to Me
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => setActiveFilter("serviceable")}
-              className={`px-3.5 py-1.5 rounded-full border flex-row items-center gap-1 ${
-                activeFilter === "serviceable"
-                  ? "bg-[#EA5410] border-[#EA5410] shadow-xs"
-                  : "bg-white border-gray-200"
-              }`}
-            >
-              <Ionicons
-                name="bicycle"
-                size={12}
-                color={activeFilter === "serviceable" ? "white" : "#EA5410"}
-              />
-              <Text
-                className={`text-xs font-bold ${
-                  activeFilter === "serviceable" ? "text-white" : "text-gray-700"
-                }`}
-              >
-                Within Delivery Zone
+                Near Me
               </Text>
             </Pressable>
 
             <Pressable
               onPress={() => setActiveFilter("open")}
-              className={`px-3.5 py-1.5 rounded-full border ${
+              className={`px-2.5 py-1 rounded-full border ${
                 activeFilter === "open"
                   ? "bg-[#EA5410] border-[#EA5410] shadow-xs"
                   : "bg-white border-gray-200"
               }`}
             >
               <Text
-                className={`text-xs font-bold ${
+                className={`text-[11px] font-bold ${
                   activeFilter === "open" ? "text-white" : "text-gray-700"
                 }`}
               >
@@ -582,19 +798,24 @@ export default function MobileMapScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => setActiveFilter("all")}
-              className={`px-3.5 py-1.5 rounded-full border ${
-                activeFilter === "all"
+              onPress={() => setActiveFilter("serviceable")}
+              className={`px-2.5 py-1 rounded-full border flex-row items-center gap-1 ${
+                activeFilter === "serviceable"
                   ? "bg-[#EA5410] border-[#EA5410] shadow-xs"
                   : "bg-white border-gray-200"
               }`}
             >
+              <Ionicons
+                name="bicycle"
+                size={11}
+                color={activeFilter === "serviceable" ? "white" : "#EA5410"}
+              />
               <Text
-                className={`text-xs font-bold ${
-                  activeFilter === "all" ? "text-white" : "text-gray-700"
+                className={`text-[11px] font-bold ${
+                  activeFilter === "serviceable" ? "text-white" : "text-gray-700"
                 }`}
               >
-                All Spots ({spotsWithEvaluation.length})
+                Deliverable
               </Text>
             </Pressable>
           </View>
@@ -609,238 +830,402 @@ export default function MobileMapScreen() {
             isWideMap ? "flex-row p-4 gap-4 items-stretch" : "flex-col"
           }`}
         >
-          {/* Visual Map Surface with Mati Landmarks */}
+          {/* Real Interactive Map Canvas */}
           <View
-            className={`flex-1 bg-slate-100 items-center justify-center relative overflow-hidden ${
-              isWideMap ? "rounded-3xl border border-gray-200 shadow-sm min-h-[420px]" : "min-h-[220px]"
+            className={`relative overflow-hidden ${
+              isWideMap
+                ? "flex-1 rounded-3xl border border-gray-200 shadow-sm min-h-[440px]"
+                : selectedSpot
+                ? "flex-1 rounded-b-2xl"
+                : "h-[280px] rounded-b-2xl"
             }`}
           >
-            {/* Street Grid pattern */}
-            <View className="absolute inset-0 opacity-20 flex-row flex-wrap pointer-events-none">
-              {[...Array(32)].map((_, i) => (
-                <View key={i} className="w-1/4 h-24 border border-slate-300" />
-              ))}
-            </View>
+            <MatiInteractiveMap
+              initialCenter={userLocation}
+              zoom={14}
+              markers={mapMarkers}
+              selectedMarkerId={selectedSpot ? String(selectedSpot.id) : undefined}
+              focusCoords={
+                cameraFocus ||
+                (selectedSpot && !activeRoute
+                  ? {
+                      latitude: selectedSpot.latitude,
+                      longitude: selectedSpot.longitude,
+                      zoom: 16,
+                    }
+                  : undefined)
+              }
+              fitRouteKey={fitRouteKey}
+              fitRouteBounds={
+                activeRoute && selectedSpot
+                  ? {
+                      key: fitRouteKey,
+                      points:
+                        activeRoute.polyline.length > 0
+                          ? activeRoute.polyline
+                          : [
+                              userLocation,
+                              {
+                                latitude: selectedSpot.latitude,
+                                longitude: selectedSpot.longitude,
+                              },
+                            ],
+                    }
+                  : undefined
+              }
+              routePolyline={activeRoute?.polyline || []}
+              interactive={true}
+              showLandmarks={true}
+              height="100%"
+              onMarkerPress={handleMarkerPress}
+            />
 
-            {/* Geographical Mati Landmarks */}
-            <View className="absolute bottom-3 left-3 bg-white/95 px-2.5 py-1 rounded-xl shadow-xs border border-gray-200 flex-row items-center gap-1 z-10">
-              <Text className="text-xs">🌊</Text>
-              <Text className="text-[11px] font-black text-gray-800">Pujada Bay</Text>
-            </View>
-            <View className="absolute bottom-3 right-3 bg-white/95 px-2.5 py-1 rounded-xl shadow-xs border border-gray-200 flex-row items-center gap-1 z-10">
-              <Text className="text-xs">🏖️</Text>
-              <Text className="text-[11px] font-black text-gray-800">Dahican Beach</Text>
-            </View>
-            <View className="absolute top-3 left-3 bg-white/95 px-2.5 py-1 rounded-xl shadow-xs border border-gray-200 flex-row items-center gap-1 z-10">
-              <Text className="text-xs">🏛️</Text>
-              <Text className="text-[11px] font-black text-gray-800">Mati City Hall</Text>
-            </View>
-
-            {/* GPS Pulse Marker: YOU ARE HERE */}
-            <View
-              style={{
-                position: "absolute",
-                left: `${userPositionMap.xPercent}%`,
-                top: `${userPositionMap.yPercent}%`,
-                transform: [{ translateX: -40 }, { translateY: -20 }],
-              }}
-              className="items-center z-30 pointer-events-none"
-            >
-              <View className="w-10 h-10 rounded-full bg-blue-500/20 items-center justify-center absolute" />
-              <View className="w-5 h-5 rounded-full bg-blue-600 border-2 border-white shadow-md items-center justify-center">
-                <View className="w-2 h-2 rounded-full bg-white" />
-              </View>
-              <View className="bg-blue-600 px-2 py-0.5 rounded-full mt-1 shadow-sm">
-                <Text className="text-[9px] font-black text-white">YOU ARE HERE</Text>
-              </View>
-            </View>
-
-            {/* Dynamic PostGIS Food Spot Pins on Map */}
-            <View className="w-full h-full relative">
-              {spotsWithEvaluation.map((spot) => {
-                const isSelected = selectedSpot?.id === spot.id;
-                return (
-                  <Pressable
-                    key={String(spot.id)}
-                    onPress={() => setSelectedSpotId(spot.id)}
-                    style={{
-                      position: "absolute",
-                      left: `${spot.xPercent}%`,
-                      top: `${spot.yPercent}%`,
-                      transform: [{ translateX: -48 }, { translateY: -38 }],
-                    }}
-                    className="items-center z-20"
-                  >
-                    <View
-                      className={`px-2 py-0.5 rounded-xl shadow-md mb-0.5 flex-row items-center gap-1 ${
-                        isSelected
-                          ? "bg-[#EA5410] scale-105"
-                          : "bg-white border border-gray-200"
-                      }`}
-                    >
-                      <View
-                        className={`w-2 h-2 rounded-full ${
-                          spot.evaluation.isServiceable ? "bg-emerald-500" : "bg-amber-500"
-                        }`}
-                      />
-                      <Text
-                        className={`text-[10px] font-black ${
-                          isSelected ? "text-white" : "text-gray-900"
-                        }`}
-                        numberOfLines={1}
-                      >
-                        {spot.name.split(" ")[0]} · {spot.evaluation.straightLineFormatted}
+            {/* Active Live Route Summary Pill Overlay (In-App GPS Navigation Only) */}
+            {activeRoute && selectedSpot && (
+              <View className="absolute top-3 left-3 right-3 bg-white/95 rounded-2xl p-3 border border-orange-200 shadow-md flex-row items-center justify-between z-20">
+                <View className="flex-row items-center gap-2.5 flex-1 mr-2">
+                  <View className="w-8 h-8 rounded-full bg-[#EA5410] items-center justify-center">
+                    <Ionicons name="navigate" size={16} color="white" />
+                  </View>
+                  <View className="flex-1">
+                    <View className="flex-row items-center gap-1.5">
+                      <Text className="text-[11px] font-black text-gray-900" numberOfLines={1}>
+                        In-App Directions to {selectedSpot.name}
                       </Text>
+                      <View className="bg-orange-100 px-1.5 py-0.2 rounded">
+                        <Text className="text-[9px] font-black text-[#EA5410]">
+                          ~{activeRoute.estMinutes} mins
+                        </Text>
+                      </View>
                     </View>
-                    <Ionicons
-                      name="restaurant"
-                      size={isSelected ? 30 : 22}
-                      color={
-                        isSelected
-                          ? "#EA5410"
-                          : spot.evaluation.isServiceable
-                          ? "#075E46"
-                          : "#6B7280"
-                      }
-                    />
+                    <Text className="text-[10px] text-gray-500 font-semibold" numberOfLines={1}>
+                      {activeRoute.roadDistanceKm.toFixed(1)} km · Live Device GPS Navigation
+                    </Text>
+                  </View>
+                </View>
+                <View className="flex-row items-center gap-1.5">
+                  <Pressable
+                    onPress={() => setFitRouteKey((k) => k + 1)}
+                    accessibilityLabel="Fit Route View"
+                    className="px-2.5 py-1.5 bg-orange-50 border border-orange-200 rounded-xl flex-row items-center gap-1 active:bg-orange-100"
+                  >
+                    <Ionicons name="scan-outline" size={13} color="#EA5410" />
+                    <Text className="text-[11px] font-bold text-[#EA5410]">Fit View</Text>
                   </Pressable>
-                );
-              })}
-            </View>
+                  <Pressable
+                    onPress={() => setActiveRoute(null)}
+                    accessibilityLabel="Close Directions"
+                    className="w-7 h-7 rounded-full bg-gray-100 items-center justify-center active:bg-gray-200"
+                  >
+                    <Ionicons name="close" size={16} color="#6B7280" />
+                  </Pressable>
+                </View>
+              </View>
+            )}
           </View>
 
-          {/* Selected Restaurant Floating Card at Bottom of Map (Side Panel on Wide Screens) */}
-          {selectedSpot && (
-            <View
-              className={`bg-white rounded-3xl border border-gray-200 shadow-xl ${
-                isWideMap ? "w-[380px] p-5 self-stretch justify-between" : "m-3 sm:m-4 p-4"
-              }`}
-            >
-              <View>
-              <View className="flex-row items-center gap-3.5 mb-2.5">
-                <Image
-                  source={{ uri: selectedSpot.imageUrl }}
-                  className="w-16 h-16 rounded-2xl bg-gray-100"
-                  resizeMode="cover"
-                />
-                <View className="flex-1 pr-1">
-                  <View className="flex-row items-center gap-1.5 mb-0.5">
-                    <Text
-                      className="text-base font-black text-gray-900 flex-1 leading-tight"
-                      numberOfLines={1}
-                    >
-                      {selectedSpot.name}
-                    </Text>
-                    <View className="bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                      <Text className="text-[10px] font-bold text-emerald-800">
-                        {selectedSpot.open ? "Open Now" : "Closed"}
+          {/* Bottom / Side Panel: Selected Spot Card OR Live Location + Nearest Recommendations Feed */}
+          {selectedSpot ? (() => {
+            const restoProfile =
+              restaurants[selectedSpot.name] ||
+              Object.values(restaurants).find(
+                (r) => r.name.toLowerCase() === selectedSpot.name.toLowerCase()
+              );
+            const spotDishes = foodItems
+              .filter(
+                (d) =>
+                  d.store?.toLowerCase() === selectedSpot.name.toLowerCase() ||
+                  d.storeId === selectedSpot.id ||
+                  d.storeId === (selectedSpot as any).storeId
+              )
+              .slice(0, 2);
+
+            return (
+              <View
+                className={`bg-white rounded-2xl border border-gray-200 shadow-xl ${
+                  isWideMap
+                    ? "w-[360px] p-4 self-stretch justify-between"
+                    : "mx-3 mb-2.5 mt-2 p-3.5"
+                }`}
+              >
+                <View>
+                  {/* Header: Photo, Name, Rating & Close */}
+                  <View className="flex-row items-center gap-3 mb-2.5">
+                    <Image
+                      source={{ uri: selectedSpot.imageUrl }}
+                      className="w-14 h-14 rounded-xl bg-gray-100"
+                      resizeMode="cover"
+                    />
+                    <View className="flex-1 min-w-0 pr-1">
+                      <View className="flex-row items-center justify-between gap-1 mb-0.5">
+                        <Text
+                          className="text-sm font-black text-gray-900 flex-1 leading-tight"
+                          numberOfLines={1}
+                        >
+                          {selectedSpot.name}
+                        </Text>
+                        <Pressable
+                          onPress={() => {
+                            setSelectedSpotId(null);
+                            setActiveRoute(null);
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel="Close preview"
+                          className="w-6 h-6 rounded-full bg-gray-100 items-center justify-center active:bg-gray-200"
+                        >
+                          <Ionicons name="close" size={13} color="#6B7280" />
+                        </Pressable>
+                      </View>
+
+                      <Text className="text-[11px] text-gray-500 font-medium mb-1.5" numberOfLines={1}>
+                        {selectedSpot.category} · {selectedSpot.area}
                       </Text>
+
+                      {/* Clean info chips: Rating, Est. Travel Time, Open Tables */}
+                      <View className="flex-row items-center gap-1.5 flex-wrap">
+                        <View className="flex-row items-center gap-0.5 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-md">
+                          <Ionicons name="star" size={10} color="#D97706" />
+                          <Text className="text-[10px] font-black text-amber-900">{selectedSpot.rating}</Text>
+                        </View>
+                        <View className="bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-md flex-row items-center gap-1">
+                          <Ionicons name="navigate-outline" size={10} color="#EA5410" />
+                          <Text className="text-[10px] font-bold text-[#EA5410]">
+                            {selectedSpot.evaluation.roadDistanceKm.toFixed(1)} km · {selectedSpot.evaluation.roadRouteFormatted.replace(" road trip", "")}
+                          </Text>
+                        </View>
+                        <View className="bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md flex-row items-center gap-1">
+                          <Ionicons name="restaurant-outline" size={10} color="#047857" />
+                          <Text className="text-[10px] font-bold text-emerald-800">
+                            {restoProfile?.availableTables ?? 8} Tables Open
+                          </Text>
+                        </View>
+                      </View>
                     </View>
                   </View>
 
-                  <Text className="text-xs text-gray-500 font-medium" numberOfLines={1}>
-                    {selectedSpot.category} · {selectedSpot.area}
-                  </Text>
-
-                  {/* Delivery Serviceability Badge */}
-                  <View
-                    className={`self-start px-2 py-0.5 rounded-md border flex-row items-center gap-1 mt-1.5 ${selectedSpot.evaluation.badgeColor}`}
-                  >
-                    <Text className="text-[10px]">
-                      {selectedSpot.evaluation.statusBadge === "serviceable"
-                        ? "🛵"
-                        : selectedSpot.evaluation.statusBadge === "outside_radius"
-                        ? "📍"
-                        : "🏪"}
-                    </Text>
-                    <Text className="text-[10px] font-black">
-                      {selectedSpot.evaluation.badgeText}
-                    </Text>
-                  </View>
+                  {/* Signature Dishes Preview with 1-Tap Add */}
+                  {spotDishes.length > 0 && (
+                    <View className="my-2 pt-2 border-t border-gray-100">
+                      <Text className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                        Signature Dishes Preview
+                      </Text>
+                      <View className="gap-1.5">
+                        {spotDishes.map((dish) => (
+                          <View
+                            key={dish.id}
+                            className="flex-row items-center justify-between p-1.5 bg-gray-50/80 rounded-xl border border-gray-200/80"
+                          >
+                            <View className="flex-row items-center gap-2 flex-1 min-w-0 mr-2">
+                              <Image
+                                source={{
+                                  uri:
+                                    dish.imageUrl ||
+                                    "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500",
+                                }}
+                                className="w-8 h-8 rounded-lg bg-gray-200 shrink-0"
+                                resizeMode="cover"
+                              />
+                              <View className="flex-1 min-w-0">
+                                <Text
+                                  className="text-xs font-bold text-gray-900 leading-tight"
+                                  numberOfLines={1}
+                                >
+                                  {dish.name}
+                                </Text>
+                                <Text className="text-[10px] text-[#EA5410] font-black">
+                                  ₱{dish.price.toFixed(2)}
+                                </Text>
+                              </View>
+                            </View>
+                            <Pressable
+                              onPress={() => {
+                                addItem(dish, 1);
+                                Alert.alert(
+                                  "Added to Basket! 🛍️",
+                                  `1x ${dish.name} added to your basket from ${selectedSpot.name}. Tap Store Profile or Cart to checkout.`,
+                                  [{ text: "OK" }]
+                                );
+                              }}
+                              className="px-2.5 py-1 bg-[#EA5410] rounded-lg flex-row items-center gap-1 active:opacity-90 shrink-0 shadow-xs"
+                            >
+                              <Ionicons name="add" size={12} color="white" />
+                              <Text className="text-[10px] font-black text-white">Add</Text>
+                            </Pressable>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
                 </View>
-              </View>
 
-              {/* Haversine Straight-Line vs. Road Route Metrics Strip */}
-              <View className="flex-row items-center gap-2 mb-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-                <View className="flex-1">
-                  <Text className="text-[9px] font-bold text-gray-400 uppercase">Haversine GPS</Text>
-                  <Text className="text-xs font-black text-gray-800" numberOfLines={1}>
-                    {selectedSpot.evaluation.straightLineFormatted}
-                  </Text>
-                </View>
-                <View className="w-px h-6 bg-gray-200" />
-                <View className="flex-1">
-                  <Text className="text-[9px] font-bold text-gray-400 uppercase">Road Travel Time</Text>
-                  <Text className="text-xs font-black text-[#EA5410]" numberOfLines={1}>
-                    {selectedSpot.evaluation.roadRouteFormatted}
-                  </Text>
-                </View>
-                <View className="w-px h-6 bg-gray-200" />
-                <View className="flex-1">
-                  <Text className="text-[9px] font-bold text-gray-400 uppercase">Delivery Fee</Text>
-                  <Text className="text-xs font-black text-gray-800" numberOfLines={1}>
-                    {selectedSpot.deliveryEnabled ? `₱${selectedSpot.deliveryFee}` : "Dine-in"}
-                  </Text>
-                </View>
-              </View>
-
-              <Text className="text-xs text-gray-600 font-medium mb-3" numberOfLines={isWideMap ? 3 : 1}>
-                🔥 <Text className="font-bold text-[#EA5410]">Specialty:</Text> {selectedSpot.specialty}
-              </Text>
-              </View>
-
-              {/* Quick Actions: View Full Profile or Route */}
-              <View className="flex-row flex-wrap gap-2 pt-2 border-t border-gray-100">
-                <Pressable
-                  onPress={() => handleOpenRestaurant(selectedSpot.name)}
-                  className="flex-1 py-3 bg-[#EA5410] rounded-2xl items-center shadow-sm active:opacity-95"
-                >
-                  <Text className="text-white font-black text-xs">View Details & Menu</Text>
-                </Pressable>
-
-                {selectedSpot.evaluation.isServiceable ? (
+                {/* 3 Main Store Actions: Directions, Make Reservation & View Menu */}
+                <View className="flex-row gap-1.5 pt-2.5 border-t border-gray-100">
                   <Pressable
                     onPress={() => {
-                      const restoDish = foodItems.find(
-                        (f) =>
-                          (f.store && f.store.toLowerCase().includes(selectedSpot.name.toLowerCase())) ||
-                          (selectedSpot.storeId && f.storeId === selectedSpot.storeId)
-                      );
-                      if (restoDish) {
-                        handleOpenCheckout(restoDish);
-                      } else {
-                        handleOpenRestaurant(selectedSpot.name);
+                      if (activeRoute) {
+                        setActiveRoute(null);
+                      } else if (selectedSpot) {
+                        void handleComputeRouteToSpot(selectedSpot);
                       }
                     }}
-                    className="py-3 px-3.5 bg-emerald-700 rounded-2xl items-center flex-row gap-1 shadow-sm active:opacity-95"
+                    className={`flex-1 py-2 px-1 rounded-xl border flex-row items-center justify-center gap-1 active:opacity-90 ${
+                      activeRoute
+                        ? "bg-orange-50 border-[#EA5410]"
+                        : "bg-gray-100 border-gray-200"
+                    }`}
                   >
-                    <Ionicons name="bicycle" size={14} color="white" />
-                    <Text className="text-white font-bold text-xs">Order COD</Text>
+                    <Ionicons
+                      name={activeRoute ? "close-circle-outline" : "navigate-outline"}
+                      size={13}
+                      color={activeRoute ? "#EA5410" : "#374151"}
+                    />
+                    <Text
+                      className={`font-black text-[11px] ${
+                        activeRoute ? "text-[#EA5410]" : "text-gray-800"
+                      }`}
+                      numberOfLines={1}
+                    >
+                      {activeRoute ? "Clear Route" : "Directions"}
+                    </Text>
                   </Pressable>
-                ) : (
+
                   <Pressable
                     onPress={() => handleOpenReservation(selectedSpot.name)}
-                    className="py-3 px-3.5 bg-amber-600 rounded-2xl items-center flex-row gap-1 shadow-sm active:opacity-95"
+                    className="flex-1 py-2 px-1 bg-white border border-gray-200 rounded-xl flex-row items-center justify-center gap-1 active:bg-gray-50"
                   >
-                    <Ionicons name="calendar-outline" size={14} color="white" />
-                    <Text className="text-white font-bold text-xs">Book Table</Text>
+                    <Ionicons name="calendar-outline" size={13} color="#374151" />
+                    <Text className="text-gray-800 font-bold text-[11px]" numberOfLines={1}>
+                      Make Reservation
+                    </Text>
                   </Pressable>
-                )}
 
-                <Pressable
-                  onPress={() =>
-                    Alert.alert(
-                      "Mati Route Navigation 🚗",
-                      `Routing to ${selectedSpot.name} (${selectedSpot.area}):\n\n• Straight-line Distance: ${selectedSpot.evaluation.straightLineFormatted}\n• Estimated Road Distance: ${selectedSpot.evaluation.roadDistanceKm} km\n• Estimated Travel Time: ${selectedSpot.evaluation.roadRouteFormatted}\n\nNotice: ${selectedSpot.evaluation.notice}`
-                    )
-                  }
-                  className="py-3 px-3.5 bg-gray-100 rounded-2xl items-center border border-gray-200 flex-row gap-1 active:bg-gray-200"
-                >
-                  <Ionicons name="navigate-outline" size={14} color="#374151" />
-                  <Text className="text-gray-800 font-bold text-xs">Route</Text>
-                </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      const targetId = selectedSpot.storeId || String(selectedSpot.id);
+                      router.push({
+                        pathname: "/(mobile)/store/[id]",
+                        params: { id: targetId, name: selectedSpot.name },
+                      });
+                    }}
+                    className="flex-1 py-2 px-1 bg-[#EA5410] rounded-xl flex-row items-center justify-center gap-1 shadow-xs active:opacity-95"
+                  >
+                    <Ionicons name="storefront-outline" size={13} color="white" />
+                    <Text className="text-white font-black text-[11px]" numberOfLines={1}>
+                      Store Profile
+                    </Text>
+                  </Pressable>
+                </View>
               </View>
-            </View>
+            );
+          })() : (
+            /* Welcoming Live Location Hub & Nearest Spots Recommendations when no store is selected */
+            <ScrollView
+              className={`flex-1 ${isWideMap ? "w-[360px]" : "w-full"}`}
+              contentContainerStyle={{ padding: 12, paddingBottom: 60 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* 1. Live Location & Service Area Status Card */}
+              <View className="bg-white rounded-2xl border border-blue-200/80 p-3 shadow-xs mb-3">
+                <View className="flex-row items-center justify-between mb-1.5">
+                  <View className="flex-row items-center gap-2 flex-1 mr-2">
+                    <View className="w-7 h-7 rounded-lg bg-blue-500/10 items-center justify-center shrink-0">
+                      <Ionicons name="navigate" size={14} color="#2563EB" />
+                    </View>
+                    <View className="flex-1 min-w-0">
+                      <Text className="text-[9px] font-extrabold text-blue-600 uppercase tracking-wider">
+                        YOUR CURRENT POSITION
+                      </Text>
+                      <Text className="text-xs font-black text-gray-900" numberOfLines={1}>
+                        {locationName}
+                      </Text>
+                    </View>
+                  </View>
+                  <Pressable
+                    onPress={requestUserLocation}
+                    className="px-2 py-1 bg-blue-50 border border-blue-200 rounded-lg flex-row items-center gap-1 active:bg-blue-100 shrink-0"
+                  >
+                    <Ionicons name="locate" size={12} color="#2563EB" />
+                    <Text className="text-[10px] font-bold text-blue-700">Recenter</Text>
+                  </Pressable>
+                </View>
+
+                <View className="flex-row items-center justify-between pt-2 border-t border-gray-100 flex-wrap gap-1">
+                  <View className="flex-row items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    <Ionicons name="checkmark-circle" size={11} color="#059669" />
+                    <Text className="text-[10px] font-bold text-emerald-800">
+                      {spotsWithEvaluation.filter((s) => s.evaluation.isServiceable).length} Delivery Spots Available
+                    </Text>
+                  </View>
+                  <Text className="text-[10px] text-gray-500 font-medium">
+                    Mati City Service Area
+                  </Text>
+                </View>
+              </View>
+
+              {/* 2. Nearest Recommendations Header */}
+              <View className="flex-row items-center justify-between mb-2">
+                <View className="flex-row items-center gap-1.5">
+                  <Text className="text-xs font-black text-gray-900">
+                    Nearest Dining Spots
+                  </Text>
+                  <View className="bg-orange-100 px-1.5 py-0.2 rounded-full">
+                    <Text className="text-[9px] font-black text-[#EA5410]">TOP PICKS</Text>
+                  </View>
+                </View>
+                <Text className="text-[10px] text-gray-400">Tap pin or card to preview</Text>
+              </View>
+
+              {/* 3. Top Nearest Spots Cards */}
+              <View className="gap-2">
+                {sortedSpots.slice(0, 3).map((spot) => (
+                  <Pressable
+                    key={String(spot.id)}
+                    onPress={() => {
+                      setSelectedSpotId(spot.id);
+                      setCameraFocus({
+                        latitude: spot.latitude,
+                        longitude: spot.longitude,
+                        zoom: 16,
+                        key: Date.now(),
+                      });
+                    }}
+                    className="bg-white rounded-2xl border border-gray-200/90 p-2.5 shadow-xs flex-row items-center gap-2.5 active:bg-orange-50/50"
+                  >
+                    <Image
+                      source={{ uri: spot.imageUrl }}
+                      style={{ width: 48, height: 48, borderRadius: 12 }}
+                      className="bg-gray-100 shrink-0"
+                      resizeMode="cover"
+                    />
+                    <View className="flex-1 min-w-0 pr-1">
+                      <View className="flex-row items-center justify-between mb-0.5">
+                        <Text className="text-xs font-black text-gray-900 flex-1 mr-1" numberOfLines={1}>
+                          {spot.name}
+                        </Text>
+                        <View className="bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded flex-row items-center gap-0.5">
+                          <Ionicons name="star" size={9} color="#D97706" />
+                          <Text className="text-[10px] font-black text-amber-900">{spot.rating}</Text>
+                        </View>
+                      </View>
+                      <Text className="text-[10px] text-gray-500 font-medium mb-1" numberOfLines={1}>
+                        {spot.category} · {spot.area}
+                      </Text>
+                      <View className="flex-row items-center gap-1.5">
+                        <View className="bg-orange-50 border border-orange-200 px-1.5 py-0.2 rounded">
+                          <Text className="text-[9px] font-bold text-[#EA5410]">
+                            {spot.evaluation.roadDistanceKm.toFixed(1)} km · {spot.evaluation.roadRouteFormatted.replace(" road trip", "")}
+                          </Text>
+                        </View>
+                        <Text className="text-[10px] text-gray-500 font-medium">
+                          {spot.deliveryEnabled ? `₱${spot.deliveryFee} delivery` : "Dine-in"}
+                        </Text>
+                      </View>
+                    </View>
+                    <Ionicons name="chevron-forward" size={14} color="#9CA3AF" />
+                  </Pressable>
+                ))}
+              </View>
+            </ScrollView>
           )}
         </View>
       ) : (
@@ -878,62 +1263,61 @@ export default function MobileMapScreen() {
             Restaurants Sorted by Distance from You
           </Text>
 
-          <View className="flex-row flex-wrap gap-3.5">
-            {sortedSpots.map((spot) => (
-              <Pressable
-                key={String(spot.id)}
-                onPress={() => handleOpenRestaurant(spot.name)}
-                style={isTwoColList ? { width: "48.8%" } : { width: "100%" }}
-                className="bg-white rounded-3xl border border-gray-200 p-4 shadow-sm flex-row items-center gap-3.5 active:bg-orange-50/40"
-              >
-                <Image
-                  source={{ uri: spot.imageUrl }}
-                  className="w-20 h-20 rounded-2xl bg-gray-100"
-                  resizeMode="cover"
-                />
+          <View className="flex-row flex-wrap gap-2.5">
+            {sortedSpots.map((spot) => {
+              const targetId = spot.storeId || String(spot.id);
+              return (
+                <Pressable
+                  key={String(spot.id)}
+                  onPress={() => {
+                    router.push({
+                      pathname: "/(mobile)/store/[id]",
+                      params: { id: targetId, name: spot.name },
+                    });
+                  }}
+                  style={isTwoColList ? { width: "48.8%" } : { width: "100%" }}
+                  className="bg-white rounded-2xl border border-gray-200 p-3 shadow-xs flex-row items-center gap-2.5 active:bg-orange-50/40"
+                >
+                  <Image
+                    source={{ uri: spot.imageUrl }}
+                    className="w-16 h-16 rounded-xl bg-gray-100"
+                    resizeMode="cover"
+                  />
 
-                <View className="flex-1 pr-1">
-                  <View className="flex-row items-center justify-between mb-1">
-                    <Text className="font-black text-gray-900 text-sm flex-1 mr-1" numberOfLines={1}>
-                      {spot.name}
+                  <View className="flex-1 pr-1">
+                    <View className="flex-row items-center justify-between mb-0.5">
+                      <Text className="font-black text-gray-900 text-xs flex-1 mr-1" numberOfLines={1}>
+                        {spot.name}
+                      </Text>
+                      <View className="bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">
+                        <Text className="text-[8px] font-bold text-emerald-800">
+                          {spot.open ? "Open" : "Closed"}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Text className="text-[11px] text-gray-500 font-medium mb-1.5" numberOfLines={1}>
+                      {spot.area} · {spot.category}
                     </Text>
-                    <View className="bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                      <Text className="text-[9px] font-bold text-emerald-800">
-                        {spot.open ? "Open" : "Closed"}
+
+                    <View className="flex-row items-center gap-1.5">
+                      <View className="flex-row items-center gap-0.5 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                        <Ionicons name="star" size={9} color="#D97706" />
+                        <Text className="text-[10px] font-black text-amber-900">{spot.rating}</Text>
+                      </View>
+                      <View className="bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded">
+                        <Text className="text-[9px] font-bold text-[#EA5410]">
+                          {spot.evaluation.roadDistanceKm.toFixed(1)} km · {spot.evaluation.roadRouteFormatted.replace(" road trip", "")}
+                        </Text>
+                      </View>
+                      <Text className="text-[10px] text-gray-500 font-medium">
+                        {spot.deliveryEnabled ? `₱${spot.deliveryFee} delivery` : "Dine-in"}
                       </Text>
                     </View>
                   </View>
-
-                  <Text className="text-xs text-gray-500 font-medium mb-1" numberOfLines={1}>
-                    {spot.area} · {spot.category}
-                  </Text>
-
-                  {/* Delivery Serviceability Badge */}
-                  <View
-                    className={`self-start px-2 py-0.5 rounded-md border mb-1.5 flex-row items-center gap-1 ${spot.evaluation.badgeColor}`}
-                  >
-                    <Text className="text-[9px]">
-                      {spot.evaluation.isServiceable ? "🛵" : "📍"}
-                    </Text>
-                    <Text className="text-[9px] font-black">
-                      {spot.evaluation.badgeText}
-                    </Text>
-                  </View>
-
-                  <View className="flex-row items-center gap-2">
-                    <View className="bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-md">
-                      <Text className="text-[10px] font-black text-[#EA5410]">
-                        {spot.evaluation.straightLineFormatted}
-                      </Text>
-                    </View>
-                    <View className="flex-row items-center gap-1">
-                      <Ionicons name="star" size={11} color="#D97706" />
-                      <Text className="text-xs font-bold text-gray-700">{spot.rating}</Text>
-                    </View>
-                  </View>
-                </View>
-              </Pressable>
-            ))}
+                </Pressable>
+              );
+            })}
           </View>
           </View>
         </ScrollView>
@@ -948,6 +1332,14 @@ export default function MobileMapScreen() {
         onViewMap={() => {
           setShowRestaurantModal(false);
           setViewMode("map");
+          if (activeRestaurant) {
+            const spotMatch = rawSpots.find(
+              (s) => s.name.toLowerCase() === activeRestaurant.name.toLowerCase()
+            );
+            if (spotMatch) {
+              setSelectedSpotId(spotMatch.id);
+            }
+          }
         }}
         menuItems={foodItems.filter(
           (f) =>

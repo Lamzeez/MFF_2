@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "../lib/supabase/client";
+import type { Database } from "../types/database";
 import type { AuthPortalScope } from "../types/auth";
 import type { OrderStatus } from "../types/order";
 import { recordVoucherRedemption } from "./vouchers";
@@ -73,6 +74,13 @@ export interface LiveOrder {
   isRemitted?: boolean;
   podImageUrl?: string;
   podTimestamp?: string;
+  courierLatitude?: number | null;
+  courierLongitude?: number | null;
+  courierHeading?: number | null;
+  courierUpdatedAt?: string | null;
+  codRemitted?: boolean;
+  codRemittedAt?: string | null;
+  codRemittedBy?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -100,7 +108,8 @@ export function mapDatabaseOrderToLiveOrder(row: any): LiveOrder {
       notesText.includes("Merchant Re-broadcast")
   );
   const isRemitted = Boolean(
-    notesText.includes("COD Remitted") ||
+    row.cod_remitted ||
+      notesText.includes("COD Remitted") ||
       notesText.includes("Cash Remitted") ||
       notesText.includes("Settled")
   );
@@ -147,6 +156,13 @@ export function mapDatabaseOrderToLiveOrder(row: any): LiveOrder {
     isRemitted,
     podImageUrl: row.pod_image_url || undefined,
     podTimestamp: row.pod_timestamp || undefined,
+    courierLatitude: row.courier_latitude ?? null,
+    courierLongitude: row.courier_longitude ?? null,
+    courierHeading: row.courier_heading ?? null,
+    courierUpdatedAt: row.courier_updated_at ?? null,
+    codRemitted: Boolean(row.cod_remitted),
+    codRemittedAt: row.cod_remitted_at ?? null,
+    codRemittedBy: row.cod_remitted_by ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -495,11 +511,19 @@ export async function updateOrderStatus(
   orderId: string,
   status: OrderStatus,
   scope: AuthPortalScope = "merchant",
+  notes?: string
 ): Promise<void> {
   const client = getSupabaseClient(scope);
+  const updatePayload: {
+    status?: Database["public"]["Enums"]["order_status"];
+    notes?: string;
+  } = { status };
+  if (typeof notes === "string" && notes.trim().length > 0) {
+    updatePayload.notes = notes.trim();
+  }
   const { data: updatedData, error } = await client
     .from("orders")
-    .update({ status })
+    .update(updatePayload)
     .eq("id", orderId)
     .select("*, stores(name)")
     .single();
@@ -563,6 +587,31 @@ export async function acceptDeliveryJob(orderId: string): Promise<LiveOrder> {
 }
 
 export const claimRiderJob = acceptDeliveryJob;
+
+/**
+ * Broadcasts the courier's real-time GPS location and heading to the active order.
+ */
+export async function updateCourierLiveLocation(
+  orderId: string,
+  location: { latitude: number; longitude: number; heading?: number }
+): Promise<void> {
+  try {
+    const client = getSupabaseClient("rider");
+    const now = new Date().toISOString();
+    const payload = {
+      courier_latitude: Number(location.latitude.toFixed(6)),
+      courier_longitude: Number(location.longitude.toFixed(6)),
+      courier_heading: location.heading != null ? Number(location.heading.toFixed(1)) : null,
+      courier_updated_at: now,
+    };
+    const { error } = await client.from("orders").update(payload).eq("id", orderId);
+    if (error) {
+      console.warn("[services/orders] updateCourierLiveLocation notice:", error.message);
+    }
+  } catch (err) {
+    console.warn("[services/orders] updateCourierLiveLocation exception:", err);
+  }
+}
 
 /**
  * Completes delivery by validating the customer's 4-digit handshake PIN.
@@ -955,7 +1004,7 @@ export function calculateCodSettlement(orders: LiveOrder[]): CodSettlementSummar
 
 /**
  * Confirms remittance of physical COD food cash between courier and merchant.
- * Appends audit verification note to order in Supabase.
+ * Updates cod_remitted flag and appends audit verification note to order in Supabase.
  */
 export async function confirmCodRemittance(
   orderId: string,
@@ -963,6 +1012,7 @@ export async function confirmCodRemittance(
 ): Promise<void> {
   const client = getSupabaseClient("merchant");
   const timestamp = new Date().toLocaleTimeString();
+  const now = new Date().toISOString();
   const noteTag = `[COD Remitted: Food cash confirmed by ${confirmedBy} at ${timestamp}]`;
 
   const { data: existing } = await client
@@ -976,11 +1026,18 @@ export async function confirmCodRemittance(
 
   const { error } = await client
     .from("orders")
-    .update({ notes: updatedNotes })
+    .update({
+      notes: updatedNotes,
+      cod_remitted: true,
+      cod_remitted_at: now,
+      cod_remitted_by: confirmedBy,
+    } as any)
     .eq("id", orderId);
 
   if (error) {
     throw new Error(`Failed to confirm COD remittance: ${error.message}`);
   }
 }
+
+export const confirmStoreCodRemittance = confirmCodRemittance;
 

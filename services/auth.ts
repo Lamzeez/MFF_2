@@ -75,7 +75,7 @@ export function authMessage(error: unknown): string {
 
   // Supabase Auth mailer / SMTP errors
   if (rawMsg.includes("error sending confirmation email") || rawMsg.includes("error sending confirmation")) {
-    return "Unable to send verification email. The email service hourly limit may have been reached. Please wait a few minutes or contact support.";
+    return "We couldn't send the verification email right now. Please check that the email address is valid and deliverable, or try again shortly.";
   }
 
   // Account existence
@@ -164,14 +164,36 @@ export function createAuthService(
         throw err;
       }
     },
-    async signUp(name: string, email: string, password: string, phone: string) {
+    async signUp(
+      name: string,
+      email: string,
+      password: string,
+      phone: string,
+      extraMetadata?: Record<string, any>
+    ) {
       if (!name.trim() || name.trim().length > 120) throw new AccountError("Enter your name (up to 120 characters).");
       if (phone.trim().length > 32) throw new AccountError("Enter a valid contact phone number.");
       strongPassword(password);
-      const { error } = await client.auth.signUp({ email: emailAddress(email), password,
-        options: { data: { display_name: name.trim(), contact_phone: phone.trim() || null } } });
+      const { data, error } = await client.auth.signUp({
+        email: emailAddress(email),
+        password,
+        options: {
+          data: {
+            display_name: name.trim(),
+            contact_phone: phone.trim() || null,
+            ...(extraMetadata || {}),
+          },
+        },
+      });
       if (error) throw error;
-      // Never infer success/roles from signup metadata or reveal account existence.
+      // Never infer roles from signup metadata. Detect obfuscated existing confirmed user cleanly when needed.
+      return {
+        isExistingUser: Boolean(
+          data?.user &&
+            Array.isArray(data.user.identities) &&
+            data.user.identities.length === 0
+        ),
+      };
     },
     async resendConfirmation(email: string) {
       const { error } = await client.auth.resend({ email: emailAddress(email), type: "signup" });

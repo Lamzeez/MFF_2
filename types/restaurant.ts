@@ -3,9 +3,18 @@ import type { Database } from "./database";
 export type Store = Database["public"]["Tables"]["stores"]["Row"];
 export type MenuItem = Database["public"]["Tables"]["menu_items"]["Row"];
 export type StoreApprovalStatus = Database["public"]["Enums"]["store_approval_status"];
-export type StoreCatalogEdit = Pick<Store, "name" | "description" | "public_phone" | "address_text" | "barangay" | "location" | "delivery_enabled" | "operating_hours" | "cover_image_url">;
-export type MenuItemCreate = Pick<MenuItem, "store_id" | "name" | "description" | "price_centavos" | "currency" | "is_published" | "is_available">;
-export type MenuItemEdit = Partial<Pick<MenuItem, "name" | "description" | "price_centavos" | "is_published" | "is_available" | "archived_at">>;
+export type StoreSubscriptionTier = "basic" | "standard" | "commercial";
+export type StoreSubscriptionStatus = "trial" | "active" | "expired";
+export type StoreCatalogEdit = Pick<Store, "name" | "description" | "public_phone" | "address_text" | "barangay" | "location" | "delivery_enabled" | "operating_hours" | "cover_image_url" | "logo_url"> & {
+  table_capacity?: number;
+  reservations_enabled?: boolean;
+};
+export type MenuItemCreate = Pick<MenuItem, "store_id" | "name" | "description" | "price_centavos" | "currency" | "is_published" | "is_available"> & Partial<Pick<MenuItem, "image_url" | "category">> & {
+  modifiers?: DishModifierGroup[];
+};
+export type MenuItemEdit = Partial<Pick<MenuItem, "name" | "description" | "price_centavos" | "image_url" | "category" | "is_published" | "is_available" | "archived_at">> & {
+  modifiers?: DishModifierGroup[];
+};
 
 /** Existing prototype presentation contracts. Prices here are pesos, NOT centavos.
  * Future feature adapters must explicitly map IDs, money and display fields.
@@ -22,6 +31,8 @@ export interface RestaurantProfile {
   phone: string;
   hours: string;
   availableTables: number;
+  tableCapacity?: number;
+  reservationsEnabled?: boolean;
   emoji: string;
   description: string;
   reviews?: number;
@@ -30,10 +41,13 @@ export interface RestaurantProfile {
   promo?: string;
   bgColor?: string;
   imageUrl?: string;
+  logoUrl?: string;
   latitude?: number;
   longitude?: number;
   deliveryRadiusKm?: number;
   isOpen?: boolean;
+  isTemporarilyOffline?: boolean;
+  isGracePeriod?: boolean;
 }
 
 export interface DishModifierOption {

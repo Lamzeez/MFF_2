@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import {
   validateStarRating,
   computeRatingSummary,
+  computeStoreDetailedRatingSummary,
   COURIER_COMPLIMENT_OPTIONS,
   SubmitReviewPayload,
 } from "../../services/reviews";
+import { canStoreViewCustomerReviews } from "../../lib/subscription-tiers";
 
 test("validateStarRating strictly validates integer star ratings between 1 and 5", () => {
   // Valid ratings
@@ -97,4 +99,45 @@ test("SubmitReviewPayload structures food and courier ratings independently", ()
   assert.equal(validateStarRating(pickupPayload.foodRating), true);
   assert.equal(pickupPayload.riderRating, null);
   assert.equal(pickupPayload.postToCommunity, false);
+});
+
+test("computeStoreDetailedRatingSummary accurately computes star counts, percentages, and sentiment", () => {
+  // Pool of ratings: 5, 5, 5, 4, 4, 3, 2, 1 -> total 8
+  const detailed = computeStoreDetailedRatingSummary([5, 5, 5, 4, 4, 3, 2, 1]);
+  assert.equal(detailed.totalReviews, 8);
+  assert.equal(detailed.starCounts[5], 3);
+  assert.equal(detailed.starCounts[4], 2);
+  assert.equal(detailed.starCounts[3], 1);
+  assert.equal(detailed.starCounts[2], 1);
+  assert.equal(detailed.starCounts[1], 1);
+
+  // Percentages: 3/8 = 37.5% -> 38%, 2/8 = 25%, 1/8 = 12.5% -> 13%
+  assert.equal(detailed.starPercentages[5], 38);
+  assert.equal(detailed.starPercentages[4], 25);
+  assert.equal(detailed.starPercentages[3], 13);
+  assert.equal(detailed.starPercentages[2], 13);
+  assert.equal(detailed.starPercentages[1], 13);
+
+  // Positive percentage: (3 + 2)/8 = 5/8 = 62.5% -> 63%
+  assert.equal(detailed.positivePercentage, 63);
+
+  // Empty ratings pool defaults safely without division by zero
+  const emptyDetailed = computeStoreDetailedRatingSummary([]);
+  assert.equal(emptyDetailed.totalReviews, 0);
+  assert.equal(emptyDetailed.averageRating, 5.0);
+  assert.equal(emptyDetailed.starCounts[5], 0);
+  assert.equal(emptyDetailed.starPercentages[5], 0);
+  assert.equal(emptyDetailed.positivePercentage, 100);
+});
+
+test("canStoreViewCustomerReviews enforces plan entitlement gating", () => {
+  assert.equal(canStoreViewCustomerReviews("basic"), false);
+  assert.equal(canStoreViewCustomerReviews("Basic"), false);
+  assert.equal(canStoreViewCustomerReviews(null), false);
+  assert.equal(canStoreViewCustomerReviews(undefined), false);
+
+  assert.equal(canStoreViewCustomerReviews("standard"), true);
+  assert.equal(canStoreViewCustomerReviews("Standard"), true);
+  assert.equal(canStoreViewCustomerReviews("commercial"), true);
+  assert.equal(canStoreViewCustomerReviews("Commercial"), true);
 });

@@ -231,6 +231,17 @@ export function getStoreApprovalTheme(status: string): StatusTheme {
         summary: "Store application rejected.",
       };
 
+    case "suspended":
+      return {
+        label: "Suspended",
+        badgeBg: "bg-orange-100",
+        badgeText: "text-orange-800",
+        borderColor: "border-orange-300",
+        iconName: "ban-outline",
+        dotColor: "bg-orange-500",
+        summary: "Store temporarily suspended pending compliance review.",
+      };
+
     default:
       return {
         label: status.toUpperCase(),

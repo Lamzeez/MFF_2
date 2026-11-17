@@ -48,6 +48,9 @@ export default function MobileHomeScreen() {
   // Filter & Search
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
+  type QuickFilterOption = "all" | "open_now" | "fastest" | "top_rated" | "budget";
+  const [quickFilter, setQuickFilter] = useState<QuickFilterOption>("all");
+
   useEffect(() => {
     setSelectedCategory(CATEGORIES.find((item) => item === category) ?? "All");
   }, [category]);
@@ -94,6 +97,11 @@ export default function MobileHomeScreen() {
 
   const [liveNotifications, setLiveNotifications] = useState<NotificationRow[]>([]);
   const [liveOrders, setLiveOrders] = useState<LiveOrder[]>([]);
+  const [dismissedOrderIds, setDismissedOrderIds] = useState<string[]>([]);
+
+  const activeOrderInProgress = liveOrders.find(
+    (o) => !["delivered", "cancelled"].includes(o.status)
+  );
 
   const loadNotificationsData = async () => {
     try {
@@ -173,26 +181,14 @@ export default function MobileHomeScreen() {
     return true;
   };
 
-  // Open Restaurant Profile
+  // Open Dedicated Store Profile Page
   const handleOpenRestaurant = (restaurantName: string) => {
-    const resto = matiRestaurantsData[restaurantName] || {
-      name: restaurantName,
-      category: "Local Mati Restaurant",
-      rating: "4.8",
-      address: "Mati City, Davao Oriental",
-      phone: "+63 900 000 0000",
-      hours: "8:00 AM - 9:00 PM Daily",
-      availableTables: 4,
-      emoji: "🏪",
-      description: "Authentic food establishment in Mati City serving local specialties.",
-      deliveryFee: 35,
-      deliveryTime: "20-30 min",
-      reviews: 95,
-      bgColor: "#FED7AA",
-      imageUrl: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop&q=80",
-    };
-    setActiveRestaurant(resto);
-    setShowRestaurantModal(true);
+    const resto = matiRestaurantsData[restaurantName];
+    const targetId = resto?.id || (resto as any)?.slug || encodeURIComponent(restaurantName);
+    router.push({
+      pathname: "/(mobile)/store/[id]",
+      params: { id: targetId, name: restaurantName },
+    });
   };
 
   // Open Table Reservation Sheet
@@ -338,14 +334,30 @@ export default function MobileHomeScreen() {
 
   // Filtered restaurants for display
   const restaurantList = Object.values(matiRestaurantsData).filter((r) => {
+    const targetCat = selectedCategory.toLowerCase().trim().replace(/s$/, "");
+    const storeHasMenuInCat = foodItems.some(
+      (dish) =>
+        (dish.store?.toLowerCase() === r.name.toLowerCase() ||
+          (dish.storeId &&
+            (dish.storeId === (r as any).id || dish.storeId === (r as any).storeId))) &&
+        (dish.category?.toLowerCase().trim().replace(/s$/, "") === targetCat ||
+          dish.category?.toLowerCase().includes(targetCat) ||
+          targetCat.includes(dish.category?.toLowerCase() || ""))
+    );
+
     const matchesCat =
       selectedCategory === "All" ||
+      storeHasMenuInCat ||
       Boolean(
-        r.categories?.some(
-          (cat) => cat.toLowerCase() === selectedCategory.toLowerCase()
-        )
+        r.categories?.some((cat) => {
+          const clean = cat.toLowerCase().trim().replace(/s$/, "");
+          return clean === targetCat || clean.includes(targetCat) || targetCat.includes(clean);
+        })
       ) ||
-      r.category.toLowerCase().includes(selectedCategory.toLowerCase());
+      r.category.toLowerCase().replace(/s$/, "").includes(targetCat) ||
+      targetCat.includes(r.category.toLowerCase().replace(/s$/, "")) ||
+      r.name.toLowerCase().includes(targetCat);
+
     const matchesQuery =
       searchQuery === "" ||
       r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -355,42 +367,74 @@ export default function MobileHomeScreen() {
           cat.toLowerCase().includes(searchQuery.toLowerCase())
         )
       );
-    return matchesCat && matchesQuery;
+
+    let matchesQuick = true;
+    if (quickFilter === "open_now") {
+      matchesQuick = r.isOpen !== false;
+    } else if (quickFilter === "fastest") {
+      const minutes = parseInt(r.deliveryTime || "30", 10);
+      matchesQuick = !isNaN(minutes) && minutes <= 25;
+    } else if (quickFilter === "top_rated") {
+      matchesQuick = parseFloat(r.rating || "0") >= 4.8;
+    } else if (quickFilter === "budget") {
+      matchesQuick = (r.deliveryFee || 35) <= 35;
+    }
+
+    return matchesCat && matchesQuery && matchesQuick;
   });
 
   // Trending dishes list
-  const trendingDishes = foodItems.filter((d) => d.available);
+  const trendingDishes = foodItems
+    .filter((d) => d.available)
+    .filter((d) => {
+      if (selectedCategory !== "All") {
+        const target = selectedCategory.toLowerCase().trim().replace(/s$/, "");
+        const dCat = (d.category || "").toLowerCase().trim().replace(/s$/, "");
+        const dName = (d.name || "").toLowerCase().trim();
+        const dStore = (d.store || "").toLowerCase().trim();
+        const matches =
+          dCat === target ||
+          dCat.includes(target) ||
+          target.includes(dCat) ||
+          dName.includes(target) ||
+          dStore.includes(target);
+        if (!matches) return false;
+      }
+      if (quickFilter === "budget") return d.price <= 100;
+      if (quickFilter === "top_rated") return parseFloat(String(d.rating || "0")) >= 4.8;
+      return true;
+    });
 
   return (
     <SafeAreaView edges={["top"]} className="flex-1 bg-[#F8FAFC]">
       {/* 1. TOP APP BAR: Brand, Delivery Location, Quick Auth / Profile */}
-      <View className="px-4 pt-2 pb-3 bg-white border-b border-gray-100">
+      <View className="px-3.5 pt-1.5 pb-2.5 bg-white border-b border-gray-100">
         <View className="w-full max-w-5xl self-center flex-row items-center justify-between">
-          <View className="flex-1 mr-3 min-w-0">
-            <Text className="text-[10px] font-bold text-gray-400 tracking-wider uppercase">
+          <View className="flex-1 mr-2.5 min-w-0">
+            <Text className="text-[9px] font-bold text-gray-400 tracking-wider uppercase">
               DELIVER TO
             </Text>
             <Pressable
               onPress={() => router.push("/(mobile)/(tabs)/map")}
-              className="flex-row items-center gap-1.5 mt-0.5"
+              className="flex-row items-center gap-1 mt-0.5"
             >
-              <Ionicons name="location-sharp" size={16} color="#EA5410" />
-              <Text className="text-sm font-black text-gray-900 tracking-tight flex-shrink" numberOfLines={1}>
+              <Ionicons name="location-sharp" size={14} color="#EA5410" />
+              <Text className="text-xs font-black text-gray-900 tracking-tight flex-shrink" numberOfLines={1}>
                 Mati City, Davao Oriental
               </Text>
-              <Ionicons name="chevron-down" size={14} color="#6B7280" />
+              <Ionicons name="chevron-down" size={12} color="#6B7280" />
             </Pressable>
           </View>
 
           {/* Right Action Icons */}
-          <View className="flex-row items-center gap-2 shrink-0">
+          <View className="flex-row items-center gap-1.5 shrink-0">
             {/* QR Scan Button */}
             <Pressable
               accessibilityLabel="Scan Store QR Code"
               onPress={handleOpenScanner}
-              className="w-9 h-9 rounded-full bg-gray-50 border border-gray-200 items-center justify-center active:bg-gray-100"
+              className="w-8 h-8 rounded-full bg-gray-50 border border-gray-200 items-center justify-center active:bg-gray-100"
             >
-              <Ionicons name="qr-code-outline" size={17} color="#374151" />
+              <Ionicons name="qr-code-outline" size={15} color="#374151" />
             </Pressable>
 
             {/* If Logged In: Notifications Bell */}
@@ -398,12 +442,12 @@ export default function MobileHomeScreen() {
               <Pressable
                 accessibilityLabel="View Notifications"
                 onPress={() => setShowNotificationsModal(true)}
-                className="w-9 h-9 rounded-full bg-gray-50 border border-gray-200 items-center justify-center relative active:bg-gray-100"
+                className="w-8 h-8 rounded-full bg-gray-50 border border-gray-200 items-center justify-center relative active:bg-gray-100"
               >
-                <Ionicons name="notifications-outline" size={17} color="#374151" />
+                <Ionicons name="notifications-outline" size={15} color="#374151" />
                 {displayUnreadCount > 0 && (
-                  <View className="absolute -top-1 -right-1 bg-red-600 rounded-full min-w-[17px] h-[17px] items-center justify-center px-1 border-2 border-white">
-                    <Text className="text-white text-[9px] font-black">{displayUnreadCount}</Text>
+                  <View className="absolute -top-1 -right-1 bg-red-600 rounded-full min-w-[15px] h-[15px] items-center justify-center px-1 border border-white">
+                    <Text className="text-white text-[8px] font-black">{displayUnreadCount}</Text>
                   </View>
                 )}
               </Pressable>
@@ -411,10 +455,10 @@ export default function MobileHomeScreen() {
               /* If Guest: Prominent One-Tap Sign In Pill */
               <Pressable
                 onPress={() => router.push("/(mobile)/auth/customer-login")}
-                className="bg-[#EA5410] px-3.5 py-1.5 rounded-full flex-row items-center gap-1 shadow-sm active:opacity-90"
+                className="bg-[#EA5410] px-3 py-1 rounded-full flex-row items-center gap-1 shadow-xs active:opacity-90"
               >
-                <Ionicons name="log-in-outline" size={14} color="white" />
-                <Text className="text-white text-xs font-black">Sign In</Text>
+                <Ionicons name="log-in-outline" size={13} color="white" />
+                <Text className="text-white text-[11px] font-black">Sign In</Text>
               </Pressable>
             )}
           </View>
@@ -423,7 +467,7 @@ export default function MobileHomeScreen() {
 
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingBottom: 110 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -437,104 +481,124 @@ export default function MobileHomeScreen() {
         <View className="w-full max-w-5xl self-center">
         {/* 2. GUEST WELCOME BANNER OR REGISTERED USER GREETING */}
         {!isLoggedIn ? (
-          <View className="mx-4 mt-3 p-4 bg-orange-50 border border-orange-200 rounded-2xl">
-            <View className="flex-row items-center justify-between flex-wrap gap-2 mb-1.5">
-              <View className="flex-row items-center gap-1.5 flex-1 min-w-[180px]">
-                <Ionicons name="sparkles" size={15} color="#EA5410" />
-                <Text className="text-sm font-black text-gray-900">
+          <View className="mx-3.5 mt-2.5 p-3.5 bg-orange-50 border border-orange-200 rounded-xl">
+            <View className="flex-row items-center justify-between flex-wrap gap-1.5 mb-1">
+              <View className="flex-row items-center gap-1.5 flex-1 min-w-[160px]">
+                <Ionicons name="sparkles" size={13} color="#EA5410" />
+                <Text className="text-xs font-black text-gray-900">
                   Welcome to Mati FoodFinder! 👋
                 </Text>
               </View>
               <View className="bg-orange-100 px-2 py-0.5 rounded-full">
-                <Text className="text-[10px] font-black text-[#EA5410]">GUEST MODE</Text>
+                <Text className="text-[9px] font-black text-[#EA5410]">GUEST MODE</Text>
               </View>
             </View>
-            <Text className="text-xs text-gray-600 leading-relaxed mb-3">
+            <Text className="text-[11px] text-gray-600 leading-snug mb-2.5">
               Explore authentic local menus and secret food spots freely. Sign in when you're ready to order COD or book dining tables.
             </Text>
             <View className="flex-row flex-wrap items-center gap-2">
               <Pressable
                 onPress={() => router.push("/(mobile)/auth/customer-login")}
-                className="flex-1 min-w-[160px] py-2.5 px-3 bg-[#EA5410] rounded-xl items-center shadow-sm active:opacity-90"
+                className="flex-1 min-w-[140px] py-2 px-3 bg-[#EA5410] rounded-lg items-center shadow-xs active:opacity-90"
               >
-                <Text className="text-white font-extrabold text-xs">Create Account / Sign In</Text>
+                <Text className="text-white font-extrabold text-[11px]">Create Account / Sign In</Text>
               </Pressable>
               <Pressable
                 onPress={() => router.push("/(mobile)/(tabs)/map")}
-                className="py-2.5 px-3 bg-white border border-gray-200 rounded-xl items-center active:bg-gray-50"
+                className="py-2 px-3 bg-white border border-gray-200 rounded-lg items-center active:bg-gray-50"
               >
-                <Text className="text-gray-700 font-bold text-xs">Explore Map 🗺️</Text>
+                <Text className="text-gray-700 font-bold text-[11px]">Explore Map 🗺️</Text>
               </Pressable>
             </View>
           </View>
         ) : (
-          <View className="mx-4 mt-3 mb-1">
-            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+          <View className="mx-3.5 mt-2.5 mb-0.5">
+            <Text className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
               {new Date().getHours() < 12 ? "Maayong Buntag" : new Date().getHours() < 18 ? "Maayong Hapon" : "Maayong Gabii"}
             </Text>
-            <Text className="text-xl font-black text-gray-900 tracking-tight mt-0.5">
+            <Text className="text-base font-black text-gray-900 tracking-tight mt-0.5">
               Hello, {user?.name?.split(" ")[0] || "Foodie"}! 👋
             </Text>
-            <Text className="text-xs text-gray-500 mt-0.5">
+            <Text className="text-[11px] text-gray-500 mt-0.5">
               What are you craving today in Mati City?
             </Text>
           </View>
         )}
 
-        {/* 3. ACTIVE ORDER BANNER (Only when registered and order exists - clean in-line, no overlapping floating pill!) */}
-        {isLoggedIn && liveOrders && liveOrders.length > 0 && (
-          <Pressable
-            onPress={() => router.push("/(mobile)/(tabs)/orders")}
-            className="mx-4 mt-3 bg-gray-900 rounded-2xl p-3.5 flex-row items-center justify-between shadow-md active:opacity-95"
-          >
-            <View className="flex-row items-center gap-3 flex-1 mr-3">
-              <View className="w-10 h-10 rounded-full bg-[#EA5410] items-center justify-center">
-                <Ionicons name="bicycle" size={20} color="white" />
-              </View>
-              <View className="flex-1">
-                <View className="flex-row items-center gap-2">
-                  <Text className="text-[11px] font-black text-[#EA5410] uppercase tracking-wider">
-                    Order In Progress
-                  </Text>
-                  <Text className="text-[11px] text-gray-400">· {liveOrders[0].orderNumber}</Text>
+        {/* 3. ACTIVE ORDER BANNER (Only when registered, order is genuinely in progress, and not dismissed) */}
+        {isLoggedIn && activeOrderInProgress && !dismissedOrderIds.includes(activeOrderInProgress.id) && (
+          <View className="mx-3.5 mt-2.5 relative">
+            <Pressable
+              onPress={() => router.push("/(mobile)/(tabs)/orders")}
+              className="bg-gray-900 rounded-xl p-3 flex-row items-center justify-between shadow-xs active:opacity-95"
+            >
+              <View className="flex-row items-center gap-2.5 flex-1 mr-2.5">
+                <View className="w-8 h-8 rounded-full bg-[#EA5410] items-center justify-center">
+                  <Ionicons name="bicycle" size={17} color="white" />
                 </View>
-                <Text className="text-xs font-bold text-white mt-0.5" numberOfLines={1}>
-                  {liveOrders[0].storeName}
-                </Text>
+                <View className="flex-1 pr-4">
+                  <View className="flex-row items-center gap-1.5">
+                    <Text className="text-[10px] font-black text-[#EA5410] uppercase tracking-wider">
+                      {activeOrderInProgress.status === "out_for_delivery"
+                        ? "Out for Delivery"
+                        : activeOrderInProgress.status === "ready_for_pickup"
+                        ? "Ready for Pickup"
+                        : activeOrderInProgress.status === "preparing"
+                        ? "Preparing in Kitchen"
+                        : "Order In Progress"}
+                    </Text>
+                    <Text className="text-[10px] text-gray-400">· {activeOrderInProgress.orderNumber}</Text>
+                  </View>
+                  <Text className="text-[11px] font-bold text-white mt-0.5" numberOfLines={1}>
+                    {activeOrderInProgress.storeName}
+                  </Text>
+                </View>
               </View>
-            </View>
-            <View className="flex-row items-center gap-1 bg-white/10 px-3 py-1.5 rounded-xl">
-              <Text className="text-xs font-bold text-white">Track</Text>
-              <Ionicons name="arrow-forward" size={12} color="white" />
-            </View>
-          </Pressable>
+              <View className="flex-row items-center gap-1.5">
+                <View className="flex-row items-center gap-1 bg-white/10 px-2.5 py-1 rounded-lg">
+                  <Text className="text-[11px] font-bold text-white">Track</Text>
+                  <Ionicons name="arrow-forward" size={11} color="white" />
+                </View>
+                <Pressable
+                  accessibilityLabel="Dismiss active order banner"
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setDismissedOrderIds((prev) => [...prev, activeOrderInProgress.id]);
+                  }}
+                  className="w-6 h-6 rounded-full bg-white/10 items-center justify-center active:bg-white/20"
+                >
+                  <Ionicons name="close" size={13} color="#D1D5DB" />
+                </Pressable>
+              </View>
+            </Pressable>
+          </View>
         )}
 
         {/* 4. SEARCH BAR */}
-        <View className="px-4 mt-3 mb-3">
-          <View className="flex-row items-center bg-white border border-gray-200 rounded-2xl px-3.5 py-2.5 shadow-sm">
-            <Ionicons name="search" size={18} color="#9CA3AF" />
+        <View className="px-3.5 mt-2.5 mb-2.5">
+          <View className="flex-row items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-xs">
+            <Ionicons name="search" size={16} color="#9CA3AF" />
             <TextInput
               placeholder='Search "humba", "seafood", "karenderia"...'
               value={searchQuery}
               onChangeText={setSearchQuery}
-              className="flex-1 text-sm text-gray-900 ml-2.5 font-medium"
+              className="flex-1 text-xs text-gray-900 ml-2 font-medium"
               placeholderTextColor="#9CA3AF"
             />
             {searchQuery ? (
-              <Pressable onPress={() => setSearchQuery("")} hitSlop={10}>
-                <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+              <Pressable onPress={() => setSearchQuery("")} hitSlop={8}>
+                <Ionicons name="close-circle" size={16} color="#9CA3AF" />
               </Pressable>
             ) : null}
           </View>
         </View>
 
         {/* 5. CATEGORY FILTER CHIPS */}
-        <View className="mb-4">
+        <View className="mb-2.5">
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 16 }}
+            contentContainerStyle={{ paddingHorizontal: 14 }}
           >
             {categories.map((c) => {
               const active = selectedCategory === c;
@@ -542,14 +606,14 @@ export default function MobileHomeScreen() {
                 <Pressable
                   key={c}
                   onPress={() => setSelectedCategory(c)}
-                  className={`mr-2 px-4 py-2 rounded-full border ${
+                  className={`mr-1.5 px-3 py-1.5 rounded-full border ${
                     active
-                      ? "bg-gray-900 border-gray-900 shadow-sm"
+                      ? "bg-gray-900 border-gray-900 shadow-xs"
                       : "bg-white border-gray-200"
                   }`}
                 >
                   <Text
-                    className={`text-xs font-bold ${
+                    className={`text-[11px] font-bold ${
                       active ? "text-white" : "text-gray-700"
                     }`}
                   >
@@ -561,36 +625,151 @@ export default function MobileHomeScreen() {
           </ScrollView>
         </View>
 
-        {/* 6. POPULAR NEAR YOU (High-Quality Foodie Restaurant Cards) */}
-        <View className="mb-5">
-          <View className="px-4 pb-2.5 flex-row items-baseline justify-between">
+        {/* 5b. QUICK FILTERS BAR (Pillar 3: Open Now, Fastest, Top Rated, Budget) */}
+        <View className="mb-3.5">
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 14 }}
+          >
+            <View className="flex-row items-center gap-1.5">
+              <Pressable
+                onPress={() => setQuickFilter("all")}
+                className={`px-2.5 py-1 rounded-full border flex-row items-center gap-1 ${
+                  quickFilter === "all"
+                    ? "bg-[#EA5410] border-[#EA5410]"
+                    : "bg-white border-gray-200"
+                }`}
+              >
+                <Text
+                  className={`text-[10px] font-black ${
+                    quickFilter === "all" ? "text-white" : "text-gray-700"
+                  }`}
+                >
+                  All Spots
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setQuickFilter("open_now")}
+                className={`px-2.5 py-1 rounded-full border flex-row items-center gap-1 ${
+                  quickFilter === "open_now"
+                    ? "bg-emerald-600 border-emerald-600"
+                    : "bg-white border-gray-200"
+                }`}
+              >
+                <View className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <Text
+                  className={`text-[10px] font-bold ${
+                    quickFilter === "open_now" ? "text-white" : "text-gray-700"
+                  }`}
+                >
+                  Open Now
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setQuickFilter("fastest")}
+                className={`px-2.5 py-1 rounded-full border flex-row items-center gap-1 ${
+                  quickFilter === "fastest"
+                    ? "bg-amber-600 border-amber-600"
+                    : "bg-white border-gray-200"
+                }`}
+              >
+                <Ionicons
+                  name="flash"
+                  size={10}
+                  color={quickFilter === "fastest" ? "white" : "#D97706"}
+                />
+                <Text
+                  className={`text-[10px] font-bold ${
+                    quickFilter === "fastest" ? "text-white" : "text-gray-700"
+                  }`}
+                >
+                  Fastest Delivery
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setQuickFilter("top_rated")}
+                className={`px-2.5 py-1 rounded-full border flex-row items-center gap-1 ${
+                  quickFilter === "top_rated"
+                    ? "bg-amber-500 border-amber-500"
+                    : "bg-white border-gray-200"
+                }`}
+              >
+                <Ionicons
+                  name="star"
+                  size={10}
+                  color={quickFilter === "top_rated" ? "white" : "#D97706"}
+                />
+                <Text
+                  className={`text-[10px] font-bold ${
+                    quickFilter === "top_rated" ? "text-white" : "text-gray-700"
+                  }`}
+                >
+                  Top Rated (4.8+)
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setQuickFilter("budget")}
+                className={`px-2.5 py-1 rounded-full border flex-row items-center gap-1 ${
+                  quickFilter === "budget"
+                    ? "bg-blue-600 border-blue-600"
+                    : "bg-white border-gray-200"
+                }`}
+              >
+                <Text
+                  className={`text-[10px] font-bold ${
+                    quickFilter === "budget" ? "text-white" : "text-gray-700"
+                  }`}
+                >
+                  ₱ Budget Friendly
+                </Text>
+              </Pressable>
+            </View>
+          </ScrollView>
+        </View>
+
+        {/* 6. POPULAR NEAR YOU (Proportionally Scaled Foodie Restaurant Cards) */}
+        <View className="mb-4">
+          <View className="px-3.5 pb-2 flex-row items-baseline justify-between">
             <View>
-              <Text className="text-lg font-black text-gray-900 tracking-tight">
+              <Text className="text-base font-black text-gray-900 tracking-tight">
                 Popular near you
               </Text>
-              <Text className="text-xs text-gray-500 mt-0.5">
+              <Text className="text-[11px] text-gray-500 mt-0.5">
                 Top rated dining spots across Mati City
               </Text>
             </View>
-            <Pressable onPress={() => setSelectedCategory("All")}>
-              <Text className="text-xs font-bold text-[#EA5410]">
+            <Pressable onPress={() => { setSelectedCategory("All"); setQuickFilter("all"); }}>
+              <Text className="text-[11px] font-bold text-[#EA5410]">
                 See all
               </Text>
             </Pressable>
           </View>
 
-          <View className="px-4 flex-row flex-wrap gap-4">
+          <View className="px-3.5 flex-row flex-wrap gap-3">
             {restaurantList.map((resto) => (
               <Pressable
                 key={resto.name}
                 onPress={() => handleOpenRestaurant(resto.name)}
                 style={isTwoCol ? { width: "48.8%" } : { width: "100%" }}
-                className="bg-white rounded-3xl border border-gray-200 overflow-hidden shadow-sm active:scale-[0.99] transition-transform"
+                className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-xs active:scale-[0.99] transition-transform"
               >
-                {/* Hero Food Photography Banner */}
-                <View className="h-44 w-full relative bg-gray-100">
+                {/* Hero Food Photography Banner (Explicit height & relative bounds prevent text overlap) */}
+                <View
+                  style={{ width: "100%", height: 144, position: "relative" }}
+                  className="bg-gray-100 overflow-hidden"
+                >
                   <Image
-                    source={{ uri: resto.imageUrl || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop&q=80" }}
+                    source={{
+                      uri:
+                        resto.imageUrl ||
+                        "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop&q=80",
+                    }}
+                    style={{ width: "100%", height: "100%" }}
                     className="w-full h-full"
                     resizeMode="cover"
                   />
@@ -599,61 +778,61 @@ export default function MobileHomeScreen() {
                   <View className="absolute inset-0 bg-black/15" />
 
                   {/* Top Badges */}
-                  <View className="absolute top-3 left-3 right-3 flex-row items-center justify-between gap-2">
-                    <View className="bg-white/95 px-2.5 py-1 rounded-full shadow-sm flex-row items-center gap-1 max-w-[58%]">
-                      <Ionicons name="bicycle" size={12} color="#EA5410" />
-                      <Text className="text-[10px] font-black text-gray-900" numberOfLines={1}>
+                  <View className="absolute top-2.5 left-2.5 right-2.5 flex-row items-center justify-between gap-1.5">
+                    <View className="bg-white/95 px-2 py-0.5 rounded-full shadow-xs flex-row items-center gap-1 max-w-[60%]">
+                      <Ionicons name="bicycle" size={11} color="#EA5410" />
+                      <Text className="text-[9px] font-black text-gray-900" numberOfLines={1}>
                         {resto.promo || "Fast Mati delivery"}
                       </Text>
                     </View>
 
-                    <View className="bg-emerald-600/95 px-2.5 py-1 rounded-full shadow-sm flex-row items-center gap-1 shrink-0">
-                      <Ionicons name="restaurant-outline" size={11} color="white" />
-                      <Text className="text-[10px] font-black text-white">
+                    <View className="bg-emerald-600/95 px-2 py-0.5 rounded-full shadow-xs flex-row items-center gap-1 shrink-0">
+                      <Ionicons name="restaurant-outline" size={10} color="white" />
+                      <Text className="text-[9px] font-black text-white">
                         {resto.availableTables} tables open
                       </Text>
                     </View>
                   </View>
                 </View>
 
-                {/* Card Content & Details */}
-                <View className="p-4">
-                  <View className="flex-row items-center justify-between mb-1">
-                    <Text className="text-base font-black text-gray-900 flex-1 mr-2 tracking-tight" numberOfLines={1}>
+                {/* Card Content & Details (Scaled from p-4 to p-3) */}
+                <View className="p-3">
+                  <View className="flex-row items-center justify-between mb-0.5">
+                    <Text className="text-sm font-black text-gray-900 flex-1 mr-1.5 tracking-tight" numberOfLines={1}>
                       {resto.name}
                     </Text>
-                    <View className="flex-row items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                      <Ionicons name="star" size={12} color="#D97706" />
-                      <Text className="text-xs font-black text-amber-900">
+                    <View className="flex-row items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200">
+                      <Ionicons name="star" size={10} color="#D97706" />
+                      <Text className="text-[11px] font-black text-amber-900">
                         {resto.rating}
                       </Text>
-                      <Text className="text-[10px] text-amber-700 font-semibold">
+                      <Text className="text-[9px] text-amber-700 font-semibold">
                         ({resto.reviews || 84})
                       </Text>
                     </View>
                   </View>
 
-                  <Text className="text-xs text-gray-500 font-medium mb-3" numberOfLines={1}>
+                  <Text className="text-[11px] text-gray-500 font-medium mb-2" numberOfLines={1}>
                     {resto.category} · {resto.address.split(",")[0]}
                   </Text>
 
                   {/* Clean Metadata Pills */}
-                  <View className="flex-row items-center gap-3 pt-2.5 border-t border-gray-100">
-                    <View className="flex-row items-center gap-1.5">
-                      <Ionicons name="time-outline" size={14} color="#6B7280" />
-                      <Text className="text-xs font-bold text-gray-700">
+                  <View className="flex-row items-center gap-2.5 pt-2 border-t border-gray-100">
+                    <View className="flex-row items-center gap-1">
+                      <Ionicons name="time-outline" size={12} color="#6B7280" />
+                      <Text className="text-[11px] font-bold text-gray-700">
                         {resto.deliveryTime || "20-30 min"}
                       </Text>
                     </View>
-                    <View className="flex-row items-center gap-1.5">
-                      <Ionicons name="bicycle-outline" size={14} color="#6B7280" />
-                      <Text className="text-xs font-bold text-gray-700">
+                    <View className="flex-row items-center gap-1">
+                      <Ionicons name="bicycle-outline" size={12} color="#6B7280" />
+                      <Text className="text-[11px] font-bold text-gray-700">
                         ₱{resto.deliveryFee || 35} fee
                       </Text>
                     </View>
                     <View className="ml-auto flex-row items-center gap-1">
-                      <Ionicons name="checkmark-circle" size={13} color="#047857" />
-                      <Text className="text-[11px] font-bold text-emerald-800">
+                      <Ionicons name="checkmark-circle" size={12} color="#047857" />
+                      <Text className="text-[10px] font-bold text-emerald-800">
                         Verified
                       </Text>
                     </View>
@@ -664,13 +843,13 @@ export default function MobileHomeScreen() {
           </View>
         </View>
 
-        {/* 7. TRENDING DISHES (Horizontal Food Carousel) */}
-        <View className="mb-4">
-          <View className="px-4 pb-2.5">
-            <Text className="text-lg font-black text-gray-900 tracking-tight">
+        {/* 7. TRENDING DISHES (Proportionally Scaled Food Carousel) */}
+        <View className="mb-3.5">
+          <View className="px-3.5 pb-2">
+            <Text className="text-base font-black text-gray-900 tracking-tight">
               Trending dishes
             </Text>
-            <Text className="text-xs text-gray-500 mt-0.5">
+            <Text className="text-[11px] text-gray-500 mt-0.5">
               Popular orders enjoyed by Mati foodies today
             </Text>
           </View>
@@ -678,44 +857,52 @@ export default function MobileHomeScreen() {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 16 }}
+            contentContainerStyle={{ paddingHorizontal: 14 }}
           >
             {trendingDishes.map((dish) => (
               <Pressable
                 key={dish.id}
                 onPress={() => handleOpenCheckout(dish)}
-                className="w-44 mr-3.5 bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm active:scale-[0.98] transition-transform"
+                className="w-36 mr-3 bg-white rounded-xl border border-gray-200 overflow-hidden shadow-xs active:scale-[0.98] transition-transform"
               >
-                <View className="h-28 w-full bg-gray-100 relative">
+                <View
+                  style={{ width: "100%", height: 96, position: "relative" }}
+                  className="bg-gray-100 overflow-hidden"
+                >
                   <Image
-                    source={{ uri: dish.imageUrl || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&auto=format&fit=crop&q=80" }}
+                    source={{
+                      uri:
+                        dish.imageUrl ||
+                        "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&auto=format&fit=crop&q=80",
+                    }}
+                    style={{ width: "100%", height: "100%" }}
                     className="w-full h-full"
                     resizeMode="cover"
                   />
-                  <View className="absolute top-2 right-2 bg-white/90 px-2 py-0.5 rounded-full shadow-xs">
-                    <Text className="text-[10px] font-bold text-gray-800">★ {dish.rating}</Text>
+                  <View className="absolute top-1.5 right-1.5 bg-white/90 px-1.5 py-0.5 rounded-md shadow-xs">
+                    <Text className="text-[9px] font-bold text-gray-800">★ {dish.rating}</Text>
                   </View>
                 </View>
 
-                <View className="p-3">
+                <View className="p-2.5">
                   <Text
-                    className="text-xs font-extrabold text-gray-900 leading-tight"
+                    className="text-xs font-black text-gray-900 leading-tight"
                     numberOfLines={1}
                   >
                     {dish.name}
                   </Text>
                   <Text
-                    className="text-[11px] text-gray-500 mt-0.5"
+                    className="text-[10px] text-gray-500 mt-0.5"
                     numberOfLines={1}
                   >
                     {dish.store}
                   </Text>
-                  <View className="flex-row items-center justify-between mt-2 pt-2 border-t border-gray-100">
-                    <Text className="text-sm font-black text-[#EA5410]">
+                  <View className="flex-row items-center justify-between mt-1.5 pt-1.5 border-t border-gray-100">
+                    <Text className="text-xs font-black text-[#EA5410]">
                       ₱{dish.price.toFixed(2)}
                     </Text>
-                    <View className="w-6 h-6 rounded-full bg-orange-50 items-center justify-center border border-orange-200">
-                      <Ionicons name="add" size={14} color="#EA5410" />
+                    <View className="w-5 h-5 rounded-full bg-orange-50 items-center justify-center border border-orange-200">
+                      <Ionicons name="add" size={12} color="#EA5410" />
                     </View>
                   </View>
                 </View>
