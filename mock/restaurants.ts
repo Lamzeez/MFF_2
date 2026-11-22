@@ -3,7 +3,6 @@ import { RestaurantProfile } from "../types/restaurant";
 export const CATEGORIES = [
   "All",
   "Meals",
-  "Karenderias",
   "Seafood",
   "BBQ & Grill",
   "Merienda",
@@ -12,9 +11,10 @@ export const CATEGORIES = [
 
 export const MATI_RESTAURANTS_DATA: Record<string, RestaurantProfile> = {
   "Mama Letty's Karenderia": {
+    id: "11111111-1111-1111-1111-111111111111",
     name: "Mama Letty's Karenderia",
-    category: "Authentic Karenderia & Homecooked",
-    categories: ["Karenderias", "Meals"],
+    category: "Homecooked Meals & Soups",
+    categories: ["Meals"],
     rating: "4.8",
     address: "Magsaysay St, Brgy. Central, Mati City",
     phone: "+63 917 234 5678",
@@ -30,6 +30,7 @@ export const MATI_RESTAURANTS_DATA: Record<string, RestaurantProfile> = {
     imageUrl: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop&q=80",
   },
   "Mati Baywalk Seafood Grill": {
+    id: "22222222-2222-2222-2222-222222222222",
     name: "Mati Baywalk Seafood Grill",
     category: "Fresh Seafood & Seaside Dining",
     categories: ["Seafood", "Meals"],
@@ -48,6 +49,7 @@ export const MATI_RESTAURANTS_DATA: Record<string, RestaurantProfile> = {
     imageUrl: "https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=800&auto=format&fit=crop&q=80",
   },
   "Subangan Street Grills": {
+    id: "33333333-3333-3333-3333-333333333333",
     name: "Subangan Street Grills",
     category: "Barbecue & Night Market Specialties",
     categories: ["BBQ & Grill", "Meals"],
@@ -66,6 +68,7 @@ export const MATI_RESTAURANTS_DATA: Record<string, RestaurantProfile> = {
     imageUrl: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&auto=format&fit=crop&q=80",
   },
   "Dahican Beach Bites": {
+    id: "44444444-4444-4444-4444-444444444444",
     name: "Dahican Beach Bites",
     category: "Coastal Quick Bites & Shakes",
     categories: ["Merienda", "Beverages"],
@@ -84,9 +87,10 @@ export const MATI_RESTAURANTS_DATA: Record<string, RestaurantProfile> = {
     imageUrl: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80",
   },
   "Aling Nena's Kitchen": {
+    id: "55555555-5555-5555-5555-555555555555",
     name: "Aling Nena's Kitchen",
     category: "Traditional Filipino & Soups",
-    categories: ["Karenderias", "Meals"],
+    categories: ["Meals"],
     rating: "4.6",
     address: "Rizal Extension, Brgy. Sainz, Mati City",
     phone: "+63 919 678 9012",

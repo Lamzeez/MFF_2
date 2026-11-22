@@ -10,6 +10,7 @@ import {
   Platform,
   Image,
   Modal,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -29,12 +30,14 @@ import {
   DEFAULT_COVER_PHOTO,
   DEFAULT_AVATAR,
 } from "../../../lib/customer-profile";
+import { uploadCustomerProfilePhoto } from "../../../services/storage";
 import { NotificationsSheet } from "../../../components/notifications/NotificationsSheet";
 import {
   fetchNotifications,
   markAllNotificationsRead,
   NotificationRow,
   AppNotification,
+  formatNotificationTimestamp,
 } from "../../../services/notifications";
 import {
   PH_MOBILE_ERROR_MESSAGE,
@@ -49,6 +52,11 @@ import {
   setDefaultAddress,
   SavedAddress,
 } from "../../../lib/saved-addresses";
+import { BarangayAutofillInput } from "../../../components/ui/BarangayAutofillInput";
+import { MATI_BARANGAYS } from "../../../mock/barangays";
+import { ActionSuccessModal } from "../../../components/ui/ActionSuccessModal";
+import { LogoutConfirmModal } from "../../../components/ui/LogoutConfirmModal";
+import { TermsModal } from "../../../components/ui/TermsModal";
 
 interface RegisteredPerk {
   icon: keyof typeof Ionicons.glyphMap;
@@ -123,8 +131,9 @@ export default function MobileCustomerProfileScreen() {
   const [editFavoriteDish, setEditFavoriteDish] = useState("");
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
-  // Profile Notifications Sheet State
+  // Profile Notifications & Terms Modal State
   const [showNotificationsSheet, setShowNotificationsSheet] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const [profileNotifications, setProfileNotifications] = useState<NotificationRow[]>([]);
 
   useEffect(() => {
@@ -177,7 +186,7 @@ export default function MobileCustomerProfileScreen() {
     id: n.id,
     title: n.title,
     message: n.message,
-    timestamp: new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    timestamp: formatNotificationTimestamp(n.created_at),
     isRead: n.is_read,
     type: (n.type as any) || "system",
   }));
@@ -211,7 +220,14 @@ export default function MobileCustomerProfileScreen() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const uri = result.assets[0].uri;
         setIsUploadingPhoto(true);
-        const updated = await saveCustomerProfile(user?.id, { avatarUrl: uri });
+        // Upload photo to Supabase storage to generate permanent public HTTPS URL
+        const uploadResult = await uploadCustomerProfilePhoto(uri, "avatar", user?.id);
+        if (uploadResult.error || !uploadResult.publicUrl) {
+          setIsUploadingPhoto(false);
+          Alert.alert("Upload Failed", uploadResult.error || "Could not upload profile picture.");
+          return;
+        }
+        const updated = await saveCustomerProfile(user?.id, { avatarUrl: uploadResult.publicUrl });
         setCustomerProfile(updated);
         setIsUploadingPhoto(false);
         Alert.alert("Profile Picture Updated! 📸", "Your personalized avatar is now active across Mati FoodFinder!");
@@ -242,7 +258,14 @@ export default function MobileCustomerProfileScreen() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const uri = result.assets[0].uri;
         setIsUploadingPhoto(true);
-        const updated = await saveCustomerProfile(user?.id, { coverPhotoUrl: uri });
+        // Upload photo to Supabase storage to generate permanent public HTTPS URL
+        const uploadResult = await uploadCustomerProfilePhoto(uri, "cover", user?.id);
+        if (uploadResult.error || !uploadResult.publicUrl) {
+          setIsUploadingPhoto(false);
+          Alert.alert("Upload Failed", uploadResult.error || "Could not upload cover photo.");
+          return;
+        }
+        const updated = await saveCustomerProfile(user?.id, { coverPhotoUrl: uploadResult.publicUrl });
         setCustomerProfile(updated);
         setIsUploadingPhoto(false);
         Alert.alert("Cover Photo Updated! 🌊", "Your profile cover photo has been saved!");
@@ -298,16 +321,16 @@ export default function MobileCustomerProfileScreen() {
   };
 
   // Customer Delivery Preferences & Saved Addresses with Mati Landmarks (Pillar 2)
-  const matiBarangays = ["Central (Poblacion)", "Dahican", "Sainz", "Matiao", "Badas", "Mayo"];
-  const [defaultBarangay, setDefaultBarangay] = useState("Central (Poblacion)");
-  const [savedAddress, setSavedAddress] = useState("Near Baywalk Pavilion, Blue Gate");
+  const matiBarangays = MATI_BARANGAYS;
+  const [defaultBarangay, setDefaultBarangay] = useState("Central (City Proper/Poblacion)");
+  const [savedAddress, setSavedAddress] = useState("");
   const [savingAddress, setSavingAddress] = useState(false);
   const [addressMsg, setAddressMsg] = useState<string | null>(null);
 
   const [addressList, setAddressList] = useState<SavedAddress[]>([]);
   const [showAddCustomAddress, setShowAddCustomAddress] = useState(false);
   const [newAddressLabel, setNewAddressLabel] = useState("");
-  const [newAddressBarangay, setNewAddressBarangay] = useState("Central (Poblacion)");
+  const [newAddressBarangay, setNewAddressBarangay] = useState("Central (City Proper/Poblacion)");
   const [newAddressLandmark, setNewAddressLandmark] = useState("");
 
   useEffect(() => {
@@ -399,18 +422,28 @@ export default function MobileCustomerProfileScreen() {
 
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
-  const handleSignOut = async () => {
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showLogoutSuccess, setShowLogoutSuccess] = useState(false);
+  const [showLoginSuccess, setShowLoginSuccess] = useState(false);
+
+  const handleConfirmSignOut = () => {
+    setShowLogoutConfirm(false);
+    setShowLogoutSuccess(true);
+  };
+
+  const handleLogoutSuccessClose = async () => {
+    setShowLogoutSuccess(false);
     setSigningOut(true);
     setSignOutError(null);
     try {
       await logoutToGuest();
-      if (Platform.OS === "web") {
-        router.replace("/");
-      }
     } catch (error) {
       setSignOutError(authMessage(error));
     } finally {
       setSigningOut(false);
+      if (Platform.OS === "web") {
+        router.replace("/");
+      }
     }
   };
 
@@ -456,25 +489,50 @@ export default function MobileCustomerProfileScreen() {
   return (
     <SafeAreaView className="flex-1 bg-[#F8FAFC]">
       {/* Top Header */}
-      <View className="px-3.5 sm:px-4 pt-2 pb-2.5 bg-white border-b border-gray-100 shadow-xs">
+      <View className="px-3.5 sm:px-4 pt-2.5 pb-2.5 bg-white border-b border-gray-100 shadow-2xs">
         <View className="w-full max-w-2xl self-center flex-row justify-between items-center">
           <View className="flex-1 pr-2">
-            <Text className="text-[10px] font-extrabold text-[#EA5410] uppercase tracking-wider">
-              CUSTOMER ACCOUNT
-            </Text>
-            <Text className="text-base font-black text-gray-900 tracking-tight" numberOfLines={1}>
+            <Text className="text-base font-extrabold text-gray-900 tracking-tight" numberOfLines={1}>
               Profile & Settings
             </Text>
           </View>
-          {!isLoggedIn ? (
+          <View className="flex-row items-center gap-2">
+            {/* Review Terms & Conditions */}
             <Pressable
-              onPress={() => router.push("/(mobile)/auth/customer-login")}
-              className="bg-[#EA5410]/10 border border-[#EA5410]/20 px-2.5 py-1 rounded-full flex-row items-center gap-1 shrink-0"
+              onPress={() => setShowTermsModal(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Review Terms and Conditions"
+              className="w-9 h-9 rounded-full bg-gray-50 border border-gray-200/80 items-center justify-center active:bg-gray-100 shrink-0"
             >
-              <Ionicons name="log-in-outline" size={13} color="#EA5410" />
-              <Text className="text-[11px] font-bold text-[#EA5410]">Sign In</Text>
+              <Ionicons name="help-circle-outline" size={19} color="#4B5563" />
             </Pressable>
-          ) : null}
+
+            {isLoggedIn ? (
+              <Pressable
+                onPress={() => setShowNotificationsSheet(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Notifications"
+                className="relative w-9 h-9 rounded-full bg-gray-50 border border-gray-200/80 items-center justify-center active:bg-gray-100 shrink-0"
+              >
+                <Ionicons name="notifications-outline" size={18} color="#374151" />
+                {profileUnreadCount > 0 && (
+                  <View className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-[#EA5410] items-center justify-center border-2 border-white">
+                    <Text className="text-[9px] font-black text-white">
+                      {profileUnreadCount > 9 ? "9+" : profileUnreadCount}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={() => router.push("/(mobile)/auth/customer-login")}
+                className="bg-gray-100 border border-gray-200 px-3 py-1 rounded-full flex-row items-center gap-1 shrink-0 active:bg-gray-200"
+              >
+                <Ionicons name="log-in-outline" size={13} color="#374151" />
+                <Text className="text-[11px] font-bold text-gray-700">Sign In</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
       </View>
 
@@ -551,24 +609,31 @@ export default function MobileCustomerProfileScreen() {
         )}
 
         {/* 1. CUSTOMER IDENTITY & FACEBOOK-STYLE PERSONALIZED COVER & AVATAR */}
-        <View className="bg-white rounded-2xl border border-gray-200/90 overflow-hidden shadow-xs mb-3.5">
+        <View className="bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-2xs mb-3.5">
           {/* Cover Photo Banner */}
-          <View className="h-32 w-full bg-gray-200 relative overflow-hidden">
+          <View className="h-32 w-full bg-gray-100 relative overflow-hidden">
             <Image
               source={{ uri: customerProfile.coverPhotoUrl || DEFAULT_COVER_PHOTO }}
               className="w-full h-full"
               resizeMode="cover"
             />
-            <View className="absolute inset-0 bg-black/25" />
+            <View className="absolute inset-0 bg-black/15" />
 
             {/* Change Cover Photo Button */}
             {isLoggedIn && (
               <Pressable
                 onPress={handlePickCover}
-                className="absolute top-2.5 right-2.5 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full flex-row items-center gap-1 border border-white/20 active:bg-black/80"
+                disabled={isUploadingPhoto}
+                className="absolute top-2.5 right-2.5 bg-black/50 backdrop-blur-md px-2.5 py-1 rounded-full flex-row items-center gap-1.5 border border-white/20 active:bg-black/70"
               >
-                <Ionicons name="camera" size={12} color="white" />
-                <Text className="text-[10px] font-bold text-white">Edit Cover</Text>
+                {isUploadingPhoto ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Ionicons name="camera" size={12} color="white" />
+                )}
+                <Text className="text-[10px] font-bold text-white">
+                  {isUploadingPhoto ? "Uploading..." : "Edit Cover"}
+                </Text>
               </Pressable>
             )}
           </View>
@@ -580,7 +645,7 @@ export default function MobileCustomerProfileScreen() {
               <View className="relative">
                 <View
                   style={{ width: 80, height: 80, borderRadius: 40 }}
-                  className="border-4 border-white bg-orange-100 overflow-hidden shadow-md items-center justify-center"
+                  className="border-4 border-white bg-gray-100 overflow-hidden shadow-sm items-center justify-center"
                 >
                   <Image
                     source={{
@@ -595,11 +660,12 @@ export default function MobileCustomerProfileScreen() {
                 {isLoggedIn && (
                   <Pressable
                     onPress={handlePickAvatar}
+                    disabled={isUploadingPhoto}
                     accessibilityRole="button"
                     accessibilityLabel="Change profile picture"
-                    className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-[#EA5410] border-2 border-white items-center justify-center shadow-xs active:bg-orange-700"
+                    className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-gray-800 border-2 border-white items-center justify-center shadow-xs active:bg-black"
                   >
-                    <Ionicons name="camera" size={13} color="white" />
+                    <Ionicons name="camera" size={12} color="white" />
                   </Pressable>
                 )}
               </View>
@@ -609,53 +675,41 @@ export default function MobileCustomerProfileScreen() {
                 {isLoggedIn ? (
                   <Pressable
                     onPress={() => setEditingProfile(true)}
-                    className="bg-gray-100 border border-gray-200 px-3 py-1.5 rounded-full flex-row items-center gap-1 active:bg-gray-200"
+                    className="bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-full flex-row items-center gap-1 active:bg-gray-100"
                   >
-                    <Ionicons name="create-outline" size={13} color="#374151" />
-                    <Text className="text-[11px] font-bold text-gray-700">Edit Profile</Text>
+                    <Ionicons name="create-outline" size={13} color="#4B5563" />
+                    <Text className="text-[11px] font-semibold text-gray-700">Edit Profile</Text>
                   </Pressable>
                 ) : null}
               </View>
             </View>
 
-            {/* Name & Role Tag */}
+            {/* Name & Account Details */}
             <View className="mb-2">
               <View className="flex-row items-center gap-2 flex-wrap">
-                <Text className="text-lg font-black text-gray-900">
+                <Text className="text-base font-extrabold text-gray-900">
                   {isLoggedIn ? user?.name : "Guest Customer"}
                 </Text>
-                <View className="px-2 py-0.5 rounded-full bg-orange-50 border border-orange-200 flex-row items-center gap-1">
-                  <Ionicons name="restaurant" size={10} color="#EA5410" />
-                  <Text className="text-[9px] font-black text-[#EA5410] uppercase tracking-wide">
-                    {isLoggedIn ? "MFF Foodie Member" : "Guest Mode"}
-                  </Text>
-                </View>
+                {!isLoggedIn && (
+                  <View className="px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200/80 flex-row items-center gap-1">
+                    <View className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                    <Text className="text-[9px] font-semibold text-gray-600 uppercase tracking-wide">
+                      Guest Mode
+                    </Text>
+                  </View>
+                )}
               </View>
-              <Text className="text-xs text-gray-500 font-medium mt-0.5">
+              <Text className="text-xs text-gray-500 font-normal mt-0.5">
                 {isLoggedIn ? user?.email : "Sign in to customize your profile, leave reviews, and track orders."}
               </Text>
             </View>
 
-            {/* Bio & Mati Food Identity */}
+            {/* Bio */}
             {isLoggedIn && (
-              <View className="bg-gray-50/80 rounded-xl p-3 border border-gray-100 mb-2.5">
-                <Text className="text-xs text-gray-700 leading-snug font-medium mb-2">
+              <View className="bg-gray-50/70 rounded-xl p-2.5 border border-gray-100 mb-2">
+                <Text className="text-xs text-gray-700 leading-snug font-normal">
                   "{customerProfile.bio}"
                 </Text>
-                <View className="flex-row items-center gap-1.5 flex-wrap">
-                  <View className="bg-orange-50 border border-orange-100 px-2 py-0.5 rounded-md flex-row items-center gap-1">
-                    <Ionicons name="heart" size={10} color="#EA5410" />
-                    <Text className="text-[10px] font-bold text-[#EA5410]">
-                      Favorite: {customerProfile.favoriteDish}
-                    </Text>
-                  </View>
-                  <View className="bg-gray-100 px-2 py-0.5 rounded-md flex-row items-center gap-1">
-                    <Ionicons name="location" size={10} color="#4B5563" />
-                    <Text className="text-[10px] font-semibold text-gray-700">
-                      Mati City Local
-                    </Text>
-                  </View>
-                </View>
               </View>
             )}
 
@@ -731,32 +785,11 @@ export default function MobileCustomerProfileScreen() {
               </Text>
             )}
 
-            {/* Quick Actions / Shortcuts */}
-            {isLoggedIn && !recovering ? (
-              <View className="flex-row items-center gap-2 pt-2 border-t border-gray-100">
-                <Pressable
-                  onPress={() => setShowNotificationsSheet(true)}
-                  className="flex-1 py-2 bg-orange-50 border border-orange-200 rounded-xl flex-row items-center justify-center gap-1.5 active:bg-orange-100"
-                >
-                  <Ionicons name="notifications" size={13} color="#EA5410" />
-                  <Text className="text-[11px] font-bold text-[#EA5410]">
-                    Notifications {profileUnreadCount > 0 ? `(${profileUnreadCount})` : ""}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={handleSignOut}
-                  disabled={signingOut}
-                  className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-xl flex-row items-center justify-center gap-1 active:bg-gray-200"
-                >
-                  <Ionicons name="log-out-outline" size={13} color="#6B7280" />
-                  <Text className="text-[11px] font-bold text-gray-700">
-                    {signingOut ? "Signing out..." : "Sign Out"}
-                  </Text>
-                </Pressable>
+            {!isLoggedIn && (
+              <View className="pt-2 border-t border-gray-100">
+                <AccountForm onSuccess={() => setShowLoginSuccess(true)} />
               </View>
-            ) : !isLoggedIn ? (
-              <AccountForm />
-            ) : null}
+            )}
           </View>
         </View>
 
@@ -766,9 +799,9 @@ export default function MobileCustomerProfileScreen() {
           </Text>
         )}
 
-        {/* 2. PERSONALIZATION FEATURE MODE SETTINGS (Scaled from rounded-3xl p-5 to rounded-2xl p-3.5) */}
+        {/* 2. PERSONALIZATION FEATURE MODE SETTINGS */}
         {isLoggedIn && (
-          <View className="bg-white rounded-2xl border border-gray-200/80 p-3.5 shadow-xs mb-3.5">
+          <View className="bg-white rounded-2xl border border-gray-200/80 p-3.5 shadow-2xs mb-3.5">
             <View className="flex-row items-center justify-between mb-2">
               <View className="flex-row items-center gap-2.5 flex-1 pr-2">
                 <View
@@ -779,23 +812,20 @@ export default function MobileCustomerProfileScreen() {
                   <Ionicons
                     name={personalizationEnabled ? "sparkles" : "sparkles-outline"}
                     size={16}
-                    color={personalizationEnabled ? "#EA5410" : "#6b7280"}
+                    color={personalizationEnabled ? "#EA5410" : "#6B7280"}
                   />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-xs font-black text-gray-900">Personalization Mode</Text>
-                  <Text className="text-[10px] text-gray-500">
-                    In-store QR scanning & recommendations
-                  </Text>
+                  <Text className="text-xs font-bold text-gray-900">Personalization Mode</Text>
                 </View>
               </View>
 
               {/* Toggle Switch */}
               <Pressable onPress={() => handleTogglePersonalizationAttempt()} hitSlop={8}>
                 <Switch
-                  trackColor={{ false: "#d1d5db", true: "#EA5410" }}
-                  thumbColor={personalizationEnabled ? "#ffffff" : "#f3f4f6"}
-                  ios_backgroundColor="#d1d5db"
+                  trackColor={{ false: "#E5E7EB", true: "#EA5410" }}
+                  thumbColor={personalizationEnabled ? "#FFFFFF" : "#F9FAFB"}
+                  ios_backgroundColor="#E5E7EB"
                   onValueChange={(val) => handleTogglePersonalizationAttempt(val)}
                   value={personalizationEnabled}
                 />
@@ -813,63 +843,61 @@ export default function MobileCustomerProfileScreen() {
                   {/* Visit Stats Summary */}
                   <View className="bg-gray-50/80 rounded-xl p-3 border border-gray-100 flex-row flex-wrap justify-between items-center gap-2">
                     <View>
-                      <Text className="text-[9px] uppercase font-extrabold text-gray-400">
+                      <Text className="text-[9px] uppercase font-bold text-gray-400">
                         Total Check-ins
                       </Text>
-                      <Text className="text-sm font-black text-gray-900 mt-0.5">
+                      <Text className="text-sm font-extrabold text-gray-900 mt-0.5">
                         {displayTotalScans} In-Store Scans
                       </Text>
                     </View>
                     <View className="sm:items-end">
-                      <Text className="text-[9px] uppercase font-extrabold text-gray-400">
+                      <Text className="text-[9px] uppercase font-bold text-gray-400">
                         #1 Most Visited Spot
                       </Text>
-                      <Text className="text-xs font-black text-[#EA5410] mt-0.5">
+                      <Text className="text-xs font-bold text-[#EA5410] mt-0.5">
                         {displayTopStoreName}
                       </Text>
                     </View>
                   </View>
                 </>
               ) : (
-                <>
-                  <Text className="text-xs text-gray-500 leading-snug mb-2.5">
+                <View className="flex-row items-center justify-between gap-3">
+                  <Text className="text-xs text-gray-500 leading-snug flex-1">
                     Personalization is paused. In-store QR scans and custom recommendations are disabled.
                   </Text>
-
                   <Pressable
                     onPress={() => handleTogglePersonalizationAttempt(true)}
-                    className="py-2.5 bg-[#EA5410] rounded-xl items-center shadow-xs active:opacity-90"
+                    className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg items-center active:bg-gray-100 shrink-0"
                   >
-                    <Text className="text-white font-black text-xs">
-                      Turn On Personalization
+                    <Text className="text-gray-700 font-semibold text-[11px]">
+                      Enable
                     </Text>
                   </Pressable>
-                </>
+                </View>
               )}
             </View>
           </View>
         )}
 
-        {/* 3. PILLAR 2: SAVED DELIVERY ADDRESSES WITH MATI LANDMARKS (REGISTERED USERS ONLY) */}
+        {/* 3. SAVED DELIVERY ADDRESSES */}
         {isLoggedIn && (
-          <View className="bg-white rounded-2xl border border-gray-200/80 p-3.5 shadow-xs mb-3.5">
+          <View className="bg-white rounded-2xl border border-gray-200/80 p-3.5 shadow-2xs mb-3.5">
             <View className="flex-row items-center justify-between mb-1.5">
               <View className="flex-row items-center gap-2">
-                <View className="w-7 h-7 rounded-lg bg-[#EA5410]/10 items-center justify-center">
-                  <Ionicons name="location" size={15} color="#EA5410" />
+                <View className="w-7 h-7 rounded-lg bg-gray-100 items-center justify-center">
+                  <Ionicons name="location-outline" size={15} color="#4B5563" />
                 </View>
                 <View>
-                  <Text className="text-xs font-black text-gray-900">Saved Delivery Addresses</Text>
-                  <Text className="text-[10px] text-gray-500">Mati Landmarks & 1-Tap Checkout</Text>
+                  <Text className="text-xs font-bold text-gray-900">Saved Delivery Addresses</Text>
                 </View>
               </View>
 
               <Pressable
                 onPress={() => setShowAddCustomAddress(true)}
-                className="px-2.5 py-1 bg-orange-50 border border-orange-200 rounded-lg flex-row items-center gap-1 active:bg-orange-100"
+                className="px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-lg flex-row items-center gap-1 active:bg-gray-100"
               >
-                <Ionicons name="add" size={13} color="#EA5410" />
-                <Text className="text-[10px] font-bold text-[#EA5410]">New Delivery Address</Text>
+                <Ionicons name="add" size={13} color="#4B5563" />
+                <Text className="text-[10px] font-semibold text-gray-700">New Address</Text>
               </Pressable>
             </View>
 
@@ -878,85 +906,95 @@ export default function MobileCustomerProfileScreen() {
             </Text>
 
             {/* List of Saved Addresses */}
-            <View className="gap-2 mb-3">
-              {addressList.map((addr) => (
-                <View
-                  key={addr.id}
-                  className={`p-2.5 rounded-xl border flex-row items-center justify-between gap-2 ${
-                    addr.isDefault
-                      ? "bg-orange-50/70 border-[#EA5410]"
-                      : "bg-gray-50 border-gray-200"
-                  }`}
-                >
-                  <View className="flex-row items-center gap-2 flex-1 min-w-0">
-                    <View
-                      className={`w-7 h-7 rounded-lg items-center justify-center shrink-0 ${
-                        addr.isDefault ? "bg-[#EA5410]" : "bg-gray-200"
-                      }`}
-                    >
-                      <Ionicons
-                        name={
-                          addr.icon === "home"
-                            ? "home"
-                            : addr.icon === "briefcase"
-                            ? "briefcase"
-                            : addr.icon === "water"
-                            ? "water"
-                            : "location"
-                        }
-                        size={13}
-                        color={addr.isDefault ? "white" : "#4B5563"}
-                      />
-                    </View>
-                    <View className="flex-1 min-w-0">
-                      <View className="flex-row items-center gap-1.5 flex-wrap">
-                        <Text className="text-xs font-black text-gray-900">{addr.label}</Text>
-                        {addr.isDefault && (
-                          <View className="bg-[#EA5410] px-1 py-0.2 rounded">
-                            <Text className="text-[8px] font-black text-white uppercase">DEFAULT</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text className="text-[10px] text-gray-500 font-semibold" numberOfLines={1}>
-                        Brgy. {addr.barangay}
-                      </Text>
-                      <Text className="text-[10px] text-gray-600" numberOfLines={1}>
-                        📍 {addr.landmarkDescription}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View className="flex-row items-center gap-1 shrink-0">
-                    {!addr.isDefault && (
-                      <Pressable
-                        onPress={() => handleSelectDefaultSavedAddress(addr)}
-                        className="px-2 py-1 bg-white border border-gray-300 rounded-lg active:bg-gray-100"
+            {addressList.length === 0 ? (
+              <View className="py-4 px-3 items-center justify-center bg-gray-50 border border-dashed border-gray-200 rounded-xl mb-3">
+                <Ionicons name="location-outline" size={20} color="#9CA3AF" />
+                <Text className="text-xs font-semibold text-gray-700 mt-1">No saved addresses yet</Text>
+                <Text className="text-[10px] text-gray-400 text-center mt-0.5">
+                  Tap + New Address above to save your home or office delivery location.
+                </Text>
+              </View>
+            ) : (
+              <View className="gap-2 mb-3">
+                {addressList.map((addr) => (
+                  <View
+                    key={addr.id}
+                    className={`p-2.5 rounded-xl border flex-row items-center justify-between gap-2 ${
+                      addr.isDefault
+                        ? "bg-orange-50/30 border-orange-200/80"
+                        : "bg-gray-50/70 border-gray-100"
+                    }`}
+                  >
+                    <View className="flex-row items-center gap-2 flex-1 min-w-0">
+                      <View
+                        className={`w-7 h-7 rounded-lg items-center justify-center shrink-0 ${
+                          addr.isDefault ? "bg-orange-100" : "bg-gray-200/80"
+                        }`}
                       >
-                        <Text className="text-[9px] font-bold text-gray-700">Set Default</Text>
+                        <Ionicons
+                          name={
+                            addr.icon === "home"
+                              ? "home-outline"
+                              : addr.icon === "briefcase"
+                              ? "briefcase-outline"
+                              : addr.icon === "water"
+                              ? "water-outline"
+                              : "location-outline"
+                          }
+                          size={13}
+                          color={addr.isDefault ? "#EA5410" : "#4B5563"}
+                        />
+                      </View>
+                      <View className="flex-1 min-w-0">
+                        <View className="flex-row items-center gap-1.5 flex-wrap">
+                          <Text className="text-xs font-bold text-gray-900">{addr.label}</Text>
+                          {addr.isDefault && (
+                            <View className="bg-orange-100 px-1.5 py-0.2 rounded">
+                              <Text className="text-[8px] font-bold text-[#EA5410] uppercase">DEFAULT</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text className="text-[10px] text-gray-500 font-medium" numberOfLines={1}>
+                          Brgy. {addr.barangay}
+                        </Text>
+                        <Text className="text-[10px] text-gray-600" numberOfLines={1}>
+                          📍 {addr.landmarkDescription}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View className="flex-row items-center gap-1.5 shrink-0">
+                      {!addr.isDefault && (
+                        <Pressable
+                          onPress={() => handleSelectDefaultSavedAddress(addr)}
+                          className="px-2 py-1 bg-white border border-gray-200 rounded-lg active:bg-gray-100"
+                        >
+                          <Text className="text-[9px] font-semibold text-gray-700">Set Default</Text>
+                        </Pressable>
+                      )}
+                      <Pressable
+                        onPress={() => handleRemoveAddress(addr.id)}
+                        className="w-6 h-6 rounded-md items-center justify-center bg-gray-100 active:bg-gray-200"
+                      >
+                        <Ionicons name="trash-outline" size={12} color="#9CA3AF" />
                       </Pressable>
-                    )}
-                    <Pressable
-                      onPress={() => handleRemoveAddress(addr.id)}
-                      className="w-6 h-6 rounded-md items-center justify-center bg-gray-100 active:bg-gray-200"
-                    >
-                      <Ionicons name="trash-outline" size={12} color="#9CA3AF" />
-                    </Pressable>
+                    </View>
                   </View>
-                </View>
-              ))}
-            </View>
+                ))}
+              </View>
+            )}
 
             {addressMsg && (
               <View className="flex-row items-center gap-1.5 mb-2 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-lg">
                 <Ionicons name="checkmark-circle" size={13} color="#059669" />
-                <Text className="text-[11px] font-bold text-emerald-800">{addressMsg}</Text>
+                <Text className="text-[11px] font-semibold text-emerald-800">{addressMsg}</Text>
               </View>
             )}
 
-            <View className="flex-row items-center gap-1.5 bg-orange-50/60 p-2 rounded-lg border border-orange-100">
-              <Ionicons name="cash-outline" size={13} color="#EA5410" />
-              <Text className="text-[10px] text-gray-600">
-                Payment: <Text className="font-black text-[#EA5410]">Cash on Delivery (COD)</Text> across Mati City
+            <View className="flex-row items-center gap-1.5 bg-gray-50 p-2 rounded-lg border border-gray-100">
+              <Ionicons name="cash-outline" size={13} color="#6B7280" />
+              <Text className="text-[10px] text-gray-500">
+                Payment: <Text className="font-semibold text-gray-700">Cash on Delivery (COD)</Text>
               </Text>
             </View>
           </View>
@@ -964,15 +1002,15 @@ export default function MobileCustomerProfileScreen() {
 
         {/* 4. ORDERS & BOOKINGS SHORTCUTS */}
         {isLoggedIn && (
-          <View className="bg-white rounded-2xl border border-gray-100 p-3.5 shadow-2xs mb-3.5">
+          <View className="bg-white rounded-2xl border border-gray-200/80 p-3.5 shadow-2xs mb-3.5">
             <View className="flex-row items-center justify-between mb-2">
-              <Text className="text-[11px] font-black text-gray-900 uppercase tracking-wider">
-                Quick Customer Shortcuts
+              <Text className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                Quick Shortcuts
               </Text>
               {(activeOrdersCount > 0 || activeReservationsCount > 0) && (
-                <View className="bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full flex-row items-center gap-1">
+                <View className="bg-gray-100 px-2 py-0.5 rounded-full flex-row items-center gap-1">
                   <View className="w-1.5 h-1.5 rounded-full bg-[#EA5410]" />
-                  <Text className="text-[10px] font-black text-[#EA5410]">
+                  <Text className="text-[10px] font-semibold text-gray-700">
                     {activeOrdersCount + activeReservationsCount} Active
                   </Text>
                 </View>
@@ -987,20 +1025,17 @@ export default function MobileCustomerProfileScreen() {
                     params: { tab: "deliveries", from: "profile" },
                   })
                 }
-                className="flex-row justify-between items-center p-2.5 bg-gray-50/80 rounded-xl border border-gray-100 active:bg-orange-50/50"
+                className="flex-row justify-between items-center p-2.5 bg-gray-50/70 rounded-xl border border-gray-100 active:bg-gray-100/70"
               >
                 <View className="flex-row items-center gap-2.5">
-                  <View className="w-7 h-7 rounded-lg bg-orange-100 items-center justify-center">
-                    <Ionicons name="bicycle" size={15} color="#EA5410" />
+                  <View className="w-7 h-7 rounded-lg bg-gray-100 items-center justify-center">
+                    <Ionicons name="bicycle-outline" size={15} color="#4B5563" />
                   </View>
-                  <View>
-                    <Text className="text-xs font-bold text-gray-800">Active Deliveries</Text>
-                    <Text className="text-[10px] text-gray-500">Live courier tracking & COD</Text>
-                  </View>
+                  <Text className="text-xs font-semibold text-gray-800">Active Deliveries</Text>
                 </View>
                 <View className="flex-row items-center gap-1.5">
-                  <View className={`px-2 py-0.5 rounded-full ${activeOrdersCount > 0 ? "bg-[#EA5410]" : "bg-gray-200"}`}>
-                    <Text className={`text-[10px] font-black ${activeOrdersCount > 0 ? "text-white" : "text-gray-600"}`}>
+                  <View className={`px-2 py-0.5 rounded-full ${activeOrdersCount > 0 ? "bg-orange-100" : "bg-gray-100"}`}>
+                    <Text className={`text-[10px] font-bold ${activeOrdersCount > 0 ? "text-[#EA5410]" : "text-gray-500"}`}>
                       {activeOrdersCount} Active
                     </Text>
                   </View>
@@ -1015,20 +1050,17 @@ export default function MobileCustomerProfileScreen() {
                     params: { tab: "reservations", from: "profile" },
                   })
                 }
-                className="flex-row justify-between items-center p-2.5 bg-gray-50/80 rounded-xl border border-gray-100 active:bg-orange-50/50"
+                className="flex-row justify-between items-center p-2.5 bg-gray-50/70 rounded-xl border border-gray-100 active:bg-gray-100/70"
               >
                 <View className="flex-row items-center gap-2.5">
-                  <View className="w-7 h-7 rounded-lg bg-blue-50 items-center justify-center">
-                    <Ionicons name="calendar-outline" size={15} color="#0284C7" />
+                  <View className="w-7 h-7 rounded-lg bg-gray-100 items-center justify-center">
+                    <Ionicons name="calendar-outline" size={15} color="#4B5563" />
                   </View>
-                  <View>
-                    <Text className="text-xs font-bold text-gray-800">Table Bookings</Text>
-                    <Text className="text-[10px] text-gray-500">Dine-in table reservations</Text>
-                  </View>
+                  <Text className="text-xs font-semibold text-gray-800">Table Bookings</Text>
                 </View>
                 <View className="flex-row items-center gap-1.5">
-                  <View className={`px-2 py-0.5 rounded-full ${activeReservationsCount > 0 ? "bg-[#EA5410]" : "bg-gray-200"}`}>
-                    <Text className={`text-[10px] font-black ${activeReservationsCount > 0 ? "text-white" : "text-gray-600"}`}>
+                  <View className={`px-2 py-0.5 rounded-full ${activeReservationsCount > 0 ? "bg-orange-100" : "bg-gray-100"}`}>
+                    <Text className={`text-[10px] font-bold ${activeReservationsCount > 0 ? "text-[#EA5410]" : "text-gray-500"}`}>
                       {activeReservationsCount} Booked
                     </Text>
                   </View>
@@ -1039,26 +1071,52 @@ export default function MobileCustomerProfileScreen() {
           </View>
         )}
 
-        {/* 5. ABOUT MFF (Scaled down) */}
-        <View className="bg-white rounded-2xl border border-gray-200/80 p-3.5 shadow-xs mb-4">
-          <Text className="text-[11px] font-black text-gray-900 uppercase tracking-wider mb-2">
+        {/* 5. ABOUT MFF */}
+        <View className="bg-white rounded-2xl border border-gray-200/80 p-3.5 shadow-2xs mb-3.5">
+          <Text className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">
             About Mati FoodFinder
           </Text>
           <View className="gap-1.5">
             <View className="flex-row justify-between items-center py-1 border-b border-gray-100">
               <Text className="text-[11px] text-gray-600">Coverage</Text>
-              <Text className="text-[11px] font-bold text-[#EA5410]">Mati City Exclusive</Text>
+              <Text className="text-[11px] font-semibold text-gray-800">Mati City Exclusive</Text>
             </View>
             <View className="flex-row justify-between items-center py-1 border-b border-gray-100">
               <Text className="text-[11px] text-gray-600">Payment Protocol</Text>
-              <Text className="text-[11px] font-bold text-gray-800">Cash on Delivery (COD)</Text>
+              <Text className="text-[11px] font-semibold text-gray-800">Cash on Delivery (COD)</Text>
             </View>
+            <Pressable
+              onPress={() => setShowTermsModal(true)}
+              className="flex-row justify-between items-center py-1 border-b border-gray-100 active:opacity-70"
+            >
+              <View className="flex-row items-center gap-1.5">
+                <Ionicons name="help-circle-outline" size={14} color="#6B7280" />
+                <Text className="text-[11px] text-gray-600">Terms & Conditions</Text>
+              </View>
+              <Text className="text-[11px] font-semibold text-[#EA5410]">Review</Text>
+            </Pressable>
             <View className="flex-row justify-between items-center py-1">
               <Text className="text-[11px] text-gray-600">App Version</Text>
-              <Text className="text-[11px] font-mono text-gray-500">v1.0.0 (Expo SDK 57)</Text>
+              <Text className="text-[11px] font-mono text-gray-400">v1.0.0 (Expo SDK 57)</Text>
             </View>
           </View>
         </View>
+
+        {/* 6. BOTTOM SIGN OUT BUTTON */}
+        {isLoggedIn && (
+          <View className="mb-6">
+            <Pressable
+              onPress={() => setShowLogoutConfirm(true)}
+              disabled={signingOut}
+              className="w-full py-3 bg-white border border-red-200/80 rounded-2xl flex-row items-center justify-center gap-2 active:bg-red-50/50 shadow-2xs"
+            >
+              <Ionicons name="log-out-outline" size={16} color="#DC2626" />
+              <Text className="text-xs font-bold text-red-600">
+                {signingOut ? "Signing Out..." : "Sign Out"}
+              </Text>
+            </Pressable>
+          </View>
+        )}
         </View>
       </ScrollView>
 
@@ -1099,39 +1157,14 @@ export default function MobileCustomerProfileScreen() {
               placeholderTextColor="#9ca3af"
             />
 
-            {/* Barangay Selector */}
-            <Text className="text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
-              Barangay
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              className="mb-2.5"
-              contentContainerStyle={{ gap: 6 }}
-            >
-              {matiBarangays.map((b) => {
-                const isSelected = newAddressBarangay === b;
-                return (
-                  <Pressable
-                    key={b}
-                    onPress={() => setNewAddressBarangay(b)}
-                    className={`px-3 py-1.5 rounded-xl border ${
-                      isSelected
-                        ? "bg-[#EA5410] border-[#EA5410] shadow-2xs"
-                        : "bg-white border-gray-200"
-                    }`}
-                  >
-                    <Text
-                      className={`text-[11px] font-bold ${
-                        isSelected ? "text-white" : "text-gray-700"
-                      }`}
-                    >
-                      {b}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            {/* Barangay Autofill Input */}
+            <BarangayAutofillInput
+              value={newAddressBarangay}
+              onSelectBarangay={setNewAddressBarangay}
+              label="BARANGAY"
+              placeholder="Type to search official Mati barangay..."
+              containerClassName="mb-2.5"
+            />
 
             {/* Street / Landmark Input */}
             <Text className="text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
@@ -1176,6 +1209,41 @@ export default function MobileCustomerProfileScreen() {
           }
         }}
         onMarkAllRead={handleMarkAllNotificationsRead}
+      />
+
+      {/* Logout Confirmation Modal */}
+      <LogoutConfirmModal
+        visible={showLogoutConfirm}
+        isSigningOut={signingOut}
+        onCancel={() => setShowLogoutConfirm(false)}
+        onConfirm={handleConfirmSignOut}
+      />
+
+      {/* Logout Success Modal */}
+      <ActionSuccessModal
+        visible={showLogoutSuccess}
+        title="Signed Out"
+        message="You have safely signed out of your account."
+        buttonLabel="Continue"
+        autoCloseMs={1500}
+        onClose={handleLogoutSuccessClose}
+      />
+
+      {/* Login Success Modal */}
+      <ActionSuccessModal
+        visible={showLoginSuccess}
+        title="Signed In Successfully"
+        message="Welcome back to Mati FoodFinder!"
+        buttonLabel="Continue"
+        autoCloseMs={1500}
+        onClose={() => setShowLoginSuccess(false)}
+      />
+
+      {/* Review Terms & Conditions Modal */}
+      <TermsModal
+        visible={showTermsModal}
+        role="customer"
+        onClose={() => setShowTermsModal(false)}
       />
     </SafeAreaView>
   );

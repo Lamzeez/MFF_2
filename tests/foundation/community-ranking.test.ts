@@ -1,11 +1,14 @@
 /// <reference types="node" />
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import { test } from "node:test";
 import {
   calculateEngagementScore,
   isPopularMatiEatery,
   ENGAGEMENT_WEIGHTS,
 } from "../../services/community";
+import { SEED_SOCIAL_POSTS } from "../../mock/posts";
 
 test("isPopularMatiEatery identifies canonical Mati culinary spots case-insensitively", () => {
   assert.equal(isPopularMatiEatery("Mama Letty's Karenderia"), true);
@@ -183,3 +186,36 @@ test("time decay factor applies gravity so fresh posts trend over aged posts", (
   assert.ok(freshPost.timeDecayFactor > oldPost.timeDecayFactor);
   assert.ok(freshPost.finalScore > oldPost.finalScore);
 });
+
+test("SEED_SOCIAL_POSTS provides rich initial reviews and fallback for guest browsing", () => {
+  assert.ok(SEED_SOCIAL_POSTS.length >= 4);
+  for (const post of SEED_SOCIAL_POSTS) {
+    assert.ok(post.id.length > 0);
+    assert.ok(post.author.length > 0);
+    assert.ok(post.content.length > 0);
+    assert.equal(typeof post.likes, "number");
+    assert.ok(Array.isArray(post.comments));
+  }
+});
+
+test("Guest users can browse community feed while all write interactions are strictly gated", () => {
+  const communitySource = fs.readFileSync(
+    path.join(process.cwd(), "app/(mobile)/(tabs)/community.tsx"),
+    "utf8"
+  );
+
+  // 1. Loading and fetch state for seamless feed synchronization
+  assert.equal(communitySource.includes("isLoadingInitial"), true);
+
+  // 2. Gating on write interactions
+  assert.equal(communitySource.includes('verifyRegisteredUser("like posts in the foodie community")'), true);
+  assert.equal(communitySource.includes('verifyRegisteredUser("comment on foodie community posts")'), true);
+  assert.equal(communitySource.includes('verifyRegisteredUser("post in the foodie community")'), true);
+  assert.equal(communitySource.includes('verifyRegisteredUser("report community content")'), true);
+
+  // 3. Guest Mode Welcome Banner & Read-only comments
+  assert.equal(communitySource.includes("GUEST MODE"), true);
+  assert.equal(communitySource.includes("editable={isLoggedIn}"), true);
+  assert.equal(communitySource.includes("GuestGateModal"), true);
+});
+

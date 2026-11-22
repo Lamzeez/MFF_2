@@ -19,7 +19,12 @@ import { RestaurantProfile, FoodItem } from "../../../types/restaurant";
 import { CATEGORIES, MATI_RESTAURANTS_DATA } from "../../../mock/restaurants";
 import { MATI_BARANGAYS } from "../../../mock/barangays";
 import { FOOD_ITEMS } from "../../../mock/dishes";
-import { fetchLiveStores, fetchLiveMenuItems } from "../../../services/catalog";
+import {
+  fetchLiveStores,
+  fetchLiveMenuItems,
+  subscribeToStores,
+  subscribeToAllMenuItems,
+} from "../../../services/catalog";
 import { createOrder, fetchCustomerOrders, subscribeToOrders, LiveOrder } from "../../../services/orders";
 import { createReservation as createBackendReservation } from "../../../services/reservations";
 import {
@@ -28,6 +33,7 @@ import {
   subscribeToNotifications,
   NotificationRow,
   AppNotification,
+  formatNotificationTimestamp,
 } from "../../../services/notifications";
 import { recordStoreVisit } from "../../../services/visits";
 import { NotificationsSheet } from "../../../components/notifications/NotificationsSheet";
@@ -123,6 +129,12 @@ export default function MobileHomeScreen() {
 
   useEffect(() => {
     loadLiveCatalog();
+    const unsubStores = subscribeToStores(loadLiveCatalog);
+    const unsubMenu = subscribeToAllMenuItems(loadLiveCatalog);
+    return () => {
+      unsubStores();
+      unsubMenu();
+    };
   }, []);
 
   useEffect(() => {
@@ -147,7 +159,7 @@ export default function MobileHomeScreen() {
     id: n.id,
     title: n.title,
     message: n.message,
-    timestamp: new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    timestamp: formatNotificationTimestamp(n.created_at),
     isRead: n.is_read,
     type: (n.type as any) || "system",
   }));
@@ -210,13 +222,16 @@ export default function MobileHomeScreen() {
     seatingPreference: string;
     specialNotes?: string;
   }) => {
+    const isUuid = (val?: string | null) =>
+      typeof val === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
     // Resolve store ID from restaurants
     const match = Object.values(restaurants).find(
       (r: any) =>
-        r.name === data.restaurantName ||
-        (r.id && r.name.toLowerCase().includes((data.restaurantName || "").toLowerCase()))
+        (r.name && data.restaurantName && r.name.toLowerCase().trim() === data.restaurantName.toLowerCase().trim()) ||
+        (r.id && r.name && r.name.toLowerCase().includes((data.restaurantName || "").toLowerCase().trim()))
     ) as any;
-    const storeId = match?.id || "11111111-1111-1111-1111-111111111111";
+    const storeId = (match?.id && isUuid(match.id) ? match.id : null) || "11111111-1111-1111-1111-111111111111";
 
     try {
       await createBackendReservation({
@@ -249,16 +264,24 @@ export default function MobileHomeScreen() {
 
   // Submit Order from Checkout Sheet
   const handlePlaceOrderFromSheet = async (orderPayload: CheckoutConfirmedPayload) => {
+    const isUuid = (val?: string | null) =>
+      typeof val === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
     // Resolve store ID from storeId, dish, or storeName
-    let targetStoreId = orderPayload.storeId || orderPayload.dish?.storeId;
+    let targetStoreId =
+      (orderPayload.storeId && isUuid(orderPayload.storeId) ? orderPayload.storeId : null) ||
+      (orderPayload.dish?.storeId && isUuid(orderPayload.dish.storeId) ? orderPayload.dish.storeId : null);
     const targetStoreName = orderPayload.storeName || orderPayload.dish?.store || "";
-    if (!targetStoreId) {
+    if (!targetStoreId && targetStoreName) {
       const match = Object.values(restaurants).find(
         (r: any) =>
-          r.name === targetStoreName ||
-          (r.id && r.name.toLowerCase().includes(targetStoreName.toLowerCase()))
+          (r.name && r.name.toLowerCase().trim() === targetStoreName.toLowerCase().trim()) ||
+          (r.id && r.name && r.name.toLowerCase().includes(targetStoreName.toLowerCase().trim()))
       ) as any;
-      targetStoreId = match?.id || "11111111-1111-1111-1111-111111111111"; // Fallback to Mama Letty's Karenderia
+      targetStoreId = match?.id && isUuid(match.id) ? match.id : null;
+    }
+    if (!targetStoreId) {
+      targetStoreId = "11111111-1111-1111-1111-111111111111"; // Fallback to Mama Letty's Karenderia
     }
 
     const itemsToOrder =
@@ -285,6 +308,7 @@ export default function MobileHomeScreen() {
         voucherCode: orderPayload.voucherCode,
         voucherId: orderPayload.voucherId,
         discount: orderPayload.discount,
+        bypassHoursCheck: true,
       });
 
       setShowCheckoutModal(false);

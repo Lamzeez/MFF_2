@@ -6,9 +6,12 @@ import {
   fetchPlatformMetricsWithStatus,
   fetchAdminStoreApplicationsWithStatus,
   setStoreApproval,
+  subscribeToAdminStores,
+  subscribeToAdminUsers,
   type PlatformMetrics,
   type StoreApplication,
 } from "../../../services/admin";
+import { subscribeToOrders } from "../../../services/orders";
 import { buildAdminCsvReport } from "../../../lib/admin-report";
 import { NotificationBanner, type BannerMessage } from "../../../components/ui/NotificationBanner";
 
@@ -38,6 +41,14 @@ export default function SystemAdminDashboard() {
 
   useEffect(() => {
     loadData();
+    const unsubStores = subscribeToAdminStores(loadData);
+    const unsubUsers = subscribeToAdminUsers(loadData);
+    const unsubOrders = subscribeToOrders(null, loadData, "admin");
+    return () => {
+      unsubStores();
+      unsubUsers();
+      unsubOrders();
+    };
   }, []);
 
   const handleExportCsv = () => {

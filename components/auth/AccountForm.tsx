@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { TermsModal } from "../ui/TermsModal";
 import { useSession } from "../../context/SessionContext";
 import { AccountError, authMessage } from "../../services/auth";
 import {
@@ -35,6 +36,8 @@ export function AccountForm({ initialMode = "login", onSuccess }: AccountFormPro
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [customerTermsAgreed, setCustomerTermsAgreed] = useState(false);
 
   const pending = useRef(false);
   const mounted = useRef(true);
@@ -100,6 +103,9 @@ export function AccountForm({ initialMode = "login", onSuccess }: AccountFormPro
           }
           break;
         case "register": {
+          if (!customerTermsAgreed) {
+            throw new AccountError("Please check the 'I agree' box to accept the Terms of Service.");
+          }
           const cleanPhone = sanitizePhoneNumber(phoneDigits);
           if (cleanPhone && !isValidPhilippineMobile(cleanPhone)) {
             throw new AccountError(PH_MOBILE_ERROR_MESSAGE);
@@ -440,13 +446,64 @@ export function AccountForm({ initialMode = "login", onSuccess }: AccountFormPro
         </View>
       )}
 
+      {/* "I AGREE" CHECKBOX (Required for registration) */}
+      {mode === "register" && (
+        <Pressable
+          onPress={() => setCustomerTermsAgreed(!customerTermsAgreed)}
+          className="flex-row items-center gap-2.5 px-1 mb-4 cursor-pointer"
+        >
+          <Ionicons
+            name={customerTermsAgreed ? "checkbox" : "square-outline"}
+            size={20}
+            color={customerTermsAgreed ? "#EA5410" : "#9CA3AF"}
+          />
+          <Text className="text-xs text-gray-700 flex-1 leading-snug">
+            I agree to the{" "}
+            <Text
+              onPress={(e) => {
+                e.stopPropagation();
+                setShowTermsModal(true);
+              }}
+              className="text-[#EA5410] font-bold underline cursor-pointer"
+            >
+              Terms of Service
+            </Text>{" "}
+            and{" "}
+            <Text
+              onPress={(e) => {
+                e.stopPropagation();
+                setShowTermsModal(true);
+              }}
+              className="text-[#EA5410] font-bold underline cursor-pointer"
+            >
+              Privacy Policy
+            </Text>
+          </Text>
+        </Pressable>
+      )}
+
       {/* PRIMARY SUBMIT ACTION BUTTON */}
       <Pressable
         accessibilityRole="button"
-        disabled={busy || auth.status === "loading"}
+        disabled={
+          busy ||
+          auth.status === "loading" ||
+          (mode === "register" && !customerTermsAgreed)
+        }
         onPress={submit}
-        className="w-full py-4 bg-[#EA5410] rounded-2xl items-center shadow-sm mb-4 active:opacity-90"
-        style={{ opacity: busy || auth.status === "loading" ? 0.6 : 1 }}
+        className={`w-full py-4 rounded-2xl items-center shadow-sm mb-4 transition-colors ${
+          mode === "register" && !customerTermsAgreed
+            ? "bg-gray-300 cursor-not-allowed"
+            : "bg-[#EA5410] active:opacity-90 cursor-pointer"
+        }`}
+        style={{
+          opacity:
+            busy || auth.status === "loading"
+              ? 0.6
+              : mode === "register" && !customerTermsAgreed
+              ? 0.5
+              : 1,
+        }}
       >
         {busy || auth.status === "loading" ? (
           <ActivityIndicator color="white" />
@@ -462,14 +519,24 @@ export function AccountForm({ initialMode = "login", onSuccess }: AccountFormPro
         )}
       </Pressable>
 
-      {/* TERMS OF SERVICE & PRIVACY POLICY DISCLOSURE */}
-      {(mode === "register" || mode === "login") && (
+      {/* TERMS OF SERVICE & PRIVACY POLICY DISCLOSURE FOR LOGIN */}
+      {mode === "login" && (
         <View className="px-3 mb-4">
           <Text className="text-[11px] text-gray-500 text-center leading-relaxed">
-            By continuing, you agree to our{" "}
-            <Text className="text-[#EA5410] font-bold underline">Terms of Service</Text>
-            {" "}and acknowledge our{" "}
-            <Text className="text-[#EA5410] font-bold underline">Privacy Policy</Text>.
+            By signing in, you agree to our{" "}
+            <Text
+              onPress={() => setShowTermsModal(true)}
+              className="text-[#EA5410] font-bold underline cursor-pointer"
+            >
+              Terms of Service
+            </Text>{" "}
+            and acknowledge our{" "}
+            <Text
+              onPress={() => setShowTermsModal(true)}
+              className="text-[#EA5410] font-bold underline cursor-pointer"
+            >
+              Privacy Policy
+            </Text>.
           </Text>
         </View>
       )}
@@ -562,6 +629,15 @@ export function AccountForm({ initialMode = "login", onSuccess }: AccountFormPro
           <Text className="text-xs font-bold text-gray-500">Cancel and sign out</Text>
         </Pressable>
       )}
+
+      {/* Customer Terms Modal */}
+      <TermsModal
+        visible={showTermsModal}
+        role="customer"
+        showAcceptButton={true}
+        onAccept={() => setCustomerTermsAgreed(true)}
+        onClose={() => setShowTermsModal(false)}
+      />
     </View>
   );
 }

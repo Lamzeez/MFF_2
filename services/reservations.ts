@@ -36,11 +36,12 @@ export async function createReservation(input: CreateReservationInput): Promise<
     throw new Error("You must be signed in to book a table.");
   }
 
-  const customerName =
+  const rawName =
     input.customerName ||
     session.user.user_metadata?.display_name ||
     session.user.email?.split("@")[0] ||
     "Customer";
+  const customerName = rawName.trim().length > 0 ? rawName.trim() : "Customer";
 
   const customerPhone =
     input.customerPhone || session.user.user_metadata?.contact_phone || "";
@@ -209,14 +210,13 @@ export function subscribeToCustomerReservations(
 ) {
   const supabase = getSupabaseClient();
   const channel = supabase
-    .channel(`customer_reservations_${customerId}`)
+    .channel(`customer_reservations_${customerId}_${Date.now()}`)
     .on(
       "postgres_changes",
       {
         event: "*",
         schema: "public",
         table: "table_reservations",
-        filter: `customer_id=eq.${customerId}`,
       },
       () => {
         onChange();
@@ -238,14 +238,13 @@ export function subscribeToStoreReservations(
 ) {
   const supabase = getSupabaseClient("merchant");
   const channel = supabase
-    .channel(`store_reservations_${storeId}`)
+    .channel(`store_reservations_${storeId}_${Date.now()}`)
     .on(
       "postgres_changes",
       {
         event: "*",
         schema: "public",
         table: "table_reservations",
-        filter: `store_id=eq.${storeId}`,
       },
       () => {
         onChange();

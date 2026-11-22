@@ -17,6 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Link, useRouter } from "expo-router";
 import { MATI_BARANGAYS } from "../../../mock/barangays";
+import { BarangayAutofillInput } from "../../../components/ui/BarangayAutofillInput";
 import { useSession } from "../../../context/SessionContext";
 import { authMessage } from "../../../services/auth";
 import { ENFORCE_STRICT_PLATFORM_GUARDS, isDesktopDevice } from "../../../lib/platform-policy";
@@ -32,6 +33,7 @@ import {
 } from "../../../components/merchant/ImageUploadDropzone";
 import { uploadCourierDocument } from "../../../services/storage";
 import { evaluateMerchantPassword } from "../../../services/merchant-registration";
+import { TermsModal } from "../../../components/ui/TermsModal";
 
 const mffLogo = require("../../../assets/logo.jpg");
 
@@ -198,13 +200,14 @@ export default function RiderRegisterScreen() {
   const [riderPlate, setRiderPlate] = useState("");
   const [riderLicense, setRiderLicense] = useState("");
   const [riderLicenseExpiry, setRiderLicenseExpiry] = useState("");
-  const [riderBarangay, setRiderBarangay] = useState("Central (Poblacion)");
-  const [riderCodAgreed, setRiderCodAgreed] = useState(true);
+  const [riderBarangay, setRiderBarangay] = useState("Central (City Proper/Poblacion)");
+  const [riderCodAgreed, setRiderCodAgreed] = useState(false);
   const [licenseAsset, setLicenseAsset] = useState<SelectedMerchantImageAsset | null>(null);
   const [vehicleAsset, setVehicleAsset] = useState<SelectedMerchantImageAsset | null>(null);
   const [uploadingDocs, setUploadingDocs] = useState(false);
   const [loading, setLoading] = useState(false);
   const [touchedPassword, setTouchedPassword] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   const passwordEval = useMemo(() => evaluateMerchantPassword(riderPassword), [riderPassword]);
 
@@ -473,35 +476,13 @@ export default function RiderRegisterScreen() {
                   </View>
                 </View>
 
-                <View>
-                  <Text className="text-xs font-bold text-gray-700 mb-1.5 ml-0.5">
-                    Barangay of Residence in Mati City *
-                  </Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} className="py-1">
-                    {MATI_BARANGAYS.map((brgy) => {
-                      const selected = riderBarangay === brgy;
-                      return (
-                        <Pressable
-                          key={brgy}
-                          onPress={() => setRiderBarangay(brgy)}
-                          className={`mr-2 px-3 py-1.5 rounded-lg border cursor-pointer transition-colors ${
-                            selected
-                              ? "bg-orange-50 border-[#EA5410]"
-                              : "bg-gray-50 border-gray-200 hover:bg-gray-100"
-                          }`}
-                        >
-                          <Text
-                            className={`text-[11px] font-semibold ${
-                              selected ? "text-[#EA5410]" : "text-gray-700"
-                            }`}
-                          >
-                            {brgy}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
+                <BarangayAutofillInput
+                  value={riderBarangay}
+                  onSelectBarangay={setRiderBarangay}
+                  label="Barangay of Residence in Mati City *"
+                  placeholder="Type to search official Mati barangay..."
+                  containerClassName="mb-1"
+                />
               </View>
             </View>
 
@@ -749,6 +730,17 @@ export default function RiderRegisterScreen() {
                   <Text className="text-[11px] text-gray-600 leading-relaxed">
                     I agree to collect customer payments and remit food totals accurately to Mati FoodFinder partner restaurants upon delivery completion.
                   </Text>
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      setShowTermsModal(true);
+                    }}
+                    className="mt-1.5"
+                  >
+                    <Text className="text-[11px] font-bold text-[#EA5410] underline cursor-pointer">
+                      Review Full Courier Partner Terms & Conditions →
+                    </Text>
+                  </Pressable>
                 </View>
               </Pressable>
             </View>
@@ -756,8 +748,13 @@ export default function RiderRegisterScreen() {
             {/* SUBMIT BUTTON */}
             <Pressable
               onPress={handleRegister}
-              disabled={loading}
-              className="w-full py-3.5 bg-[#EA5410] hover:bg-[#D04508] active:bg-[#B83B06] rounded-xl items-center shadow-md mb-4 cursor-pointer transition-colors"
+              disabled={loading || !riderCodAgreed}
+              className={`w-full py-3.5 rounded-xl items-center shadow-md mb-4 transition-colors ${
+                loading || !riderCodAgreed
+                  ? "bg-gray-300 cursor-not-allowed opacity-60"
+                  : "bg-[#EA5410] hover:bg-[#D04508] active:bg-[#B83B06] cursor-pointer"
+              }`}
+              style={{ opacity: loading || !riderCodAgreed ? 0.6 : 1 }}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
@@ -782,6 +779,14 @@ export default function RiderRegisterScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      {/* Courier Partner Terms & Conditions Modal */}
+      <TermsModal
+        visible={showTermsModal}
+        role="rider"
+        showAcceptButton={true}
+        onAccept={() => setRiderCodAgreed(true)}
+        onClose={() => setShowTermsModal(false)}
+      />
     </SafeAreaView>
   );
 }

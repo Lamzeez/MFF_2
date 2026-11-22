@@ -20,6 +20,7 @@ import { authMessage } from "../../../services/auth";
 import { getSupabaseClient } from "../../../lib/supabase/client";
 import { uploadStoreVerificationDocument } from "../../../services/storage";
 import { filterPhoneInput, sanitizePhoneNumber } from "../../../lib/phone";
+import { BarangayAutofillInput } from "../../../components/ui/BarangayAutofillInput";
 import {
   DEFAULT_CLOSE_TIME,
   DEFAULT_OPEN_TIME,
@@ -52,6 +53,7 @@ import {
 import StoreMapPicker from "../../../components/auth/StoreMapPicker";
 import { MATI_CITY_HALL_COORDS } from "../../../lib/geo-serviceability";
 import { NotificationBanner, type BannerMessage } from "../../../components/ui/NotificationBanner";
+import { TermsModal } from "../../../components/ui/TermsModal";
 
 const mffLogo = require("../../../assets/logo.jpg");
 
@@ -271,6 +273,8 @@ export default function StoreRegister() {
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
   const [banner, setBanner] = useState<BannerMessage | null>(null);
+  const [termsAgreed, setTermsAgreed] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   const scrollToTop = useCallback(() => {
     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
@@ -485,6 +489,12 @@ export default function StoreRegister() {
       documentAsset,
     ]
   );
+
+  const isFormValid = useMemo(() => {
+    return Object.keys(fieldErrors).length === 0;
+  }, [fieldErrors]);
+
+  const canSubmit = !loading && termsAgreed && isFormValid;
 
   const markTouched = (field: StoreRegistrationFieldKey) => {
     setTouched((prev) => (prev[field] ? prev : { ...prev, [field]: true }));
@@ -783,6 +793,14 @@ export default function StoreRegister() {
       return;
     }
 
+    if (!termsAgreed) {
+      setBanner({
+        type: "error",
+        message: "Please review and agree to the Store Merchant Terms & Conditions before submitting.",
+      });
+      return;
+    }
+
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedOwnerPhone = sanitizePhoneNumber(ownerPhone);
 
@@ -1003,13 +1021,23 @@ export default function StoreRegister() {
                   Saved registration draft restored. Re-enter your password for security before submitting.
                 </Text>
               </View>
-              <View className="flex-row items-center gap-3">
-                <Pressable onPress={handleClearDraft}>
-                  <Text className="text-[11px] font-bold text-[#EA5410] hover:underline">
+              <View className="flex-row items-center gap-2">
+                <Pressable
+                  onPress={handleClearDraft}
+                  className="flex-row items-center gap-1 px-2.5 py-1 rounded-md bg-red-50/80 border border-red-200 hover:bg-red-100 active:bg-red-200 transition-colors cursor-pointer shadow-2xs"
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear Draft Form"
+                >
+                  <Ionicons name="trash-outline" size={12} color="#DC2626" />
+                  <Text className="text-[11px] font-bold text-red-700">
                     Clear Draft
                   </Text>
                 </Pressable>
-                <Pressable onPress={() => setHasRestoredDraft(false)}>
+                <Pressable
+                  onPress={() => setHasRestoredDraft(false)}
+                  className="p-1 rounded hover:bg-amber-100 cursor-pointer"
+                  accessibilityLabel="Dismiss draft notification"
+                >
                   <Ionicons name="close" size={14} color="#92400E" />
                 </Pressable>
               </View>
@@ -1127,18 +1155,17 @@ export default function StoreRegister() {
                     </View>
                     <Text className="text-sm font-bold text-gray-900">1. Store Information</Text>
                   </View>
-                  <View className="flex-row items-center gap-3">
-                    {hasDraftContent && (
-                      <Pressable onPress={handleClearDraft}>
-                        <Text className="text-[11px] font-semibold text-[#EA5410] hover:underline">
-                          Clear Draft
-                        </Text>
-                      </Pressable>
-                    )}
-                    <Text className="text-[10px] font-semibold text-gray-400">
-                      Required fields *
-                    </Text>
-                  </View>
+                  {hasDraftContent && (
+                    <Pressable
+                      onPress={handleClearDraft}
+                      className="flex-row items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-50/80 border border-red-200 hover:bg-red-100 active:bg-red-200 transition-colors cursor-pointer"
+                      accessibilityRole="button"
+                      accessibilityLabel="Clear Draft Form"
+                    >
+                      <Ionicons name="trash-outline" size={12} color="#DC2626" />
+                      <Text className="text-[11px] font-bold text-red-700">Clear Draft</Text>
+                    </Pressable>
+                  )}
                 </View>
 
                 <View className="gap-3.5">
@@ -1188,7 +1215,7 @@ export default function StoreRegister() {
                         Choose Store Categories *
                       </Text>
                       <Text className="text-[10px] font-medium text-gray-400">
-                        Select all that apply ({categories.length} selected)
+                        Select all that apply
                       </Text>
                     </View>
                     <View className="flex-row flex-wrap gap-2">
@@ -1257,9 +1284,6 @@ export default function StoreRegister() {
                       <View className="flex-1">
                         <Text className="text-[11px] font-semibold text-gray-800">
                           Operating Hours *
-                        </Text>
-                        <Text className="text-[10px] text-gray-500 mt-0.5">
-                          Choose 30-minute AM/PM time slots or toggle 24-hour service
                         </Text>
                       </View>
                       <View className="flex-row items-center gap-2">
@@ -1332,48 +1356,26 @@ export default function StoreRegister() {
                 </View>
               </View>
 
-              {/* Section 2: Address & Map Pinpoint */}
+              {/* Section 2: Address */}
               <View className="bg-white border border-gray-200/90 rounded-2xl p-5 shadow-2xs">
                 <View className="flex-row items-center gap-2 mb-4 pb-3 border-b border-gray-100">
                   <View className="w-6 h-6 rounded-md bg-orange-100 items-center justify-center">
                     <Ionicons name="map-outline" size={13} color="#EA5410" />
                   </View>
                   <Text className="text-sm font-bold text-gray-900">
-                    2. Address & Map Pinpoint
+                    2. Address
                   </Text>
                 </View>
 
                 <View className="gap-3.5">
-                  <View>
-                    <Text className="text-[11px] font-semibold text-gray-700 mb-1.5 ml-0.5">
-                      Barangay (Mati City) *
-                    </Text>
-                    <View className="flex-row flex-wrap gap-2">
-                      {STORE_BARANGAY_OPTIONS.map((item) => {
-                        const selected = barangay === item;
-                        return (
-                          <Pressable
-                            key={item}
-                            onPress={() => handleSelectBarangay(item)}
-                            className={`px-3 py-1.5 rounded-lg border transition-colors ${
-                              selected
-                                ? "bg-orange-50 border-[#EA5410]"
-                                : "bg-gray-50 border-gray-200 hover:bg-gray-100"
-                            }`}
-                          >
-                            <Text
-                              className={`text-[11px] font-semibold ${
-                                selected ? "text-[#EA5410]" : "text-gray-700"
-                              }`}
-                            >
-                              {item}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                    <FieldErrorText message={getVisibleError("barangay")} />
-                  </View>
+                  <BarangayAutofillInput
+                    value={barangay}
+                    onSelectBarangay={handleSelectBarangay}
+                    label="Barangay (Mati City) *"
+                    placeholder="Type to search official Mati barangay..."
+                    error={getVisibleError("barangay")}
+                    containerClassName="mb-1"
+                  />
 
                   <View>
                     <Text className="text-[11px] font-semibold text-gray-700 mb-1 ml-0.5">
@@ -1398,21 +1400,13 @@ export default function StoreRegister() {
                       <Text className="text-[11px] font-semibold text-gray-700">
                         Pin Exact Store Location on Map (Mati City) *
                       </Text>
-                      <View
-                        className={`px-2 py-0.5 rounded-full ${
-                          mapInMatiBounds ? "bg-emerald-50" : "bg-red-50"
-                        }`}
-                      >
-                        <Text
-                          className={`text-[10px] font-semibold ${
-                            mapInMatiBounds ? "text-emerald-700" : "text-red-700"
-                          }`}
-                        >
-                          {mapInMatiBounds
-                            ? "Within Mati City boundaries"
-                            : "Outside Mati City bounds"}
-                        </Text>
-                      </View>
+                      {!mapInMatiBounds && (
+                        <View className="px-2 py-0.5 rounded-full bg-red-50">
+                          <Text className="text-[10px] font-semibold text-red-700">
+                            Outside Mati City bounds
+                          </Text>
+                        </View>
+                      )}
                     </View>
                     <StoreMapPicker
                       latitude={latitude}
@@ -1426,14 +1420,14 @@ export default function StoreRegister() {
                 </View>
               </View>
 
-              {/* Section 3: Owner Account & Verification Document */}
+              {/* Section 3: Personal Information */}
               <View className="bg-white border border-gray-200/90 rounded-2xl p-5 shadow-2xs">
                 <View className="flex-row items-center gap-2 mb-4 pb-3 border-b border-gray-100">
                   <View className="w-6 h-6 rounded-md bg-orange-100 items-center justify-center">
                     <Ionicons name="person-outline" size={13} color="#EA5410" />
                   </View>
                   <Text className="text-sm font-bold text-gray-900">
-                    3. Owner Account & Verification
+                    3. Personal Information
                   </Text>
                 </View>
 
@@ -1441,14 +1435,14 @@ export default function StoreRegister() {
                   <View className="flex-col md:flex-row gap-3.5">
                     <View className="flex-1">
                       <Text className="text-[11px] font-semibold text-gray-700 mb-1 ml-0.5">
-                        Owner Full Name *
+                        Full Name *
                       </Text>
                       <TextInput
                         value={ownerName}
                         onChangeText={(text) => setOwnerName(filterOwnerNameInput(text))}
                         onBlur={() => markTouched("ownerName")}
                         maxLength={100}
-                        placeholder="Owner full name"
+                        placeholder="Full name"
                         className={`w-full bg-gray-50 border rounded-lg px-3 py-2.5 text-xs text-gray-900 focus:border-[#EA5410] focus:bg-white ${
                           getVisibleError("ownerName") ? "border-red-400" : "border-gray-200"
                         }`}
@@ -1458,7 +1452,7 @@ export default function StoreRegister() {
                     </View>
                     <View className="flex-1">
                       <Text className="text-[11px] font-semibold text-gray-700 mb-1 ml-0.5">
-                        Owner Mobile (GCash) *
+                        Mobile Number *
                       </Text>
                       <TextInput
                         value={ownerPhone}
@@ -1665,14 +1659,69 @@ export default function StoreRegister() {
                 </View>
               </View>
 
+              {/* Checkbox Agreement */}
+              <View className="bg-white border border-gray-200/90 rounded-2xl p-4 sm:p-5 shadow-2xs">
+                <View className="flex-row items-center justify-center gap-2.5">
+                  <Pressable
+                    onPress={() => setTermsAgreed(!termsAgreed)}
+                    className="cursor-pointer"
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: termsAgreed }}
+                  >
+                    <Ionicons
+                      name={termsAgreed ? "checkbox" : "square-outline"}
+                      size={20}
+                      color={termsAgreed ? "#EA5410" : "#6B7280"}
+                    />
+                  </Pressable>
+                  <Text className="text-xs sm:text-[13px] text-gray-800 text-center">
+                    <Text
+                      onPress={() => setTermsAgreed(!termsAgreed)}
+                      className="cursor-pointer"
+                    >
+                      I have read and agree to the{" "}
+                    </Text>
+                    <Text
+                      onPress={() => setShowTermsModal(true)}
+                      className="font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                    >
+                      Privacy Policy
+                    </Text>
+                    <Text
+                      onPress={() => setTermsAgreed(!termsAgreed)}
+                      className="cursor-pointer"
+                    >
+                      {" "}and{" "}
+                    </Text>
+                    <Text
+                      onPress={() => setShowTermsModal(true)}
+                      className="font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                    >
+                      Terms & Conditions
+                    </Text>
+                    <Text
+                      onPress={() => setTermsAgreed(!termsAgreed)}
+                      className="cursor-pointer"
+                    >
+                      .
+                    </Text>
+                  </Text>
+                </View>
+              </View>
+
               {/* Submit Action */}
               <View className="gap-3">
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Submit Store Application"
                   onPress={handleSubmitForm}
-                  disabled={loading}
-                  className="w-full bg-[#EA5410] py-3 rounded-xl items-center shadow-sm hover:bg-[#D04508] active:opacity-90 transition-colors"
+                  disabled={!canSubmit}
+                  className={`w-full py-3 rounded-xl items-center shadow-sm transition-colors ${
+                    !canSubmit
+                      ? "bg-gray-300 cursor-not-allowed opacity-60"
+                      : "bg-[#EA5410] hover:bg-[#D04508] active:opacity-90 cursor-pointer"
+                  }`}
+                  style={{ opacity: !canSubmit ? 0.6 : 1 }}
                 >
                   {loading ? (
                     <ActivityIndicator size="small" color="white" />
@@ -1762,6 +1811,14 @@ export default function StoreRegister() {
           </Pressable>
         </Pressable>
       </Modal>
+      {/* Store Merchant Terms & Conditions Modal */}
+      <TermsModal
+        visible={showTermsModal}
+        role="merchant"
+        showAcceptButton={false}
+        closeButtonLabel="I Understand"
+        onClose={() => setShowTermsModal(false)}
+      />
     </View>
   );
 }

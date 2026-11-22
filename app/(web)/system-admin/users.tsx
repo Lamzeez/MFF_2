@@ -7,6 +7,7 @@ import {
   setAdminUserPlatformRole,
   adminResetCustomerCodStrikes,
   deleteAdminUser,
+  subscribeToAdminUsers,
   type AdminUserItem,
 } from "../../../services/admin";
 import { getUserAccountStatusTheme, getUserRoleTheme } from "../../../lib/status-tokens";
@@ -51,6 +52,10 @@ export default function UsersPage() {
 
   useEffect(() => {
     loadUsers();
+    const unsub = subscribeToAdminUsers(loadUsers);
+    return () => {
+      unsub();
+    };
   }, []);
 
   const toggleStatus = async (id: string, currentStatus: "active" | "suspended") => {

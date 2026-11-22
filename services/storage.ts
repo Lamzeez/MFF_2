@@ -61,6 +61,21 @@ export async function uploadDishPhoto(
   }
 }
 
+/**
+ * Uploads a customer profile asset (cover photo or avatar) to Supabase Storage ('foodie-uploads').
+ * Converts local URI / web Blob URL into a permanent public HTTPS URL.
+ */
+export async function uploadCustomerProfilePhoto(
+  fileUri: string,
+  kind: "cover" | "avatar",
+  userId?: string | null
+): Promise<UploadResult> {
+  const safeUserId = userId ? userId.replace(/[^a-zA-Z0-9_-]/g, "") : "anonymous";
+  return uploadDishPhoto(fileUri, {
+    folder: `customer-profiles/${safeUserId}/${kind}`,
+  });
+}
+
 async function uploadMerchantAsset(
   fileOrUri: Blob | string,
   pathPrefix: string,

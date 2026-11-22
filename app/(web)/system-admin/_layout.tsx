@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Slot, Link, usePathname, useRouter } from "expo-router";
 import { ActivityIndicator, View, Text, Pressable, ScrollView, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -8,6 +8,8 @@ import { useSession } from "../../../context/SessionContext";
 import { hasAdminApplicationRole } from "../../../services/auth";
 import { isAdminNavItemActive } from "../../../lib/admin-report";
 import { canAccessSystemAdmin } from "../../../lib/platform-policy";
+import { LogoutConfirmModal } from "../../../components/ui/LogoutConfirmModal";
+import { ActionSuccessModal } from "../../../components/ui/ActionSuccessModal";
 
 const ADMIN_NAV_ITEMS = [
   {
@@ -48,6 +50,27 @@ export default function SystemAdminLayout() {
   const { status, identity, logoutToGuest } = useSession("admin");
   const { width } = useWindowDimensions();
 
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState<boolean>(false);
+  const [showLogoutSuccess, setShowLogoutSuccess] = useState<boolean>(false);
+  const [showLoginSuccess, setShowLoginSuccess] = useState<boolean>(false);
+  const [signingOut, setSigningOut] = useState<boolean>(false);
+
+  const handleConfirmSignOut = () => {
+    setShowLogoutConfirm(false);
+    setShowLogoutSuccess(true);
+  };
+
+  const handleLogoutSuccessClose = async () => {
+    setShowLogoutSuccess(false);
+    setSigningOut(true);
+    try {
+      await logoutToGuest();
+    } finally {
+      setSigningOut(false);
+      router.replace("/");
+    }
+  };
+
   // System Admin console is restricted to desktop viewports.
   if (!canAccessSystemAdmin(width)) {
     return (
@@ -85,13 +108,14 @@ export default function SystemAdminLayout() {
     status === "authenticated" && !!identity && hasAdminApplicationRole(identity.roles);
 
   if (!isAdminUnlocked) {
-    return <SystemAdminGate />;
+    return (
+      <SystemAdminGate
+        onLoginSuccess={() => {
+          setShowLoginSuccess(true);
+        }}
+      />
+    );
   }
-
-  const handleSignOut = async () => {
-    await logoutToGuest();
-    router.replace("/");
-  };
 
   return (
     <View className="flex-1 flex-row bg-[#F8FAFC] h-screen w-full">
@@ -168,7 +192,7 @@ export default function SystemAdminLayout() {
           </View>
 
           <Pressable
-            onPress={handleSignOut}
+            onPress={() => setShowLogoutConfirm(true)}
             className="px-3 py-2 rounded-lg hover:bg-red-500/10 flex-row items-center justify-center gap-1.5 border border-transparent hover:border-red-500/20 transition-colors"
           >
             <Ionicons name="log-out-outline" size={14} color="#F87171" />
@@ -187,7 +211,7 @@ export default function SystemAdminLayout() {
             </View>
             <Text className="text-white font-bold text-sm">Admin</Text>
           </View>
-          <Pressable onPress={handleSignOut} className="px-2.5 py-1 bg-gray-900 rounded-lg">
+          <Pressable onPress={() => setShowLogoutConfirm(true)} className="px-2.5 py-1 bg-gray-900 rounded-lg">
             <Text className="text-red-400 text-[11px] font-bold">Sign Out</Text>
           </Pressable>
         </View>
@@ -199,6 +223,34 @@ export default function SystemAdminLayout() {
           </SafeAreaView>
         </ScrollView>
       </View>
+
+      {/* Admin Logout Confirmation Modal */}
+      <LogoutConfirmModal
+        visible={showLogoutConfirm}
+        isSigningOut={signingOut}
+        onCancel={() => setShowLogoutConfirm(false)}
+        onConfirm={handleConfirmSignOut}
+      />
+
+      {/* Admin Logout Success Modal */}
+      <ActionSuccessModal
+        visible={showLogoutSuccess}
+        title="Signed Out"
+        message="You have safely signed out of System Administration."
+        buttonLabel="Continue"
+        autoCloseMs={1500}
+        onClose={handleLogoutSuccessClose}
+      />
+
+      {/* Admin Login Success Modal */}
+      <ActionSuccessModal
+        visible={showLoginSuccess}
+        title="Admin Access Verified"
+        message="Welcome to Mati FoodFinder System Administration."
+        buttonLabel="Open Console"
+        autoCloseMs={1500}
+        onClose={() => setShowLoginSuccess(false)}
+      />
     </View>
   );
 }

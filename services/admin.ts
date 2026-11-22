@@ -649,3 +649,64 @@ export async function setRiderApproval(
   }
 }
 
+/**
+ * Subscribe to store application / status changes for System Admin
+ */
+export function subscribeToAdminStores(onChange: () => void): () => void {
+  const supabase = getSupabaseClient("admin");
+  const channel = supabase
+    .channel(`admin_stores_changes_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "stores",
+      },
+      () => {
+        onChange();
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
+
+/**
+ * Subscribe to user and profile changes for System Admin
+ */
+export function subscribeToAdminUsers(onChange: () => void): () => void {
+  const supabase = getSupabaseClient("admin");
+  const channel = supabase
+    .channel(`admin_users_changes_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "profiles",
+      },
+      () => {
+        onChange();
+      }
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "platform_roles",
+      },
+      () => {
+        onChange();
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
+

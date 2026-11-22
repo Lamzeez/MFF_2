@@ -13,14 +13,17 @@ import { Link } from "expo-router";
 import { useSession } from "../../context/SessionContext";
 import { authMessage, hasAdminApplicationRole } from "../../services/auth";
 import { getSupabaseClient } from "../../lib/supabase/client";
+import { ActionSuccessModal } from "../ui/ActionSuccessModal";
 
 const adminBackdrop = require("../../assets/admin-bg.jpg");
 const mffLogo = require("../../assets/logo.jpg");
 
 export default function SystemAdminGate({
   onUnlock,
+  onLoginSuccess,
 }: {
   onUnlock?: () => void;
+  onLoginSuccess?: () => void;
 }) {
   const { signIn, logoutToGuest } = useSession("admin");
   const [email, setEmail] = useState("");
@@ -28,6 +31,7 @@ export default function SystemAdminGate({
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const handleAdminAuth = async () => {
     setErrorMsg(null);
@@ -54,7 +58,8 @@ export default function SystemAdminGate({
         return;
       }
 
-      onUnlock?.();
+      onLoginSuccess?.();
+      setShowSuccessModal(true);
     } catch (err: unknown) {
       const msg = authMessage(err);
       const errMessage =
@@ -228,6 +233,18 @@ export default function SystemAdminGate({
           </View>
         </View>
       </ScrollView>
+
+      <ActionSuccessModal
+        visible={showSuccessModal}
+        title="Admin Access Verified"
+        message="Welcome to Mati FoodFinder System Administration."
+        buttonLabel="Open Console"
+        autoCloseMs={1500}
+        onClose={() => {
+          setShowSuccessModal(false);
+          onUnlock?.();
+        }}
+      />
     </View>
   );
 }

@@ -20,7 +20,13 @@ import { RestaurantProfile, FoodItem } from "../../../types/restaurant";
 import { MATI_RESTAURANTS_DATA } from "../../../mock/restaurants";
 import { FOOD_ITEMS } from "../../../mock/dishes";
 import { MATI_BARANGAYS } from "../../../mock/barangays";
-import { fetchLiveStores, fetchLiveMenuItems, LiveStoreProfile } from "../../../services/catalog";
+import {
+  fetchLiveStores,
+  fetchLiveMenuItems,
+  subscribeToStores,
+  subscribeToAllMenuItems,
+  LiveStoreProfile,
+} from "../../../services/catalog";
 import { createOrder } from "../../../services/orders";
 import { createReservation } from "../../../services/reservations";
 import { RestaurantProfileSheet } from "../../../components/restaurant/RestaurantProfileSheet";
@@ -64,7 +70,7 @@ const EXPLORE_FALLBACK_SPOTS: ExploreSpotItem[] = [
     id: "11111111-1111-1111-1111-111111111111",
     storeId: "11111111-1111-1111-1111-111111111111",
     name: "Mama Letty's Karenderia",
-    category: "Karenderias",
+    category: "Meals",
     latitude: 6.955,
     longitude: 126.2165,
     area: "Magsaysay St, Brgy. Central",
@@ -144,7 +150,7 @@ const EXPLORE_FALLBACK_SPOTS: ExploreSpotItem[] = [
     id: "55555555-5555-5555-5555-555555555555",
     storeId: "55555555-5555-5555-5555-555555555555",
     name: "Aling Nena's Kitchen",
-    category: "Karenderias",
+    category: "Meals",
     latitude: 6.958,
     longitude: 126.219,
     area: "Rizal Extension, Brgy. Sainz",
@@ -217,6 +223,12 @@ export default function MobileMapScreen() {
   useEffect(() => {
     requestUserLocation();
     loadLiveCatalog();
+    const unsubStores = subscribeToStores(loadLiveCatalog);
+    const unsubMenu = subscribeToAllMenuItems(loadLiveCatalog);
+    return () => {
+      unsubStores();
+      unsubMenu();
+    };
   }, []);
 
   // Live GPS tracking when an active route is open: keeps userLocation updated as device moves
@@ -584,15 +596,23 @@ export default function MobileMapScreen() {
 
   // Handle Order Placement
   const handlePlaceOrderFromSheet = async (orderPayload: CheckoutConfirmedPayload) => {
-    let targetStoreId = orderPayload.storeId || orderPayload.dish?.storeId;
+    const isUuid = (val?: string | null) =>
+      typeof val === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
+    let targetStoreId =
+      (orderPayload.storeId && isUuid(orderPayload.storeId) ? orderPayload.storeId : null) ||
+      (orderPayload.dish?.storeId && isUuid(orderPayload.dish.storeId) ? orderPayload.dish.storeId : null);
     const targetStoreName = orderPayload.storeName || orderPayload.dish?.store || "";
-    if (!targetStoreId) {
+    if (!targetStoreId && targetStoreName) {
       const match = Object.values(restaurants).find(
         (r: any) =>
-          r.name === targetStoreName ||
-          (r.id && r.name.toLowerCase().includes(targetStoreName.toLowerCase()))
+          (r.name && r.name.toLowerCase().trim() === targetStoreName.toLowerCase().trim()) ||
+          (r.id && r.name && r.name.toLowerCase().includes(targetStoreName.toLowerCase().trim()))
       ) as any;
-      targetStoreId = match?.id || "11111111-1111-1111-1111-111111111111";
+      targetStoreId = match?.id && isUuid(match.id) ? match.id : null;
+    }
+    if (!targetStoreId) {
+      targetStoreId = "11111111-1111-1111-1111-111111111111";
     }
 
     const itemsToOrder =
@@ -619,6 +639,7 @@ export default function MobileMapScreen() {
         voucherCode: orderPayload.voucherCode,
         voucherId: orderPayload.voucherId,
         discount: orderPayload.discount,
+        bypassHoursCheck: true,
       });
 
       setShowCheckoutModal(false);
@@ -1371,10 +1392,12 @@ export default function MobileMapScreen() {
         initialRestaurant={reservationResto}
         restaurants={restaurants}
         onConfirmReservation={async (data) => {
+          const isUuid = (val?: string | null) =>
+            typeof val === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
           const storeEntry = Object.values(restaurants).find(
             (s) => s.name.toLowerCase() === data.restaurantName.toLowerCase()
           );
-          const storeId = storeEntry?.id || "11111111-1111-1111-1111-111111111111";
+          const storeId = (storeEntry?.id && isUuid(storeEntry.id) ? storeEntry.id : null) || "11111111-1111-1111-1111-111111111111";
           try {
             await createReservation({
               storeId,

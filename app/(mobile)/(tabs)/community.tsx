@@ -19,6 +19,7 @@ import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "../../../context/AuthContext";
 import { SocialPost } from "../../../types/post";
+import { SEED_SOCIAL_POSTS } from "../../../mock/posts";
 import { fetchLiveStores } from "../../../services/catalog";
 import {
   fetchCommunityPosts,
@@ -50,6 +51,7 @@ export default function MobileCommunityScreen() {
 
   // Social Posts & Pagination State
   const [socialPosts, setSocialPosts] = useState<SocialPost[]>([]);
+  const [isLoadingInitial, setIsLoadingInitial] = useState(true);
   const [availableStores, setAvailableStores] = useState<string[]>(DEFAULT_MATI_STORES);
   const [currentUserAvatarUrl, setCurrentUserAvatarUrl] = useState<string | null>(null);
   const [feedSort, setFeedSort] = useState<FeedSortOption>("trending");
@@ -92,6 +94,8 @@ export default function MobileCommunityScreen() {
       if (data.length < 10) setHasMore(false);
     } catch (err) {
       console.warn("Could not fetch community posts:", err);
+    } finally {
+      setIsLoadingInitial(false);
     }
   };
 
@@ -274,6 +278,7 @@ export default function MobileCommunityScreen() {
 
   // Create Post with Real Media Upload
   const handleCreatePost = async (handleDismiss: () => void) => {
+    if (!verifyRegisteredUser("post in the foodie community")) return;
     if (!newPostText.trim()) {
       Alert.alert("Missing Content", "Please share something about your food trip in Mati City.");
       return;
@@ -669,34 +674,41 @@ export default function MobileCommunityScreen() {
           ) : null
         }
         ListEmptyComponent={
-          <View className="w-full max-w-2xl self-center px-4">
-          <View className="bg-white p-8 rounded-3xl border border-gray-200/80 items-center justify-center my-6 shadow-sm">
-            <View className="w-16 h-16 rounded-2xl bg-[#EA5410]/10 items-center justify-center mb-3">
-              <Ionicons name="chatbubbles-outline" size={32} color="#EA5410" />
+          isLoadingInitial ? (
+            <View className="w-full max-w-2xl self-center px-4 py-16 items-center justify-center">
+              <ActivityIndicator size="large" color="#EA5410" />
+              <Text className="text-xs text-gray-500 font-medium mt-3">Loading Mati foodie reviews...</Text>
             </View>
-            <Text className="text-base font-black text-gray-900 mt-1">No Foodie Reviews Yet</Text>
-            <Text className="text-xs text-gray-500 text-center mt-1.5 mb-5 max-w-xs leading-relaxed">
-              Be the first to share a review or dish photo of your favorite restaurant in Mati City!
-            </Text>
-            {isLoggedIn ? (
-              <Pressable
-                onPress={() => setShowCreateModal(true)}
-                className="bg-[#EA5410] px-6 py-3 rounded-2xl shadow-sm active:opacity-90 flex-row items-center gap-2"
-              >
-                <Ionicons name="create-outline" size={16} color="white" />
-                <Text className="text-white font-extrabold text-xs">Write the First Review</Text>
-              </Pressable>
-            ) : (
-              <Pressable
-                onPress={() => router.push("/(mobile)/auth/customer-login")}
-                className="bg-[#EA5410] px-6 py-3 rounded-2xl shadow-sm active:opacity-90 flex-row items-center gap-2"
-              >
-                <Ionicons name="log-in-outline" size={16} color="white" />
-                <Text className="text-white font-extrabold text-xs">Sign In to Post</Text>
-              </Pressable>
-            )}
-          </View>
-          </View>
+          ) : (
+            <View className="w-full max-w-2xl self-center px-4">
+              <View className="bg-white p-8 rounded-3xl border border-gray-200/80 items-center justify-center my-6 shadow-sm">
+                <View className="w-16 h-16 rounded-2xl bg-[#EA5410]/10 items-center justify-center mb-3">
+                  <Ionicons name="chatbubbles-outline" size={32} color="#EA5410" />
+                </View>
+                <Text className="text-base font-black text-gray-900 mt-1">No Foodie Reviews Yet</Text>
+                <Text className="text-xs text-gray-500 text-center mt-1.5 mb-5 max-w-xs leading-relaxed">
+                  Be the first to share a review or dish photo of your favorite restaurant in Mati City!
+                </Text>
+                {isLoggedIn ? (
+                  <Pressable
+                    onPress={() => setShowCreateModal(true)}
+                    className="bg-[#EA5410] px-6 py-3 rounded-2xl shadow-sm active:opacity-90 flex-row items-center gap-2"
+                  >
+                    <Ionicons name="create-outline" size={16} color="white" />
+                    <Text className="text-white font-extrabold text-xs">Write the First Review</Text>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    onPress={() => router.push("/(mobile)/auth/customer-login")}
+                    className="bg-[#EA5410] px-6 py-3 rounded-2xl shadow-sm active:opacity-90 flex-row items-center gap-2"
+                  >
+                    <Ionicons name="log-in-outline" size={16} color="white" />
+                    <Text className="text-white font-extrabold text-xs">Sign In to Post</Text>
+                  </Pressable>
+                )}
+              </View>
+            </View>
+          )
         }
         initialNumToRender={6}
         maxToRenderPerBatch={8}

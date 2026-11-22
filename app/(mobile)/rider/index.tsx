@@ -50,6 +50,8 @@ import {
   sendQuickDispatchMessage,
   BISAYA_RIDER_DISPATCH_CHIPS,
 } from "../../../services/quick-dispatch";
+import { LogoutConfirmModal } from "../../../components/ui/LogoutConfirmModal";
+import { ActionSuccessModal } from "../../../components/ui/ActionSuccessModal";
 
 interface RiderJob {
   id: string | number;
@@ -110,6 +112,8 @@ export default function MobileRiderMode() {
   const [gpsBeaconEnabled, setGpsBeaconEnabled] = useState(true);
   const [audioChimesEnabled, setAudioChimesEnabled] = useState(true);
   const [signingOut, setSigningOut] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showLogoutSuccess, setShowLogoutSuccess] = useState(false);
 
   const hour = new Date().getHours();
   const timeGreeting = hour < 12 ? "Maayong buntag" : hour < 18 ? "Maayong hapon" : "Maayong gabii";
@@ -526,46 +530,28 @@ export default function MobileRiderMode() {
     );
   };
 
-  const performSignOut = async () => {
+  const performSignOut = () => {
     if (signingOut) return;
-    setSigningOut(true);
     setProfileModalVisible(false);
+    setShowLogoutConfirm(false);
+    setShowLogoutSuccess(true);
+  };
+
+  const handleLogoutSuccessClose = async () => {
+    setShowLogoutSuccess(false);
+    setSigningOut(true);
     try {
       await logoutToGuest();
     } catch (err) {
       console.error("Rider sign out error:", err);
     } finally {
-      router.replace("/");
       setSigningOut(false);
+      router.replace("/");
     }
   };
 
   const handleSignOutRider = () => {
-    if (Platform.OS === "web") {
-      const confirmed =
-        typeof window !== "undefined"
-          ? window.confirm("Are you sure you want to sign out of your Rider Account?")
-          : true;
-      if (confirmed) {
-        void performSignOut();
-      }
-      return;
-    }
-
-    Alert.alert(
-      "Sign Out of Rider Account?",
-      "Are you sure you want to sign out?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Sign Out",
-          style: "destructive",
-          onPress: () => {
-            void performSignOut();
-          },
-        },
-      ]
-    );
+    setShowLogoutConfirm(true);
   };
 
   const activeJob = availableJobs.find((j) => j.id === activeJobId);
@@ -2278,6 +2264,24 @@ export default function MobileRiderMode() {
           </Pressable>
         </View>
       </View>
+
+      {/* Rider Logout Confirmation Modal */}
+      <LogoutConfirmModal
+        visible={showLogoutConfirm}
+        isSigningOut={signingOut}
+        onCancel={() => setShowLogoutConfirm(false)}
+        onConfirm={performSignOut}
+      />
+
+      {/* Rider Logout Success Modal */}
+      <ActionSuccessModal
+        visible={showLogoutSuccess}
+        title="Signed Out"
+        message="You have safely signed out of your Rider Dispatch account."
+        buttonLabel="Continue"
+        autoCloseMs={1500}
+        onClose={handleLogoutSuccessClose}
+      />
     </SafeAreaView>
   );
 }

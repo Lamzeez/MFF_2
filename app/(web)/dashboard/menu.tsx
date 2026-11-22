@@ -17,6 +17,7 @@ import {
   fetchStoreById,
   fetchStoreMenuItems,
   fetchUserStoreId,
+  subscribeToStoreMenuItems,
   updateMenuItemAvailability,
   updateStoreMenuItem,
 } from "../../../services/catalog";
@@ -63,8 +64,6 @@ export default function MenuManager() {
   const [itemName, setItemName] = useState("");
   const [itemDescription, setItemDescription] = useState("");
   const [itemCategory, setItemCategory] = useState<string>(ITEM_CATEGORY_OPTIONS[0]);
-  const [isCustomCategory, setIsCustomCategory] = useState(false);
-  const [customCategoryInput, setCustomCategoryInput] = useState("");
   const [itemModifiers, setItemModifiers] = useState<DishModifierGroup[]>([]);
   const [itemPrice, setItemPrice] = useState("");
   const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
@@ -146,17 +145,17 @@ export default function MenuManager() {
   useEffect(() => {
     if (!storeId) return;
     void loadMenu(storeId);
+    const unsub = subscribeToStoreMenuItems(storeId, () => {
+      void loadMenu(storeId);
+    });
+    return () => {
+      unsub();
+    };
   }, [storeId, loadMenu]);
 
   const availableCategories = useMemo(() => {
-    const set = new Set<string>(MENU_ITEM_CATEGORIES);
-    for (const m of menuItems) {
-      if (m.category && m.category.trim()) {
-        set.add(m.category.trim());
-      }
-    }
-    return Array.from(set);
-  }, [menuItems]);
+    return [...MENU_ITEM_CATEGORIES];
+  }, []);
 
   const MODIFIER_PRESETS = [
     {
@@ -282,8 +281,6 @@ export default function MenuManager() {
     setItemName("");
     setItemDescription("");
     setItemCategory(ITEM_CATEGORY_OPTIONS[0]);
-    setIsCustomCategory(false);
-    setCustomCategoryInput("");
     setItemModifiers([]);
     setItemPrice("");
     setExistingImageUrl(null);
@@ -326,16 +323,11 @@ export default function MenuManager() {
     setEditingItem(item);
     setItemName(filterMenuItemNameInput(item.name));
     setItemDescription(filterMenuItemDescriptionInput(item.description || ""));
-    const isStdCategory = (ITEM_CATEGORY_OPTIONS as string[]).includes(item.category);
-    if (isStdCategory) {
-      setItemCategory(item.category);
-      setIsCustomCategory(false);
-      setCustomCategoryInput("");
-    } else {
-      setItemCategory(item.category);
-      setIsCustomCategory(true);
-      setCustomCategoryInput(item.category);
-    }
+    setItemCategory(
+      (ITEM_CATEGORY_OPTIONS as string[]).includes(item.category)
+        ? item.category
+        : ITEM_CATEGORY_OPTIONS[0]
+    );
     setItemModifiers(
       Array.isArray(item.modifiers)
         ? JSON.parse(JSON.stringify(item.modifiers))
@@ -416,18 +408,14 @@ export default function MenuManager() {
       return;
     }
 
-    const finalCategory = isCustomCategory
-      ? customCategoryInput.trim() || "Meals"
-      : itemCategory;
-
-    const allowedCats = Array.from(new Set([...availableCategories, finalCategory]));
+    const finalCategory = itemCategory;
 
     const errors = validateMenuItemForm({
       name: itemName,
       description: itemDescription,
       category: finalCategory,
       price: itemPrice,
-      allowedCategories: allowedCats,
+      allowedCategories: ITEM_CATEGORY_OPTIONS as string[],
     });
 
     if (Object.keys(errors).length > 0) {
@@ -976,69 +964,29 @@ export default function MenuManager() {
                 <View>
                   <Text className="text-[11px] font-semibold text-gray-700 mb-1">Category</Text>
                   <View className="flex-row flex-wrap gap-1.5 mb-2">
-                    {availableCategories.map((cat: string) => (
+                    {ITEM_CATEGORY_OPTIONS.map((cat: string) => (
                       <Pressable
                         key={cat}
                         onPress={() => {
                           setItemCategory(cat);
-                          setIsCustomCategory(false);
-                          setCustomCategoryInput("");
                           setFieldErrors((prev) => ({ ...prev, category: undefined }));
                         }}
-                        className={`px-2.5 py-1 rounded-lg border cursor-pointer ${
-                          !isCustomCategory && itemCategory === cat
+                        className={`px-3 py-1.5 rounded-lg border cursor-pointer ${
+                          itemCategory === cat
                             ? "bg-orange-50 border-[#EA5410]"
-                            : "bg-gray-50 border-gray-200"
+                            : "bg-gray-50 border-gray-200 hover:bg-gray-100"
                         }`}
                       >
                         <Text
                           className={`text-[11px] font-semibold ${
-                            !isCustomCategory && itemCategory === cat ? "text-[#EA5410]" : "text-gray-600"
+                            itemCategory === cat ? "text-[#EA5410]" : "text-gray-600"
                           }`}
                         >
                           {cat}
                         </Text>
                       </Pressable>
                     ))}
-                    <Pressable
-                      onPress={() => {
-                        setIsCustomCategory(true);
-                        setFieldErrors((prev) => ({ ...prev, category: undefined }));
-                      }}
-                      className={`px-2.5 py-1 rounded-lg border cursor-pointer flex-row items-center gap-1 ${
-                        isCustomCategory
-                          ? "bg-orange-50 border-[#EA5410]"
-                          : "bg-gray-50 border-gray-200"
-                      }`}
-                    >
-                      <Ionicons
-                        name="add-circle-outline"
-                        size={12}
-                        color={isCustomCategory ? "#EA5410" : "#6B7280"}
-                      />
-                      <Text
-                        className={`text-[11px] font-semibold ${
-                          isCustomCategory ? "text-[#EA5410]" : "text-gray-600"
-                        }`}
-                      >
-                        + Custom Category
-                      </Text>
-                    </Pressable>
                   </View>
-
-                  {isCustomCategory && (
-                    <TextInput
-                      value={customCategoryInput}
-                      onChangeText={(text) => {
-                        setCustomCategoryInput(text);
-                        setFieldErrors((prev) => ({ ...prev, category: undefined }));
-                      }}
-                      placeholder="e.g. Breakfast / Silog, Desserts, Native Coffee"
-                      placeholderTextColor="#9CA3AF"
-                      maxLength={40}
-                      className="bg-gray-50 border border-[#EA5410] rounded-lg px-3 py-1.5 text-xs text-gray-900 outline-none"
-                    />
-                  )}
 
                   {fieldErrors.category ? (
                     <Text className="text-[11px] font-semibold text-rose-600 mt-1">

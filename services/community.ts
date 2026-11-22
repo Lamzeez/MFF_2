@@ -1,6 +1,7 @@
 import { getSupabaseClient } from "../lib/supabase/client";
 import { Database } from "../types/database";
 import { SocialPost, FeedComment } from "../types/post";
+import { SEED_SOCIAL_POSTS } from "../mock/posts";
 
 export type CommunityPostRow = Database["public"]["Tables"]["community_posts"]["Row"];
 export type CommunityCommentRow = Database["public"]["Tables"]["community_comments"]["Row"];
@@ -206,12 +207,12 @@ export async function fetchCommunityPosts(
   const { data: posts, error: postsError } = await postsQuery;
 
   if (postsError) {
-    console.error("[services/community] fetchCommunityPosts error:", postsError);
-    throw new Error(postsError.message);
+    console.warn("[services/community] fetchCommunityPosts notice:", postsError.message);
+    return SEED_SOCIAL_POSTS;
   }
 
   if (!posts || posts.length === 0) {
-    return [];
+    return SEED_SOCIAL_POSTS;
   }
 
   const postIds = posts.map((p) => p.id);

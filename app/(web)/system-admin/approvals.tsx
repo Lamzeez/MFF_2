@@ -18,6 +18,8 @@ import {
   setStoreApproval,
   setStoreSuspended,
   setRiderApproval,
+  subscribeToAdminStores,
+  subscribeToAdminUsers,
   type StoreApplication,
   type RiderApplicationItem,
 } from "../../../services/admin";
@@ -64,6 +66,12 @@ export default function ApprovalsPage() {
 
   useEffect(() => {
     void loadData();
+    const unsubStores = subscribeToAdminStores(loadData);
+    const unsubUsers = subscribeToAdminUsers(loadData);
+    return () => {
+      unsubStores();
+      unsubUsers();
+    };
   }, []);
 
   const handleRiderAction = async (riderId: string, approve: boolean) => {

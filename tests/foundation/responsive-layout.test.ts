@@ -54,7 +54,16 @@ import {
   SUBSCRIPTION_TIERS,
   resolveStoreSubscriptionSummary,
 } from "../../lib/subscription-tiers";
-import { MENU_ITEM_CATEGORIES } from "../../services/catalog";
+import {
+  CATEGORIES as CATALOG_CATEGORIES,
+  MENU_ITEM_CATEGORIES,
+} from "../../services/catalog";
+import {
+  CATEGORIES as MOCK_CATEGORIES,
+  MATI_RESTAURANTS_DATA,
+} from "../../mock/restaurants";
+import { FOOD_ITEMS } from "../../mock/dishes";
+import { STORE_CUISINE_OPTIONS } from "../../services/merchant-registration";
 import { isStoreCurrentlyOpen } from "../../lib/geo-serviceability";
 
 const ROOT = process.cwd();
@@ -283,10 +292,21 @@ test("Merchant web dashboard layout includes mobile horizontal sub-navigation, l
     null
   );
 
-  // No "Karenderias" item category, clear Sold Out switch + View/Edit/Delete actions
+  // System-wide: No "Karenderias" category anywhere across catalog, restaurants, registration, or dishes
   const dashboardBilling = readSource("app/(web)/dashboard/billing.tsx");
   const customerOrdersSrc = readSource("app/(mobile)/(tabs)/orders.tsx");
   assert.equal(MENU_ITEM_CATEGORIES.includes("Karenderias" as never), false);
+  assert.equal(CATALOG_CATEGORIES.includes("Karenderias" as never), false);
+  assert.equal(MOCK_CATEGORIES.includes("Karenderias" as never), false);
+  assert.equal(STORE_CUISINE_OPTIONS.includes("Karenderias" as never), false);
+  assert.deepEqual([...CATALOG_CATEGORIES], ["All", "Meals", "Seafood", "BBQ & Grill", "Merienda", "Beverages"]);
+  assert.deepEqual([...MOCK_CATEGORIES], ["All", "Meals", "Seafood", "BBQ & Grill", "Merienda", "Beverages"]);
+  assert.deepEqual([...STORE_CUISINE_OPTIONS], ["Meals", "Seafood", "BBQ & Grill", "Merienda", "Beverages"]);
+  assert.equal(FOOD_ITEMS.some((dish) => dish.category === "Karenderias"), false);
+  assert.equal(
+    Object.values(MATI_RESTAURANTS_DATA).some((store) => store.categories?.includes("Karenderias")),
+    false
+  );
   assert.equal(dashboardMenu.includes("Karenderias"), false);
   assert.equal(dashboardMenu.includes("MENU_ITEM_CATEGORIES"), true);
   assert.equal(dashboardMenu.includes("Sold Out Toggle"), true);

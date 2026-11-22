@@ -50,10 +50,28 @@ function buildLeafletMapHtml(initialLat: number, initialLng: number): string {
       text-align: center;
       background: #f8fafc;
     }
+    #toast {
+      display: none;
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(220, 38, 38, 0.95);
+      color: #ffffff;
+      padding: 7px 16px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+      pointer-events: none;
+      white-space: nowrap;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <div id="toast"></div>
   <div id="fallback">Unable to load street tiles right now. Use Barangay presets or GPS to set coordinates.</div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script>
@@ -63,9 +81,24 @@ function buildLeafletMapHtml(initialLat: number, initialLng: number): string {
         return;
       }
 
+      // Mati City Geographic Boundaries (Lawigan to Don Salvador Lopez, Dawan to Mayo)
+      var MATI_MIN_LAT = 6.74;
+      var MATI_MAX_LAT = 7.08;
+      var MATI_MIN_LNG = 126.08;
+      var MATI_MAX_LNG = 126.38;
+
+      var matiBounds = L.latLngBounds(
+        [MATI_MIN_LAT, MATI_MIN_LNG],
+        [MATI_MAX_LAT, MATI_MAX_LNG]
+      );
+
       var map = L.map("map", {
         center: [${safeLat}, ${safeLng}],
         zoom: 15,
+        minZoom: 11,
+        maxZoom: 18,
+        maxBounds: matiBounds,
+        maxBoundsViscosity: 1.0,
         zoomControl: true
       });
 
@@ -73,6 +106,32 @@ function buildLeafletMapHtml(initialLat: number, initialLng: number): string {
         maxZoom: 19,
         attribution: "&copy; OpenStreetMap"
       }).addTo(map);
+
+      // Subtle boundary visual indication of Mati City territory
+      L.rectangle(matiBounds, {
+        color: "#ea5410",
+        weight: 1.5,
+        fillColor: "#ea5410",
+        fillOpacity: 0.02,
+        dashArray: "4, 6"
+      }).addTo(map);
+
+      var toastTimer = null;
+      function showNotice(msg) {
+        var toast = document.getElementById("toast");
+        if (!toast) return;
+        toast.textContent = msg;
+        toast.style.display = "block";
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () {
+          toast.style.display = "none";
+        }, 3200);
+      }
+
+      function isInsideMati(lat, lng) {
+        return lat >= MATI_MIN_LAT && lat <= MATI_MAX_LAT &&
+               lng >= MATI_MIN_LNG && lng <= MATI_MAX_LNG;
+      }
 
       var pinIcon = L.divIcon({
         className: "",
@@ -98,12 +157,24 @@ function buildLeafletMapHtml(initialLat: number, initialLng: number): string {
       }
 
       map.on("click", function (e) {
+        if (!isInsideMati(e.latlng.lat, e.latlng.lng)) {
+          showNotice("Please pin your store within Mati City boundaries.");
+          return;
+        }
         marker.setLatLng(e.latlng);
         notifyParent(e.latlng.lat, e.latlng.lng);
       });
 
       marker.on("dragend", function () {
         var pos = marker.getLatLng();
+        if (!isInsideMati(pos.lat, pos.lng)) {
+          var clampedLat = Math.min(Math.max(pos.lat, MATI_MIN_LAT + 0.005), MATI_MAX_LAT - 0.005);
+          var clampedLng = Math.min(Math.max(pos.lng, MATI_MIN_LNG + 0.005), MATI_MAX_LNG - 0.005);
+          marker.setLatLng([clampedLat, clampedLng]);
+          notifyParent(clampedLat, clampedLng);
+          showNotice("Pin was kept inside Mati City boundaries.");
+          return;
+        }
         notifyParent(pos.lat, pos.lng);
       });
 
@@ -117,6 +188,10 @@ function buildLeafletMapHtml(initialLat: number, initialLng: number): string {
         marker.setLatLng(nextLatLng);
         map.setView(nextLatLng, Math.max(map.getZoom(), 15), { animate: true });
       });
+
+      setTimeout(function () {
+        map.invalidateSize();
+      }, 250);
     })();
   </script>
 </body>
@@ -264,8 +339,16 @@ export default function StoreMapPicker({
         </Pressable>
       </View>
 
-      {/* Interactive OpenStreetMap Canvas */}
-      <View style={{ width: "100%", height: 240, backgroundColor: "#F1F5F9" }}>
+      {/* Interactive OpenStreetMap Canvas (1:1 Aspect Ratio) */}
+      <View
+        style={{
+          width: "100%",
+          aspectRatio: 1,
+          minHeight: 380,
+          maxHeight: 580,
+          backgroundColor: "#F1F5F9",
+        }}
+      >
         <iframe
           ref={iframeRef}
           title="Store location map picker"

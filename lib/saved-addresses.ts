@@ -16,34 +16,9 @@ export interface SavedAddress {
 
 const STORAGE_KEY = "mff_saved_delivery_addresses";
 
-export const DEFAULT_MATI_ADDRESSES: SavedAddress[] = [
-  {
-    id: "addr-home-default",
-    label: "Home",
-    icon: "home",
-    barangay: "Central (Poblacion)",
-    landmarkDescription: "Near Baywalk Pavilion, blue gate, Purok 3",
-    isDefault: true,
-  },
-  {
-    id: "addr-work-default",
-    label: "Work / Office",
-    icon: "briefcase",
-    barangay: "Central (Poblacion)",
-    landmarkDescription: "Provincial Capitol Complex, Government Center",
-    isDefault: false,
-  },
-  {
-    id: "addr-beach-default",
-    label: "Dahican Beach",
-    icon: "water",
-    barangay: "Dahican",
-    landmarkDescription: "Near Amihan Surf Resort, Dahican Coast Road",
-    isDefault: false,
-  },
-];
+export const DEFAULT_MATI_ADDRESSES: SavedAddress[] = [];
 
-let inMemoryAddresses: SavedAddress[] = [...DEFAULT_MATI_ADDRESSES];
+let inMemoryAddresses: SavedAddress[] = [];
 
 /**
  * Retrieve saved delivery addresses from persistent localStorage or memory fallback.

@@ -21,13 +21,34 @@ export const MATI_CITY_HALL_COORDS: GeoCoordinates = {
  * and fallback customer address pinning.
  */
 export const MATI_BARANGAY_CENTROIDS: Record<string, GeoCoordinates> = {
+  "Central (City Proper/Poblacion)": { latitude: 6.9550, longitude: 126.2165 },
   "Central (Poblacion)": { latitude: 6.9550, longitude: 126.2165 },
   "Central": { latitude: 6.9550, longitude: 126.2165 },
-  "Sainz": { latitude: 6.9600, longitude: 126.2200 },
-  "Matiao": { latitude: 6.9700, longitude: 126.2050 },
-  "Dahican": { latitude: 6.9180, longitude: 126.2750 },
   "Badas": { latitude: 6.9400, longitude: 126.1700 },
+  "Bobon": { latitude: 6.8450, longitude: 126.2800 },
+  "Buso": { latitude: 6.9750, longitude: 126.1550 },
+  "Cabuaya": { latitude: 6.7850, longitude: 126.2650 },
+  "Culian": { latitude: 7.0100, longitude: 126.2400 },
+  "Dahican": { latitude: 6.9180, longitude: 126.2750 },
+  "Danao": { latitude: 6.9050, longitude: 126.1400 },
+  "Dawan": { latitude: 6.9450, longitude: 126.1200 },
+  "Don Enrique Lopez": { latitude: 6.9850, longitude: 126.2150 },
+  "Don Martin Marundan": { latitude: 6.9750, longitude: 126.2300 },
+  "Don Salvador Lopez, Sr.": { latitude: 7.0300, longitude: 126.2200 },
+  "Langka": { latitude: 6.9250, longitude: 126.1850 },
+  "Lawigan": { latitude: 6.7550, longitude: 126.2550 },
+  "Libudon": { latitude: 6.9850, longitude: 126.2500 },
+  "Luban": { latitude: 6.8050, longitude: 126.2700 },
+  "Macambol": { latitude: 6.8750, longitude: 126.3400 },
+  "Mamali": { latitude: 6.9550, longitude: 126.1600 },
+  "Matiao": { latitude: 6.9700, longitude: 126.2050 },
   "Mayo": { latitude: 6.9850, longitude: 126.3100 },
+  "Sainz": { latitude: 6.9600, longitude: 126.2200 },
+  "Sanghay": { latitude: 6.9950, longitude: 126.3350 },
+  "Tagabakid": { latitude: 7.0050, longitude: 126.1950 },
+  "Tagbinonga": { latitude: 7.0250, longitude: 126.2050 },
+  "Taguibo": { latitude: 6.9550, longitude: 126.1800 },
+  "Tamisan": { latitude: 6.8850, longitude: 126.2850 },
 };
 
 /**

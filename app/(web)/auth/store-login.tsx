@@ -14,6 +14,7 @@ import { useSession } from "../../../context/SessionContext";
 import { authMessage } from "../../../services/auth";
 import { getSupabaseClient } from "../../../lib/supabase/client";
 import { fetchMerchantMembershipStatus } from "../../../services/merchant-registration";
+import { ActionSuccessModal } from "../../../components/ui/ActionSuccessModal";
 
 const merchantBackdrop = require("../../../assets/merchant-bg.jpg");
 const mffLogo = require("../../../assets/logo.jpg");
@@ -29,6 +30,8 @@ export default function StoreLogin() {
   const [redirectHref, setRedirectHref] = useState<
     "/(web)/dashboard" | "/(web)/auth/verification" | null
   >(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successTarget, setSuccessTarget] = useState<"/(web)/dashboard" | "/(web)/auth/verification">("/(web)/dashboard");
 
   useEffect(() => {
     let active = true;
@@ -69,7 +72,7 @@ export default function StoreLogin() {
     };
   }, [status, identity?.id, identity?.roles, logoutToGuest]);
 
-  if (redirectHref) {
+  if (redirectHref && !showSuccessModal) {
     return <Redirect href={redirectHref} />;
   }
 
@@ -105,7 +108,8 @@ export default function StoreLogin() {
       }
 
       if (membership.approvalStatus === "pending") {
-        router.replace("/(web)/auth/verification");
+        setSuccessTarget("/(web)/auth/verification");
+        setShowSuccessModal(true);
         return;
       }
 
@@ -115,7 +119,8 @@ export default function StoreLogin() {
         return;
       }
 
-      router.replace("/(web)/dashboard");
+      setSuccessTarget("/(web)/dashboard");
+      setShowSuccessModal(true);
     } catch (err: unknown) {
       const msg = authMessage(err);
       const errMessage =
@@ -297,6 +302,15 @@ export default function StoreLogin() {
           </View>
         </View>
       </ScrollView>
+
+      <ActionSuccessModal
+        visible={showSuccessModal}
+        title="Signed In Successfully"
+        message="Welcome to your Store Merchant portal!"
+        buttonLabel="Continue"
+        autoCloseMs={1500}
+        onClose={() => router.replace(successTarget)}
+      />
     </View>
   );
 }

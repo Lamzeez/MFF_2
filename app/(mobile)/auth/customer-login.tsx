@@ -12,6 +12,7 @@ import { Link, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSession } from "../../../context/SessionContext";
 import { authMessage } from "../../../services/auth";
+import { ActionSuccessModal } from "../../../components/ui/ActionSuccessModal";
 
 const customerBackdrop = require("../../../assets/customer-bg.jpg");
 const mffLogo = require("../../../assets/logo.jpg");
@@ -25,12 +26,13 @@ export default function CustomerLoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   useEffect(() => {
-    if (status === "authenticated" && identity) {
+    if (status === "authenticated" && identity && !showSuccessModal) {
       router.replace("/(mobile)/(tabs)/discover");
     }
-  }, [status, identity, router]);
+  }, [status, identity, showSuccessModal, router]);
 
   const handleLogin = async () => {
     setErrorMessage(null);
@@ -42,7 +44,7 @@ export default function CustomerLoginScreen() {
     setLoading(true);
     try {
       await signIn(email.trim(), password);
-      router.replace("/(mobile)/(tabs)/discover");
+      setShowSuccessModal(true);
     } catch (err: unknown) {
       const msg = authMessage(err);
       const errMessage =
@@ -235,6 +237,15 @@ export default function CustomerLoginScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <ActionSuccessModal
+        visible={showSuccessModal}
+        title="Signed In Successfully"
+        message="Welcome back to Mati FoodFinder!"
+        buttonLabel="Continue"
+        autoCloseMs={1500}
+        onClose={() => router.replace("/(mobile)/(tabs)/discover")}
+      />
     </View>
   );
 }

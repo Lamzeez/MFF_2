@@ -19,6 +19,7 @@ import { uploadStoreCoverPhoto, uploadStoreProfilePhoto } from "../../../service
 import { NotificationBanner, type BannerMessage } from "../../../components/ui/NotificationBanner";
 import type { SelectedMerchantImageAsset } from "../../../components/merchant/ImageUploadDropzone";
 import { filterPhoneInput, sanitizePhoneNumber } from "../../../lib/phone";
+import { BarangayAutofillInput } from "../../../components/ui/BarangayAutofillInput";
 import {
   DEFAULT_CLOSE_TIME,
   DEFAULT_OPEN_TIME,
@@ -423,7 +424,7 @@ export default function StoreProfile() {
       public_phone: cleanPhone,
       address_text: addressText.trim() || undefined,
       barangay,
-      delivery_enabled: subscriptionTier === "basic" ? false : deliveryEnabled,
+      delivery_enabled: deliveryEnabled,
       operating_hours,
       logo_url: logoUrl || undefined,
       cover_image_url: coverImageUrl || undefined,
@@ -717,19 +718,16 @@ export default function StoreProfile() {
 
               {/* Barangay Selector */}
               <View>
-                <Text className="font-semibold text-[11px] text-gray-700 mb-1">
-                  Mati City Barangay *
-                </Text>
-                <Pressable
-                  onPress={() => setBarangayPickerVisible(true)}
-                  className="w-full border border-gray-200 bg-gray-50 hover:border-[#EA5410] rounded-lg px-3 py-2 flex-row items-center justify-between cursor-pointer"
-                >
-                  <View className="flex-row items-center gap-2">
-                    <Ionicons name="location-outline" size={14} color="#EA5410" />
-                    <Text className="text-xs font-semibold text-gray-900">{barangay}</Text>
-                  </View>
-                  <Ionicons name="chevron-down" size={14} color="#6B7280" />
-                </Pressable>
+                <BarangayAutofillInput
+                  value={barangay}
+                  onSelectBarangay={(b) => {
+                    setBarangay(b);
+                    setFieldErrors((prev) => ({ ...prev, barangay: undefined }));
+                  }}
+                  label="Mati City Barangay *"
+                  placeholder="Type to search official Mati barangay..."
+                  containerClassName="mb-1"
+                />
               </View>
 
               {/* Street Address / Landmark */}
@@ -857,65 +855,38 @@ export default function StoreProfile() {
                 ) : null}
               </View>
 
-              {/* Delivery Configuration Card (Gated by Subscription Tier) */}
-              {subscriptionTier === "basic" ? (
-                <View className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/70 flex-col gap-2">
-                  <View className="flex-row items-center justify-between">
-                    <View className="flex-row items-center gap-2">
-                      <View className="w-6 h-6 rounded-md bg-amber-100 border border-amber-300 items-center justify-center">
-                        <Ionicons name="lock-closed" size={13} color="#D97706" />
-                      </View>
-                      <Text className="text-xs font-bold text-amber-900">
-                        Customer Delivery Integration
-                      </Text>
+              {/* Delivery Configuration Card */}
+              <View className="p-3.5 rounded-xl border border-gray-200 bg-gray-50 flex-col gap-2">
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-row items-center gap-2">
+                    <View className="w-6 h-6 rounded-md bg-emerald-100 border border-emerald-300 items-center justify-center">
+                      <Ionicons name="bicycle" size={13} color="#059669" />
                     </View>
-                    <View className="bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
-                      <Text className="text-[10px] font-bold text-amber-800">Basic Plan</Text>
-                    </View>
+                    <Text className="text-xs font-bold text-gray-900">
+                      Customer Delivery Orders
+                    </Text>
                   </View>
-                  <Text className="text-[11px] text-amber-800 leading-relaxed">
-                    Delivery dispatch to Mati riders is locked on the Basic plan. Dine-in table reservations remain active. Upgrade to Standard (₱299/mo) to unlock delivery orders with automated rider dispatch.
-                  </Text>
-                  <Link href="/(web)/dashboard/billing" asChild>
-                    <Pressable className="self-start mt-1 px-3 py-1.5 rounded-lg bg-[#EA5410] hover:bg-[#D04508] flex-row items-center gap-1.5 cursor-pointer">
-                      <Ionicons name="arrow-up-circle-outline" size={13} color="white" />
-                      <Text className="text-white font-bold text-[11px]">Upgrade to Standard (₱299/mo)</Text>
-                    </Pressable>
-                  </Link>
-                </View>
-              ) : (
-                <View className="p-3.5 rounded-xl border border-gray-200 bg-gray-50 flex-col gap-2">
-                  <View className="flex-row items-center justify-between">
-                    <View className="flex-row items-center gap-2">
-                      <View className="w-6 h-6 rounded-md bg-emerald-100 border border-emerald-300 items-center justify-center">
-                        <Ionicons name="bicycle" size={13} color="#059669" />
-                      </View>
-                      <Text className="text-xs font-bold text-gray-900">
-                        Customer Delivery Orders
-                      </Text>
-                    </View>
-                    <Pressable
-                      onPress={() => setDeliveryEnabled((prev) => !prev)}
-                      accessibilityRole="switch"
-                      accessibilityState={{ checked: deliveryEnabled }}
-                      className={`w-11 h-6 rounded-full p-0.5 transition-colors cursor-pointer ${
-                        deliveryEnabled ? "bg-emerald-500" : "bg-gray-300"
+                  <Pressable
+                    onPress={() => setDeliveryEnabled((prev) => !prev)}
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: deliveryEnabled }}
+                    className={`w-11 h-6 rounded-full p-0.5 transition-colors cursor-pointer ${
+                      deliveryEnabled ? "bg-emerald-500" : "bg-gray-300"
+                    }`}
+                  >
+                    <View
+                      className={`w-5 h-5 rounded-full bg-white shadow-xs transition-transform ${
+                        deliveryEnabled ? "translate-x-5" : "translate-x-0"
                       }`}
-                    >
-                      <View
-                        className={`w-5 h-5 rounded-full bg-white shadow-xs transition-transform ${
-                          deliveryEnabled ? "translate-x-5" : "translate-x-0"
-                        }`}
-                      />
-                    </Pressable>
-                  </View>
-                  <Text className="text-[11px] text-gray-600 leading-relaxed">
-                    {deliveryEnabled
-                      ? "Delivery is ACTIVE. Diners across Mati City can place food delivery orders dispatched to independent riders."
-                      : "Delivery is PAUSED. Diners can only place dine-in table reservations."}
-                  </Text>
+                    />
+                  </Pressable>
                 </View>
-              )}
+                <Text className="text-[11px] text-gray-600 leading-relaxed">
+                  {deliveryEnabled
+                    ? "Delivery is ACTIVE. Diners across Mati City can place food delivery orders dispatched to independent riders."
+                    : "Delivery is PAUSED. Diners can only place dine-in table reservations."}
+                </Text>
+              </View>
 
               {/* Dine-In Table Reservations & Seating Capacity Card */}
               <View className="p-3.5 rounded-xl border border-gray-200 bg-gray-50 flex-col gap-3">

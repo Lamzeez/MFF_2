@@ -145,3 +145,16 @@ export function subscribeToNotifications(userId: string, onChange: () => void) {
     supabase.removeChannel(channel);
   };
 }
+
+/**
+ * Formats a notification date into a short 'mm-dd · hh:mm A' string.
+ * Example: '11-17 · 07:24 PM'
+ */
+export function formatNotificationTimestamp(dateInput: string | number | Date): string {
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return "";
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return `${mm}-${dd} · ${time}`;
+}

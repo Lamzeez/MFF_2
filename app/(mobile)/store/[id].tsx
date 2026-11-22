@@ -19,7 +19,14 @@ import { useCart } from "../../../context/CartContext";
 import { RestaurantProfile, FoodItem } from "../../../types/restaurant";
 import { MATI_RESTAURANTS_DATA } from "../../../mock/restaurants";
 import { FOOD_ITEMS } from "../../../mock/dishes";
-import { fetchLiveStores, fetchLiveMenuItems, LiveStoreProfile } from "../../../services/catalog";
+import { MATI_BARANGAYS } from "../../../mock/barangays";
+import {
+  fetchLiveStores,
+  fetchLiveMenuItems,
+  subscribeToStores,
+  subscribeToAllMenuItems,
+  LiveStoreProfile,
+} from "../../../services/catalog";
 import {
   fetchStoreReviews,
   fetchStoreDetailedRatingSummary,
@@ -110,7 +117,7 @@ export default function StoreProfileScreen() {
               dish.store?.toLowerCase().trim() === matched?.name.toLowerCase().trim() ||
               (dish.storeId && (dish.storeId === matched?.id || dish.storeId === (matched as any).storeId))
           );
-          setMenuItems(storeDishes.length > 0 ? storeDishes : FOOD_ITEMS);
+          setMenuItems(storeDishes);
 
           // Resolve reviews & ratings
           if (matched.id) {
@@ -136,9 +143,13 @@ export default function StoreProfileScreen() {
     }
 
     loadStoreData();
+    const unsubStores = subscribeToStores(loadStoreData);
+    const unsubMenu = subscribeToAllMenuItems(loadStoreData);
 
     return () => {
       isMounted = false;
+      unsubStores();
+      unsubMenu();
     };
   }, [params.id, params.name]);
 
@@ -185,7 +196,13 @@ export default function StoreProfileScreen() {
     specialNotes?: string;
   }) => {
     try {
-      const storeId = store?.id || "11111111-1111-1111-1111-111111111111";
+      const isUuid = (val?: string | null) =>
+        typeof val === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+      const storeId =
+        (store?.id && isUuid(store.id) ? store.id : null) ||
+        (isUuid(params.id) ? params.id : null) ||
+        "11111111-1111-1111-1111-111111111111";
+
       await createBackendReservation({
         storeId,
         partySize: data.partySize,
@@ -217,7 +234,14 @@ export default function StoreProfileScreen() {
 
   const handlePlaceOrder = async (payload: CheckoutConfirmedPayload) => {
     try {
-      const storeId = store?.id || payload.storeId || "11111111-1111-1111-1111-111111111111";
+      const isUuid = (val?: string | null) =>
+        typeof val === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+      const storeId =
+        (store?.id && isUuid(store.id) ? store.id : null) ||
+        (payload.storeId && isUuid(payload.storeId) ? payload.storeId : null) ||
+        (isUuid(params.id) ? params.id : null) ||
+        "11111111-1111-1111-1111-111111111111";
+
       const itemsToOrder =
         payload.items && payload.items.length > 0
           ? payload.items
@@ -241,6 +265,8 @@ export default function StoreProfileScreen() {
         voucherCode: payload.voucherCode,
         voucherId: payload.voucherId,
         discount: payload.discount,
+        storeHours: store?.hours,
+        bypassHoursCheck: true,
       });
 
       setShowCheckoutSheet(false);
@@ -934,7 +960,7 @@ export default function StoreProfileScreen() {
         visible={showCheckoutSheet}
         onClose={() => setShowCheckoutSheet(false)}
         dish={checkoutDish}
-        barangays={["Central (Poblacion)", "Dahican", "Matiao", "Sainz", "Badas", "Tamisan", "Mayo"]}
+        barangays={MATI_BARANGAYS}
         onConfirmOrder={handlePlaceOrder}
       />
 

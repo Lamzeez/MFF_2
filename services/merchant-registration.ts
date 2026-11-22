@@ -10,12 +10,11 @@ import {
   isValidPhilippineMobile,
   sanitizePhoneNumber,
 } from "../lib/phone";
-import { MATI_BARANGAYS } from "../mock/barangays";
+import { MATI_BARANGAYS, matchOfficialBarangay } from "../mock/barangays";
 import type { Database } from "../types/database";
 
 export const STORE_CUISINE_OPTIONS = [
   "Meals",
-  "Karenderias",
   "Seafood",
   "BBQ & Grill",
   "Merienda",
@@ -58,7 +57,11 @@ export const STORE_OPERATING_TIME_OPTIONS: readonly string[] = (() => {
 
 const OPERATING_TIME_SLOT_SET = new Set<string>(STORE_OPERATING_TIME_OPTIONS);
 const CATEGORY_OPTION_SET = new Set<string>(STORE_CUISINE_OPTIONS);
-const BARANGAY_OPTION_SET = new Set<string>(STORE_BARANGAY_OPTIONS);
+const BARANGAY_OPTION_SET = new Set<string>([
+  ...STORE_BARANGAY_OPTIONS,
+  "Central (Poblacion)",
+  "Central",
+]);
 
 export type StoreRegistrationFieldKey =
   | "storeName"
@@ -327,7 +330,7 @@ export function validateStoreRegistrationFieldErrors(
     }
   }
 
-  if (!BARANGAY_OPTION_SET.has(input.barangay.trim())) {
+  if (!BARANGAY_OPTION_SET.has(input.barangay.trim()) && !matchOfficialBarangay(input.barangay.trim())) {
     errors.barangay = "Select a valid barangay in Mati City.";
   }
 

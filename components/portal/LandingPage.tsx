@@ -38,7 +38,7 @@ const colors = {
 };
 
 const quickCategories = [
-  { name: "Karenderias", filter: "Karenderias", icon: "restaurant-outline" as const },
+  { name: "Meals", filter: "Meals", icon: "restaurant-outline" as const },
   { name: "Seafood & Grill", filter: "Seafood", icon: "fish-outline" as const },
   { name: "BBQ & Street Eats", filter: "BBQ & Grill", icon: "flame-outline" as const },
 ] as const;

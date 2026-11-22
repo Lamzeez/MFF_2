@@ -14,6 +14,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { FoodItem } from "../../types/restaurant";
 import { BottomSheetModal } from "../ui/BottomSheetModal";
+import { BarangayAutofillInput } from "../ui/BarangayAutofillInput";
+import { MATI_BARANGAYS } from "../../mock/barangays";
 import { useSession } from "../../context/SessionContext";
 import { useCart, CartItem } from "../../context/CartContext";
 import {
@@ -75,7 +77,7 @@ export function CheckoutSheet({
   const [step, setStep] = useState<1 | 2>(1);
   const [singleDishQty, setSingleDishQty] = useState(1);
   const [fulfillment, setFulfillment] = useState<"delivery" | "pickup">("delivery");
-  const [selectedBarangay, setSelectedBarangay] = useState("Central (Poblacion)");
+  const [selectedBarangay, setSelectedBarangay] = useState("Central (City Proper/Poblacion)");
   const [address, setAddress] = useState("");
   const [notes, setNotes] = useState("");
 
@@ -740,39 +742,14 @@ export function CheckoutSheet({
                   </View>
                 )}
 
-                {/* Barangay Selection Chips */}
-                <Text className="text-xs font-bold text-gray-700 mb-1.5">
-                  Select Delivery Barangay *
-                </Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  className="mb-3"
-                  contentContainerStyle={{ paddingRight: 10 }}
-                >
-                  {barangays.map((brgy) => {
-                    const isSelected = selectedBarangay === brgy;
-                    return (
-                      <Pressable
-                        key={brgy}
-                        onPress={() => setSelectedBarangay(brgy)}
-                        className={`mr-1.5 px-3 py-1.5 rounded-lg border ${
-                          isSelected
-                            ? "bg-[#EA5410] border-[#EA5410] shadow-xs"
-                            : "bg-gray-100 border-gray-200"
-                        }`}
-                      >
-                        <Text
-                          className={`text-[11px] font-bold ${
-                            isSelected ? "text-white" : "text-gray-700"
-                          }`}
-                        >
-                          {brgy}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
+                {/* Delivery Barangay Autofill Input */}
+                <BarangayAutofillInput
+                  value={selectedBarangay}
+                  onSelectBarangay={setSelectedBarangay}
+                  label="Delivery Barangay *"
+                  placeholder="Type to search official Mati barangay..."
+                  containerClassName="mb-2.5"
+                />
 
                 {/* Delivery Landmark / Street */}
                 <Text className="text-xs font-bold text-gray-700 mb-1">

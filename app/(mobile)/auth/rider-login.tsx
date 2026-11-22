@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSession } from "../../../context/SessionContext";
 import { authMessage } from "../../../services/auth";
 import { getSupabaseClient } from "../../../lib/supabase/client";
+import { ActionSuccessModal } from "../../../components/ui/ActionSuccessModal";
 
 const riderBackdrop = require("../../../assets/rider-bg.jpg");
 const mffLogo = require("../../../assets/logo.jpg");
@@ -26,12 +27,13 @@ export default function RiderLoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   useEffect(() => {
-    if (status === "authenticated" && identity?.roles.includes("rider")) {
+    if (status === "authenticated" && identity?.roles.includes("rider") && !showSuccessModal) {
       router.replace("/(mobile)/rider");
     }
-  }, [status, identity, router]);
+  }, [status, identity, showSuccessModal, router]);
 
   const handleLogin = async () => {
     setErrorMessage(null);
@@ -53,7 +55,7 @@ export default function RiderLoginScreen() {
         return;
       }
 
-      router.replace("/(mobile)/rider");
+      setShowSuccessModal(true);
     } catch (err: unknown) {
       const msg = authMessage(err);
       const errMessage =
@@ -236,6 +238,15 @@ export default function RiderLoginScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <ActionSuccessModal
+        visible={showSuccessModal}
+        title="Signed In Successfully"
+        message="Welcome to Mati Courier Delivery Dispatch!"
+        buttonLabel="Continue"
+        autoCloseMs={1500}
+        onClose={() => router.replace("/(mobile)/rider")}
+      />
     </View>
   );
 }

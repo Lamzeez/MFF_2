@@ -189,11 +189,12 @@ export async function createOrder(payload: CreateOrderPayload): Promise<LiveOrde
   const totalCentavos = Math.round(totalPesos * 100);
   const handshakePin = generateHandshakePin();
 
-  // 0. Store Operating Hours Verification
-  if (!payload.bypassHoursCheck) {
+  // 0. Store Operating Hours Verification (graceful tag so customers can place advance / testing orders anytime)
+  let initialNotes = payload.notes || "";
+  if (!payload.bypassHoursCheck && payload.storeHours) {
     const hoursEval = isStoreCurrentlyOpen(payload.storeHours);
     if (!hoursEval.isOpen) {
-      throw new Error(hoursEval.message);
+      initialNotes = `[Advance / Off-Hours Order] ${initialNotes}`.trim();
     }
   }
 
@@ -252,7 +253,7 @@ export async function createOrder(payload: CreateOrderPayload): Promise<LiveOrde
     delivery_address: payload.deliveryAddress,
     barangay: payload.barangay,
     customer_phone: payload.customerPhone || null,
-    notes: payload.notes || "",
+    notes: initialNotes,
     handshake_pin: handshakePin,
     voucher_code: payload.voucherCode || null,
     voucher_id: payload.voucherId || null,
@@ -315,10 +316,13 @@ export async function createOrder(payload: CreateOrderPayload): Promise<LiveOrde
     }
   }
 
-  // 2. Insert Order Items
+  // 2. Insert Order Items (safeguard UUID validity for foreign key)
+  const isUuid = (val?: string | null) =>
+    typeof val === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
   const itemsToInsert = payload.items.map((item) => ({
     order_id: orderData.id,
-    menu_item_id: item.menuItemId || null,
+    menu_item_id: isUuid(item.menuItemId) ? item.menuItemId : null,
     item_name: item.name,
     price_centavos: Math.round(item.price * 100),
     quantity: item.quantity,

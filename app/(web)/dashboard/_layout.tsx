@@ -10,6 +10,8 @@ import StoreDashboardOverview from "./index";
 import MenuManager from "./menu";
 import StoreProfile from "./profile";
 import BillingView from "./billing";
+import { LogoutConfirmModal } from "../../../components/ui/LogoutConfirmModal";
+import { ActionSuccessModal } from "../../../components/ui/ActionSuccessModal";
 
 const MERCHANT_NAV_ITEMS = [
   {
@@ -46,6 +48,25 @@ export default function StoreAdminLayout() {
   const [approvalGate, setApprovalGate] = useState<
     "checking" | "approved" | "pending" | "rejected" | "suspended"
   >("checking");
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showLogoutSuccess, setShowLogoutSuccess] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleConfirmSignOut = () => {
+    setShowLogoutConfirm(false);
+    setShowLogoutSuccess(true);
+  };
+
+  const handleLogoutSuccessClose = async () => {
+    setShowLogoutSuccess(false);
+    setSigningOut(true);
+    try {
+      await logoutToGuest();
+    } finally {
+      setSigningOut(false);
+      router.replace("/");
+    }
+  };
 
   const overviewScrollRef = useRef<ScrollView>(null);
   const menuScrollRef = useRef<ScrollView>(null);
@@ -164,11 +185,6 @@ export default function StoreAdminLayout() {
     return <Redirect href="/(web)/auth/verification" />;
   }
 
-  const handleSignOut = async () => {
-    await logoutToGuest();
-    router.replace("/");
-  };
-
   return (
     <View className="flex-1 flex-row bg-[#F8FAFC] h-screen w-full">
       {/* Sidebar Navigation (Desktop) — Lively Light Theme matching System Admin scale & pill highlight */}
@@ -253,7 +269,7 @@ export default function StoreAdminLayout() {
           </View>
 
           <Pressable
-            onPress={handleSignOut}
+            onPress={() => setShowLogoutConfirm(true)}
             className="px-3 py-2 rounded-lg hover:bg-red-50 flex-row items-center justify-center gap-1.5 border border-transparent hover:border-red-100 transition-colors cursor-pointer"
           >
             <Ionicons name="log-out-outline" size={14} color="#DC2626" />
@@ -273,7 +289,7 @@ export default function StoreAdminLayout() {
               </View>
               <Text className="text-gray-900 font-bold text-sm">Mati FoodFinder</Text>
             </View>
-            <Pressable onPress={handleSignOut} className="px-2.5 py-1 bg-gray-100 rounded-lg active:bg-gray-200">
+            <Pressable onPress={() => setShowLogoutConfirm(true)} className="px-2.5 py-1 bg-gray-100 rounded-lg active:bg-gray-200">
               <Text className="text-gray-700 text-[11px] font-bold">Sign Out</Text>
             </Pressable>
           </View>
@@ -375,6 +391,24 @@ export default function StoreAdminLayout() {
           </View>
         </View>
       </View>
+
+      {/* Merchant Logout Confirmation Modal */}
+      <LogoutConfirmModal
+        visible={showLogoutConfirm}
+        isSigningOut={signingOut}
+        onCancel={() => setShowLogoutConfirm(false)}
+        onConfirm={handleConfirmSignOut}
+      />
+
+      {/* Merchant Logout Success Modal */}
+      <ActionSuccessModal
+        visible={showLogoutSuccess}
+        title="Signed Out"
+        message="You have safely signed out of your Merchant Portal."
+        buttonLabel="Continue"
+        autoCloseMs={1500}
+        onClose={handleLogoutSuccessClose}
+      />
     </View>
   );
 }

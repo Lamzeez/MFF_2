@@ -9,15 +9,13 @@ import { resolveStoreSubscriptionSummary } from "../lib/subscription-tiers";
 export const CATEGORIES = [
   "All",
   "Meals",
-  "Karenderias",
   "Seafood",
   "BBQ & Grill",
   "Merienda",
   "Beverages",
 ] as const;
 
-/** Menu item categories (excludes establishment types like "Karenderias"). */
-/** Menu item categories (excludes establishment types like "Karenderias"). */
+/** Menu item categories (standardized across stores & items). */
 export const MENU_ITEM_CATEGORIES = [
   "Meals",
   "Seafood",
@@ -79,10 +77,12 @@ export function mapStoreToProfile(
   ratingSummary?: RatingSummary
 ): LiveStoreProfile {
   const explicitCategories = Array.isArray(store.categories)
-    ? store.categories.filter((c) => typeof c === "string" && c.trim().length > 0)
+    ? store.categories
+        .filter((c) => typeof c === "string" && c.trim().length > 0)
+        .filter((c) => c.trim().toLowerCase() !== "karenderias")
     : [];
 
-  let fallbackCategory = "Karenderias";
+  let fallbackCategory = "Meals";
   const desc = (store.description + " " + store.name).toLowerCase();
   if (desc.includes("seafood") || desc.includes("tuna") || desc.includes("fish")) {
     fallbackCategory = "Seafood";
@@ -90,6 +90,8 @@ export function mapStoreToProfile(
     fallbackCategory = "BBQ & Grill";
   } else if (desc.includes("beach") || desc.includes("shake") || desc.includes("smoothie")) {
     fallbackCategory = "Merienda";
+  } else if (desc.includes("drink") || desc.includes("coffee") || desc.includes("beverage")) {
+    fallbackCategory = "Beverages";
   }
 
   const categories = explicitCategories.length > 0 ? explicitCategories : [fallbackCategory];
@@ -620,6 +622,50 @@ export function subscribeToStoreMenuItems(
         schema: "public",
         table: "menu_items",
         filter: `store_id=eq.${storeId}`,
+      },
+      () => {
+        onChange();
+      }
+    )
+    .subscribe();
+
+  return () => {
+    client.removeChannel(channel);
+  };
+}
+
+export function subscribeToStores(onChange: () => void): () => void {
+  const client = getSupabaseClient("customer");
+  const channel = client
+    .channel(`public_stores_changes_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "stores",
+      },
+      () => {
+        onChange();
+      }
+    )
+    .subscribe();
+
+  return () => {
+    client.removeChannel(channel);
+  };
+}
+
+export function subscribeToAllMenuItems(onChange: () => void): () => void {
+  const client = getSupabaseClient("customer");
+  const channel = client
+    .channel(`public_menu_items_changes_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "menu_items",
       },
       () => {
         onChange();
