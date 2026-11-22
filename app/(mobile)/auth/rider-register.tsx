@@ -34,6 +34,7 @@ import {
 import { uploadCourierDocument } from "../../../services/storage";
 import { evaluateMerchantPassword } from "../../../services/merchant-registration";
 import { TermsModal } from "../../../components/ui/TermsModal";
+import { EmailAlreadyRegisteredModal } from "../../../components/ui/EmailAlreadyRegisteredModal";
 
 const mffLogo = require("../../../assets/logo.jpg");
 
@@ -208,6 +209,7 @@ export default function RiderRegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [touchedPassword, setTouchedPassword] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showExistingAccountModal, setShowExistingAccountModal] = useState(false);
 
   const passwordEval = useMemo(() => evaluateMerchantPassword(riderPassword), [riderPassword]);
 
@@ -351,7 +353,7 @@ export default function RiderRegisterScreen() {
         return;
       }
 
-      await signUp(cleanName, cleanEmail, riderPassword, sanitizePhoneNumber(riderPhone), {
+      const signUpResult = await signUp(cleanName, cleanEmail, riderPassword, sanitizePhoneNumber(riderPhone), {
         license_document_url: licenseRes.publicUrl,
         vehicle_document_url: vehicleRes.publicUrl,
         motorcycle_info: `${riderMotorcycle.trim()} (${cleanPlate})`,
@@ -359,12 +361,21 @@ export default function RiderRegisterScreen() {
         license_number: cleanLicense,
         license_expiry: riderLicenseExpiry.trim(),
       });
+      if (signUpResult?.isExistingUser) {
+        setShowExistingAccountModal(true);
+        return;
+      }
       Alert.alert(
         "Application Submitted! 🏍️",
         `Thank you ${cleanName}! We have sent a verification email to ${cleanEmail}. Once approved by the Mati FoodFinder admin team, your rider account will be active!`,
         [{ text: "Go to Rider Login", onPress: () => router.replace("/(mobile)/auth/rider-login") }]
       );
     } catch (err: any) {
+      const rawMsg = err?.message?.toLowerCase() || "";
+      if (rawMsg.includes("already registered") || rawMsg.includes("already been registered")) {
+        setShowExistingAccountModal(true);
+        return;
+      }
       const msg = authMessage(err);
       Alert.alert("Registration Failed", err.message && !err.code ? err.message : msg);
     } finally {
@@ -786,6 +797,20 @@ export default function RiderRegisterScreen() {
         showAcceptButton={true}
         onAccept={() => setRiderCodAgreed(true)}
         onClose={() => setShowTermsModal(false)}
+      />
+
+      {/* Email Already Registered Pop-Up Modal */}
+      <EmailAlreadyRegisteredModal
+        visible={showExistingAccountModal}
+        email={riderEmail.trim()}
+        title="Rider Account Already Exists"
+        message={`An account with ${riderEmail.trim()} is already registered in Mati FoodFinder. If you are already a registered courier, please sign in.`}
+        signInLabel="Sign In as Courier"
+        onSignIn={() => {
+          setShowExistingAccountModal(false);
+          router.replace("/(mobile)/auth/rider-login");
+        }}
+        onCancel={() => setShowExistingAccountModal(false)}
       />
     </SafeAreaView>
   );

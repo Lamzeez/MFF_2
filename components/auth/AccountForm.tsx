@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { TermsModal } from "../ui/TermsModal";
+import { EmailAlreadyRegisteredModal } from "../ui/EmailAlreadyRegisteredModal";
 import { useSession } from "../../context/SessionContext";
 import { AccountError, authMessage } from "../../services/auth";
 import {
@@ -38,6 +39,7 @@ export function AccountForm({ initialMode = "login", onSuccess }: AccountFormPro
   const [notice, setNotice] = useState<string | null>(null);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [customerTermsAgreed, setCustomerTermsAgreed] = useState(false);
+  const [showExistingAccountModal, setShowExistingAccountModal] = useState(false);
 
   const pending = useRef(false);
   const mounted = useRef(true);
@@ -71,7 +73,14 @@ export function AccountForm({ initialMode = "login", onSuccess }: AccountFormPro
     setNotice(null);
     try {
       await action();
-    } catch (failure) {
+    } catch (failure: any) {
+      const rawMsg = typeof failure === "object" && failure !== null && "message" in failure && typeof failure.message === "string" ? failure.message.toLowerCase() : "";
+      if (rawMsg.includes("already registered") || rawMsg.includes("already been registered")) {
+        if (mounted.current) {
+          setShowExistingAccountModal(true);
+        }
+        return;
+      }
       if (mounted.current) setError(authMessage(failure));
     } finally {
       pending.current = false;
@@ -110,7 +119,11 @@ export function AccountForm({ initialMode = "login", onSuccess }: AccountFormPro
           if (cleanPhone && !isValidPhilippineMobile(cleanPhone)) {
             throw new AccountError(PH_MOBILE_ERROR_MESSAGE);
           }
-          await auth.signUp(name, email, password, cleanPhone);
+          const signUpResult = await auth.signUp(name, email, password, cleanPhone);
+          if (signUpResult?.isExistingUser) {
+            setShowExistingAccountModal(true);
+            return;
+          }
           setMode("confirm");
           setCountdown(60);
           setNotice("A 6-digit verification code has been sent to your email. Enter it below to activate your account.");
@@ -637,6 +650,17 @@ export function AccountForm({ initialMode = "login", onSuccess }: AccountFormPro
         showAcceptButton={true}
         onAccept={() => setCustomerTermsAgreed(true)}
         onClose={() => setShowTermsModal(false)}
+      />
+
+      {/* Email Already Registered Pop-Up Modal */}
+      <EmailAlreadyRegisteredModal
+        visible={showExistingAccountModal}
+        email={email.trim()}
+        onSignIn={() => {
+          setShowExistingAccountModal(false);
+          changeMode("login");
+        }}
+        onCancel={() => setShowExistingAccountModal(false)}
       />
     </View>
   );

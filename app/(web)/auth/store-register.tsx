@@ -54,6 +54,7 @@ import StoreMapPicker from "../../../components/auth/StoreMapPicker";
 import { MATI_CITY_HALL_COORDS } from "../../../lib/geo-serviceability";
 import { NotificationBanner, type BannerMessage } from "../../../components/ui/NotificationBanner";
 import { TermsModal } from "../../../components/ui/TermsModal";
+import { EmailAlreadyRegisteredModal } from "../../../components/ui/EmailAlreadyRegisteredModal";
 
 const mffLogo = require("../../../assets/logo.jpg");
 
@@ -275,6 +276,7 @@ export default function StoreRegister() {
   const [banner, setBanner] = useState<BannerMessage | null>(null);
   const [termsAgreed, setTermsAgreed] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showExistingAccountModal, setShowExistingAccountModal] = useState(false);
 
   const scrollToTop = useCallback(() => {
     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
@@ -827,12 +829,7 @@ export default function StoreRegister() {
       );
 
       if (signUpResult?.isExistingUser) {
-        setBanner({
-          type: "error",
-          message:
-            "An account with this email is already registered in Mati FoodFinder. Use a different email address, or sign in via Merchant Log In if you already have a store account.",
-        });
-        scrollToTop();
+        setShowExistingAccountModal(true);
         return;
       }
 
@@ -854,6 +851,17 @@ export default function StoreRegister() {
       });
       scrollToTop();
     } catch (err: unknown) {
+      const rawMsg =
+        typeof err === "object" &&
+        err !== null &&
+        "message" in err &&
+        typeof (err as { message: unknown }).message === "string"
+          ? (err as { message: string }).message.toLowerCase()
+          : "";
+      if (rawMsg.includes("already registered") || rawMsg.includes("already been registered")) {
+        setShowExistingAccountModal(true);
+        return;
+      }
       const msg = authMessage(err);
       const errMessage =
         typeof err === "object" &&
@@ -908,6 +916,17 @@ export default function StoreRegister() {
 
       await finalizeStoreSubmission(userId);
     } catch (err: unknown) {
+      const rawMsg =
+        typeof err === "object" &&
+        err !== null &&
+        "message" in err &&
+        typeof (err as { message: unknown }).message === "string"
+          ? (err as { message: string }).message.toLowerCase()
+          : "";
+      if (rawMsg.includes("already registered") || rawMsg.includes("already been registered")) {
+        setShowExistingAccountModal(true);
+        return;
+      }
       const msg = authMessage(err);
       const errMessage =
         typeof err === "object" &&
@@ -1818,6 +1837,20 @@ export default function StoreRegister() {
         showAcceptButton={false}
         closeButtonLabel="I Understand"
         onClose={() => setShowTermsModal(false)}
+      />
+
+      {/* Email Already Registered Pop-Up Modal */}
+      <EmailAlreadyRegisteredModal
+        visible={showExistingAccountModal}
+        email={email.trim()}
+        title="Store Account Already Exists"
+        message={`An account with ${email.trim()} is already registered in Mati FoodFinder. Please sign in to your merchant account.`}
+        signInLabel="Sign In as Merchant"
+        onSignIn={() => {
+          setShowExistingAccountModal(false);
+          router.push("/auth/store-login");
+        }}
+        onCancel={() => setShowExistingAccountModal(false)}
       />
     </View>
   );

@@ -86,3 +86,35 @@ test("System Admin portal integrates login success and logout confirmation modal
   assert.equal(layoutSource.includes("showLoginSuccess"), true);
   assert.equal(layoutSource.includes("handleLogoutSuccessClose"), true);
 });
+
+test("EmailAlreadyRegisteredModal component adheres to clean dialog contract", () => {
+  const filePath = path.resolve(process.cwd(), "components/ui/EmailAlreadyRegisteredModal.tsx");
+  assert.equal(fs.existsSync(filePath), true, "EmailAlreadyRegisteredModal.tsx must exist");
+  const source = fs.readFileSync(filePath, "utf-8");
+
+  assert.equal(source.includes("transparent={true}"), true);
+  assert.equal(source.includes("onPress={onCancel}"), true);
+  assert.equal(source.includes("onPress={onSignIn}"), true);
+  assert.equal(source.includes("Email Already Registered"), true);
+  assert.equal(source.includes("Sign In Instead"), true);
+});
+
+test("All registration portals integrate EmailAlreadyRegisteredModal for existing accounts", () => {
+  const accountFormPath = path.resolve(process.cwd(), "components/auth/AccountForm.tsx");
+  const accountFormSource = fs.readFileSync(accountFormPath, "utf-8");
+  assert.equal(accountFormSource.includes("EmailAlreadyRegisteredModal"), true);
+  assert.equal(accountFormSource.includes("showExistingAccountModal"), true);
+  assert.equal(accountFormSource.includes("signUpResult?.isExistingUser"), true);
+
+  const riderRegisterPath = path.resolve(process.cwd(), "app/(mobile)/auth/rider-register.tsx");
+  const riderRegisterSource = fs.readFileSync(riderRegisterPath, "utf-8");
+  assert.equal(riderRegisterSource.includes("EmailAlreadyRegisteredModal"), true);
+  assert.equal(riderRegisterSource.includes("showExistingAccountModal"), true);
+  assert.equal(riderRegisterSource.includes("signUpResult?.isExistingUser"), true);
+
+  const storeRegisterPath = path.resolve(process.cwd(), "app/(web)/auth/store-register.tsx");
+  const storeRegisterSource = fs.readFileSync(storeRegisterPath, "utf-8");
+  assert.equal(storeRegisterSource.includes("EmailAlreadyRegisteredModal"), true);
+  assert.equal(storeRegisterSource.includes("showExistingAccountModal"), true);
+  assert.equal(storeRegisterSource.includes("signUpResult?.isExistingUser"), true);
+});
