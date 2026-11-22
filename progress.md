@@ -2,7 +2,34 @@
 
 > Living project memory for Codex/agents. Update after meaningful
 > development sessions. Last repository review used for this snapshot:
-> 2026-11-22.
+> 2026-11-23.
+
+## Phase 62: Store Admin PayMongo Subscription Payments & Invoices (2026-11-23)
+
+### Completed Work
+- **Remote Database Migration (`20261122000100_store_subscription_payments.sql`)**:
+  - Created `store_subscription_payments` table for recording PayMongo checkout intents, payment status, payment method (GCash, Maya, Card, GrabPay), amounts, and timestamps.
+  - Implemented secure PostgreSQL RPC functions:
+    - `record_subscription_checkout_intent`: Records checkout sessions with RLS validation.
+    - `confirm_subscription_payment`: Atomically updates subscription payment to `paid`, updates the store's `subscription_tier` and `subscription_status` ('active'), and rolls forward the next 30-day billing cycle.
+    - `get_store_subscription_invoices`: Authoritatively retrieves payment history and receipts for the store.
+  - Applied migration live to remote Supabase (`tqztlckmeznbsjcszzyg`).
+- **PayMongo Edge Function (`paymongo-checkout`)**:
+  - Implemented Supabase Edge Function (`supabase/functions/paymongo-checkout/index.ts`) using the standard PayMongo API v1.
+  - Keeps `PAYMONGO_SECRET_KEY` entirely on the Supabase backend with zero client bundle exposure.
+  - Implements actions:
+    - `create_checkout_session`: Creates a PayMongo Checkout Session for Basic (₱99), Standard (₱299), or Commercial (₱699), returning the PayMongo hosted checkout URL.
+    - `verify_checkout_session`: Inspects the session on PayMongo API and invokes `confirm_subscription_payment` when status is `paid`.
+  - Deployed live to Supabase (`paymongo-checkout`). Live probe verified with real PayMongo session generation.
+- **Store Billing Web Dashboard Integration (`app/(web)/dashboard/billing.tsx`)**:
+  - Integrated PayMongo checkout flow when clicking plan buttons ("Subscribe Now" / "Upgrade Plan").
+  - Handles return redirect URLs (`?payment=success&session_id=...` and `?payment=cancelled`).
+  - Implemented automatic payment verification on return with loading overlay and `ActionSuccessModal`.
+  - Added a dedicated "Subscription Invoices & Receipts" ledger displaying receipt history, billing dates, payment method, and PayMongo transaction references.
+- **Verification**:
+  - Added unit tests in `tests/foundation/paymongo.test.ts` and `tests/foundation/subscription-payments.test.ts`.
+  - Ran `npm.cmd test`: **151/151 unit tests passing**.
+  - Ran `npm.cmd run typecheck`: **0 TypeScript errors**.
 
 ## Phase 61: Terms Pop-up Container Removal, Centering, and Orange Brand Theme (2026-11-22)
 

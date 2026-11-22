@@ -5,6 +5,62 @@ export type Database = {
 
   "public": {
           Tables: {
+            "store_subscription_payments": {
+              Row: {
+                "amount": number;
+                "billing_cycle_end": string;
+                "billing_cycle_start": string;
+                "created_at": string;
+                "currency": string;
+                "id": string;
+                "payment_method": string | null;
+                "paymongo_checkout_session_id": string | null;
+                "paymongo_payment_id": string | null;
+                "status": "pending" | "paid" | "failed" | "cancelled" | "expired";
+                "store_id": string;
+                "tier": "basic" | "standard" | "commercial";
+                "updated_at": string;
+              };
+              Insert: {
+                "amount": number;
+                "billing_cycle_end"?: string;
+                "billing_cycle_start"?: string;
+                "created_at"?: string;
+                "currency"?: string;
+                "id"?: string;
+                "payment_method"?: string | null;
+                "paymongo_checkout_session_id"?: string | null;
+                "paymongo_payment_id"?: string | null;
+                "status"?: "pending" | "paid" | "failed" | "cancelled" | "expired";
+                "store_id": string;
+                "tier": "basic" | "standard" | "commercial";
+                "updated_at"?: string;
+              };
+              Update: {
+                "amount"?: number;
+                "billing_cycle_end"?: string;
+                "billing_cycle_start"?: string;
+                "created_at"?: string;
+                "currency"?: string;
+                "id"?: string;
+                "payment_method"?: string | null;
+                "paymongo_checkout_session_id"?: string | null;
+                "paymongo_payment_id"?: string | null;
+                "status"?: "pending" | "paid" | "failed" | "cancelled" | "expired";
+                "store_id"?: string;
+                "tier"?: "basic" | "standard" | "commercial";
+                "updated_at"?: string;
+              };
+              Relationships: [
+                {
+                  foreignKeyName: "store_subscription_payments_store_id_fkey";
+                  columns: ["store_id"];
+                  isOneToOne: false;
+                  referencedRelation: "stores";
+                  referencedColumns: ["id"];
+                }
+              ];
+            },
             "menu_items": {
                   Row: {
                     "archived_at": string | null,"category"?: string | null,"created_at": string,"currency": string,"description": string,"id": string,"image_url": string | null,"is_available": boolean,"is_published": boolean,"name": string,"price_centavos": number,"store_id": string,"updated_at": string,"modifiers"?: Json | null
@@ -947,6 +1003,15 @@ isOneToOne: false
                            },
 "merchant_select_subscription_plan":
 { Args: { "p_store_id": string; "p_tier": string }; Returns: { subscription_tier: string; subscription_status: string; trial_started_at: string | null; trial_ends_at: string | null; subscribed_at: string | null }
+                           },
+"record_subscription_checkout_intent":
+{ Args: { "p_amount": number; "p_session_id": string; "p_store_id": string; "p_tier": string }; Returns: string
+                           },
+"confirm_subscription_payment":
+{ Args: { "p_payment_id"?: string | null; "p_payment_method"?: string | null; "p_session_id": string }; Returns: Json
+                           },
+"get_store_subscription_invoices":
+{ Args: { "p_store_id": string }; Returns: Database["public"]["Tables"]["store_subscription_payments"]["Row"][]
                            }
           }
           Enums: {

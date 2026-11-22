@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Linking, Platform, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSession } from "../../../context/SessionContext";
 import {
   fetchStoreById,
@@ -14,7 +15,14 @@ import {
   fetchStoreOrders,
   type LiveOrder,
 } from "../../../services/orders";
+import {
+  createStoreSubscriptionCheckout,
+  verifyStoreSubscriptionPayment,
+  fetchStoreSubscriptionInvoices,
+  type StoreSubscriptionInvoice,
+} from "../../../services/paymongo";
 import { NotificationBanner, type BannerMessage } from "../../../components/ui/NotificationBanner";
+import { ActionSuccessModal } from "../../../components/ui/ActionSuccessModal";
 import {
   SUBSCRIPTION_TIERS,
   resolveStoreSubscriptionSummary,
@@ -22,16 +30,24 @@ import {
 import type { StoreSubscriptionTier } from "../../../types/restaurant";
 
 export default function StoreBilling() {
+  const router = useRouter();
+  const searchParams = useLocalSearchParams<{ payment?: string; session_id?: string }>();
   const { identity } = useSession("merchant");
   const [storeId, setStoreId] = useState<string | null>(null);
   const [storeProfile, setStoreProfile] = useState<LiveStoreProfile | null>(null);
   const [orders, setOrders] = useState<LiveOrder[]>([]);
+  const [invoices, setInvoices] = useState<StoreSubscriptionInvoice[]>([]);
   const [loadingBilling, setLoadingBilling] = useState(true);
   const [refreshingBilling, setRefreshingBilling] = useState(false);
   const [updatingTier, setUpdatingTier] = useState<StoreSubscriptionTier | null>(null);
+  const [verifyingPayment, setVerifyingPayment] = useState(false);
+  const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
+  const [paymentSuccessMessage, setPaymentSuccessMessage] = useState("");
   const [pendingConfirmOrderId, setPendingConfirmOrderId] = useState<string | null>(null);
   const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
   const [banner, setBanner] = useState<BannerMessage | null>(null);
+
+  const processedSessionRef = useRef<string | null>(null);
 
   const loadBillingData = useCallback(
     async (isRefresh = false) => {
@@ -51,18 +67,21 @@ export default function StoreBilling() {
         setStoreId(targetStoreId);
         if (!targetStoreId) {
           setOrders([]);
+          setInvoices([]);
           setStoreProfile(null);
           return;
         }
 
-        const [fetchedStore, storeOrders] = await Promise.all([
+        const [fetchedStore, storeOrders, storeInvoices] = await Promise.all([
           fetchStoreById(targetStoreId),
           fetchStoreOrders(targetStoreId),
+          fetchStoreSubscriptionInvoices(targetStoreId),
         ]);
         if (fetchedStore) {
           setStoreProfile(fetchedStore);
         }
         setOrders(storeOrders || []);
+        setInvoices(storeInvoices || []);
       } catch (err: any) {
         setBanner({
           type: "error",
@@ -79,6 +98,52 @@ export default function StoreBilling() {
   useEffect(() => {
     void loadBillingData(false);
   }, [loadBillingData]);
+
+  // Handle PayMongo return callbacks (?payment=success&session_id=... or ?payment=cancelled)
+  useEffect(() => {
+    const paymentStatus = searchParams.payment;
+    const sessionId = searchParams.session_id;
+
+    if (paymentStatus === "success" && sessionId && processedSessionRef.current !== sessionId) {
+      processedSessionRef.current = sessionId;
+      void handleVerifyPayment(sessionId);
+    } else if (paymentStatus === "cancelled") {
+      setBanner({
+        type: "info",
+        message: "PayMongo checkout was cancelled. No charges were made to your account.",
+      });
+      router.replace("/dashboard/billing");
+    }
+  }, [searchParams.payment, searchParams.session_id]);
+
+  const handleVerifyPayment = async (sessionId: string) => {
+    setVerifyingPayment(true);
+    setBanner(null);
+    try {
+      const res = await verifyStoreSubscriptionPayment(sessionId);
+      if (res.success && res.status === "paid") {
+        const tierName = res.data?.store_subscription_tier || "Selected";
+        const method = (res.paymentMethod || "online").toUpperCase();
+        setPaymentSuccessMessage(
+          `Payment of ₱${res.data?.amount || 0} via ${method} confirmed! Your store has been upgraded to the ${tierName.toUpperCase()} Plan.`
+        );
+        setShowPaymentSuccessModal(true);
+        await loadBillingData(true);
+      } else {
+        setBanner({
+          type: "error",
+          message: res.error || "Payment was not completed. Please try again.",
+        });
+      }
+    } catch (err: any) {
+      setBanner({
+        type: "error",
+        message: err?.message || "Could not verify payment status with gateway.",
+      });
+    } finally {
+      setVerifyingPayment(false);
+    }
+  };
 
   const settlementData = useMemo(() => calculateCodSettlement(orders), [orders]);
 
@@ -98,41 +163,71 @@ export default function StoreBilling() {
     if (!storeId) return;
     setUpdatingTier(tier);
     setBanner(null);
-    try {
-      const res = await selectMerchantSubscriptionPlan(storeId, tier);
-      if (res.success && res.data) {
-        setStoreProfile((prev) =>
-          prev
-            ? {
-                ...prev,
-                subscription_tier: res.data!.subscription_tier,
-                subscription_status: res.data!.subscription_status,
-                trial_started_at: res.data!.trial_started_at,
-                trial_ends_at: res.data!.trial_ends_at,
-                subscribed_at: res.data!.subscribed_at,
-              }
-            : prev
-        );
-        const wasOffline = subscriptionSummary.isTemporarilyOffline;
-        const chosen = SUBSCRIPTION_TIERS.find((item) => item.id === tier);
+
+    // If within active trial selecting Basic plan, activate directly with 0 PHP
+    if (tier === "basic" && subscriptionSummary.isTrialActive) {
+      try {
+        const res = await selectMerchantSubscriptionPlan(storeId, tier);
+        if (res.success && res.data) {
+          setStoreProfile((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  subscription_tier: res.data!.subscription_tier,
+                  subscription_status: res.data!.subscription_status,
+                  trial_started_at: res.data!.trial_started_at,
+                  trial_ends_at: res.data!.trial_ends_at,
+                  subscribed_at: res.data!.subscribed_at,
+                }
+              : prev
+          );
+          setBanner({
+            type: "success",
+            message: "Active on Basic Plan (Free 2-month trial upon approval).",
+          });
+        } else {
+          setBanner({
+            type: "error",
+            message: res.error || "Could not update subscription plan.",
+          });
+        }
+      } catch (err: any) {
         setBanner({
-          type: "success",
-          message: wasOffline
-            ? `Store Successfully Reactivated! Subscribed to ${chosen?.name || tier} Plan (₱${chosen?.pricePhp || 0}/month). Your storefront is now live across Mati FoodFinder.`
-            : `Subscribed to ${chosen?.name || tier} Plan (₱${chosen?.pricePhp || 0}/month). Your store stays active with zero commission.`,
+          type: "error",
+          message: err?.message || "Failed to update subscription plan.",
         });
+      } finally {
+        setUpdatingTier(null);
+      }
+      return;
+    }
+
+    // Launch secure PayMongo Checkout Session for paid plans / upgrades
+    try {
+      const checkoutRes = await createStoreSubscriptionCheckout({
+        storeId,
+        storeName: storeProfile?.name || "Your Store",
+        tier,
+      });
+
+      if (checkoutRes.success && checkoutRes.checkoutUrl) {
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          window.location.href = checkoutRes.checkoutUrl;
+        } else {
+          await Linking.openURL(checkoutRes.checkoutUrl);
+        }
       } else {
         setBanner({
           type: "error",
-          message: res.error || "Could not update subscription plan.",
+          message: checkoutRes.error || "Failed to initiate PayMongo checkout. Please try again.",
         });
+        setUpdatingTier(null);
       }
     } catch (err: any) {
       setBanner({
         type: "error",
-        message: err?.message || "Failed to update subscription plan.",
+        message: err?.message || "Payment gateway connection error.",
       });
-    } finally {
       setUpdatingTier(null);
     }
   };
@@ -175,6 +270,17 @@ export default function StoreBilling() {
       </View>
 
       <NotificationBanner banner={banner} onDismiss={() => setBanner(null)} />
+
+      {/* PayMongo Payment Verifying State */}
+      {verifyingPayment && (
+        <View className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-5 flex-row items-center gap-3 shadow-xs">
+          <ActivityIndicator size="small" color="#1D4ED8" />
+          <View className="flex-1">
+            <Text className="text-sm font-bold text-blue-900">Verifying PayMongo Payment...</Text>
+            <Text className="text-xs text-blue-700">Connecting with the payment gateway to confirm your subscription and activate your store tier.</Text>
+          </View>
+        </View>
+      )}
 
       {/* Current Availed Plan Status Banner */}
       <View className="bg-white p-5 rounded-2xl shadow-2xs border border-gray-200/80 mb-5">
@@ -364,19 +470,106 @@ export default function StoreBilling() {
                       }`}
                     >
                       {isSubmittingThis
-                        ? "Updating..."
+                        ? "Connecting to PayMongo..."
                         : isActiveAndCurrent
-                          ? "Subscribed (Current)"
-                          : isFreeTrialCurrent
-                            ? `Subscribe to ${tier.name} (₱${tier.pricePhp}/mo)`
-                            : `Select ${tier.name} (₱${tier.pricePhp}/mo)`}
+                          ? "Subscribed (Current Plan)"
+                          : isFreeTrialCurrent && tier.id === "basic"
+                            ? "Active (Free Trial)"
+                            : `Pay with PayMongo • ₱${tier.pricePhp}`}
                     </Text>
                   </Pressable>
+                  {!isActiveAndCurrent && (
+                    <Text className="text-[10px] text-gray-400 text-center mt-1.5 font-medium">
+                      GCash • Maya • Cards • GrabPay
+                    </Text>
+                  )}
                 </View>
               </View>
             );
           })}
         </View>
+      </View>
+
+      {/* PayMongo Subscription Invoices & Receipts */}
+      <View className="bg-white p-5 rounded-2xl shadow-2xs border border-gray-200/80 mb-6">
+        <View className="flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3.5 border-b border-gray-100 mb-4">
+          <View>
+            <Text className="text-sm font-bold text-gray-900">Subscription Invoices & Receipts</Text>
+            <Text className="text-[11px] text-gray-400">
+              {storeName} • Verified payment receipts powered by PayMongo
+            </Text>
+          </View>
+          <View className="flex-row items-center gap-1.5 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-full">
+            <Ionicons name="shield-checkmark" size={12} color="#1D4ED8" />
+            <Text className="text-[10px] font-bold text-blue-800">Secure PayMongo Gateway</Text>
+          </View>
+        </View>
+
+        {loadingBilling ? (
+          <View className="py-6 items-center justify-center">
+            <ActivityIndicator size="small" color="#EA5410" />
+            <Text className="text-[11px] text-gray-400 mt-2">Loading invoice history...</Text>
+          </View>
+        ) : invoices.length === 0 ? (
+          <View className="bg-gray-50 border border-gray-200 p-5 rounded-xl items-center">
+            <Ionicons name="receipt-outline" size={24} color="#9CA3AF" />
+            <Text className="text-xs font-bold text-gray-600 mt-2">No subscription receipts yet</Text>
+            <Text className="text-[11px] text-gray-400 text-center mt-0.5 max-w-sm">
+              Invoices will automatically log here whenever you renew or upgrade your store tier via PayMongo.
+            </Text>
+          </View>
+        ) : (
+          <View className="gap-2.5">
+            {invoices.map((inv) => {
+              const dateStr = new Date(inv.created_at).toLocaleDateString("en-PH", {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+              });
+              const methodStr = (inv.payment_method || "Online").toUpperCase();
+              const isPaid = inv.status === "paid";
+
+              return (
+                <View
+                  key={inv.id}
+                  className="bg-gray-50/80 border border-gray-200/90 p-3.5 rounded-xl flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5"
+                >
+                  <View className="flex-1">
+                    <View className="flex-row items-center gap-2 flex-wrap">
+                      <Text className="text-xs font-black text-gray-900 uppercase">
+                        {inv.tier} Plan
+                      </Text>
+                      <View
+                        className={`px-2 py-0.5 rounded-full ${
+                          isPaid ? "bg-emerald-100" : "bg-amber-100"
+                        }`}
+                      >
+                        <Text
+                          className={`text-[9px] font-bold uppercase ${
+                            isPaid ? "text-emerald-800" : "text-amber-800"
+                          }`}
+                        >
+                          {isPaid ? "Paid & Active" : inv.status}
+                        </Text>
+                      </View>
+                      <Text className="text-[11px] text-gray-500 font-medium">via {methodStr}</Text>
+                    </View>
+                    <Text className="text-[11px] text-gray-500 mt-1">
+                      Billing Cycle: {new Date(inv.billing_cycle_start).toLocaleDateString("en-PH", { month: "short", day: "numeric" })} - {new Date(inv.billing_cycle_end).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })} • Ref: {inv.paymongo_payment_id || inv.paymongo_checkout_session_id?.slice(0, 16) || inv.id.slice(0, 8)}
+                    </Text>
+                  </View>
+
+                  <View className="items-end shrink-0">
+                    <Text className="text-sm font-extrabold text-gray-900 tabular-nums">
+                      ₱{Number(inv.amount).toFixed(2)}
+                    </Text>
+                    <Text className="text-[10px] text-gray-400 mt-0.5">{dateStr}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
       </View>
 
       {/* COD Settlement & Cash Remittance Reconciliation */}
@@ -527,6 +720,21 @@ export default function StoreBilling() {
           </View>
         )}
       </View>
+
+      {/* Payment Success Modal */}
+      <ActionSuccessModal
+        visible={showPaymentSuccessModal}
+        title="Subscription Confirmed! 💳"
+        message={paymentSuccessMessage}
+        buttonLabel="Back to Billing"
+        icon="checkmark-circle"
+        iconColor="#059669"
+        iconBgColor="#ECFDF5"
+        onClose={() => {
+          setShowPaymentSuccessModal(false);
+          router.replace("/dashboard/billing");
+        }}
+      />
     </View>
   );
 }
