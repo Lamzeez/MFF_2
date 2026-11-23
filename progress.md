@@ -4,6 +4,24 @@
 > development sessions. Last repository review used for this snapshot:
 > 2026-11-24.
 
+## Phase 71: PayMongo Production / Live Readiness Assessment & Migration Checklist (2026-11-24)
+
+### Completed Assessment & Strategic Review
+- **Codebase Readiness**:
+  - **Zero Client-Side Secret Exposure**: All PayMongo API interactions are isolated within Supabase Edge Functions (`supabase/functions/paymongo-checkout`). Client bundles only hold public Supabase URLs and public publishable keys.
+  - **No Client Code Rewrite Required**: Switching to Live Mode requires zero frontend code modifications. It solely involves updating the `PAYMONGO_SECRET_KEY` secret from `sk_test_...` to `sk_live_...` in Supabase Edge Functions.
+  - **Atomic Upgrade Integrity**: PostgreSQL security definer function `confirm_subscription_payment` guarantees atomic updates to `store_subscription_payments` and `stores.subscription_tier`.
+  - **Dual Fulfillment Flow**: Direct browser return verification (`action: verify`) and server-to-server webhook events (`checkout_session.payment.paid`) protect against lost sessions.
+- **Operational & Compliance Checklist for Going Live**:
+  1. **PayMongo Account Verification**: Complete business document submission (DTI/SEC/Barangay permit and valid IDs) in the PayMongo dashboard to activate Live Mode.
+  2. **Payment Channel Activation**: Ensure GCash, Maya, QR Ph, and Cards are enabled under Live Settings in the PayMongo dashboard.
+  3. **Live Webhook Registration**: Register the production webhook URL (`https://tqztlckmeznbsjcszzyg.supabase.co/functions/v1/paymongo-checkout`) for `checkout_session.payment.paid` in the PayMongo Live dashboard.
+  4. **Supabase Secret Update**: Set `PAYMONGO_SECRET_KEY` to the live secret key (`sk_live_...`).
+  5. **Live Verification Smoke Test**: Perform an initial ₱99 live test payment with a real e-wallet to verify end-to-end payment capture, tier activation, and payout accounting.
+- **Strategic Recommendation**:
+  - For academic capstone defense, keeping test mode active avoids charging real money during live demonstrations.
+  - For pilot merchant onboarding in Mati City, the system is 100% architecturally and technically ready to go live.
+
 ## Phase 70: Technical Assessment of PayMongo QR Ph Sandbox Double-Authorization & Simulator Tab Lifecycle (2026-11-24)
 
 ### Completed Assessment & Root Cause Analysis
