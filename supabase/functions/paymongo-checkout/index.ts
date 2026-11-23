@@ -41,7 +41,11 @@ serve(async (req) => {
       const payments = sessionObj?.attributes?.payments || [];
       const primaryPayment = payments[0];
       const paymentId = primaryPayment?.id || null;
-      const paymentMethod = primaryPayment?.attributes?.source?.type || "qrph";
+      const paymentMethod =
+        primaryPayment?.attributes?.source?.type ||
+        primaryPayment?.attributes?.payment_method_type ||
+        (primaryPayment?.attributes?.source?.brand ? "card" : null) ||
+        "gcash";
 
       if (!sessionId) {
         return new Response(JSON.stringify({ error: "Missing session ID in webhook event." }), {
@@ -206,7 +210,11 @@ serve(async (req) => {
       const paidPayment = payments.find((p: any) => p?.attributes?.status === "paid") || payments[0];
       const paymentIntentStatus = sessionData?.payment_intent?.attributes?.status;
       const paymentId = paidPayment?.id || null;
-      const paymentMethod = paidPayment?.attributes?.source?.type || "qrph";
+      const paymentMethod =
+        paidPayment?.attributes?.source?.type ||
+        paidPayment?.attributes?.payment_method_type ||
+        (paidPayment?.attributes?.source?.brand ? "card" : null) ||
+        "gcash";
       const isPaid =
         sessionData?.status === "paid" ||
         paidPayment?.attributes?.status === "paid" ||

@@ -30,6 +30,20 @@ import {
 } from "../../../lib/subscription-tiers";
 import type { StoreSubscriptionTier } from "../../../types/restaurant";
 
+function formatPaymentMethodLabel(method: string | null | undefined, isPaid: boolean): string {
+  if (!method) {
+    return isPaid ? "ONLINE GATEWAY" : "ONLINE (PENDING)";
+  }
+  const clean = method.toLowerCase();
+  if (clean === "gcash") return "GCASH";
+  if (clean === "paymaya" || clean === "maya") return "MAYA";
+  if (clean === "grab_pay" || clean === "grabpay") return "GRABPAY";
+  if (clean === "qrph" || clean === "qr_ph") return "QR PH";
+  if (clean === "card") return "CARD";
+  if (clean === "dob" || clean === "online_banking") return "ONLINE BANKING";
+  return method.toUpperCase();
+}
+
 export default function StoreBilling() {
   const router = useRouter();
   const searchParams = useLocalSearchParams<{ payment?: string; session_id?: string }>();
@@ -84,6 +98,28 @@ export default function StoreBilling() {
         }
         setOrders(storeOrders || []);
         setInvoices(storeInvoices || []);
+
+        // Background auto-reconciliation: check any recent pending invoices against PayMongo
+        // so payments completed outside direct redirect (or after reconnecting) activate automatically.
+        const pendingInvoices = (storeInvoices || []).filter(
+          (inv) => inv.status === "pending" && inv.paymongo_checkout_session_id
+        );
+        if (pendingInvoices.length > 0) {
+          const latestPending = pendingInvoices[0];
+          verifyStoreSubscriptionPayment(latestPending.paymongo_checkout_session_id!)
+            .then((res) => {
+              if (res.success && res.status === "paid") {
+                void Promise.all([
+                  fetchStoreById(targetStoreId),
+                  fetchStoreSubscriptionInvoices(targetStoreId),
+                ]).then(([freshStore, freshInvoices]) => {
+                  if (freshStore) setStoreProfile(freshStore);
+                  if (freshInvoices) setInvoices(freshInvoices);
+                });
+              }
+            })
+            .catch(() => {});
+        }
       } catch (err: any) {
         setBanner({
           type: "error",
@@ -116,20 +152,35 @@ export default function StoreBilling() {
           sessionId = urlParams.get("session_id") || undefined;
         }
         if (!sessionId) {
-          sessionId = window.sessionStorage.getItem("mff_pending_paymongo_session") || undefined;
+          sessionId =
+            window.sessionStorage.getItem("mff_pending_paymongo_session") ||
+            window.localStorage.getItem("mff_pending_paymongo_session") ||
+            undefined;
         }
       } catch {}
+    }
+
+    // Fallback: If return was marked success but sessionId was cleared, resolve from pending invoices
+    if (paymentStatus === "success" && !sessionId && invoices.length > 0) {
+      const pendingInv = invoices.find(
+        (inv) => inv.status === "pending" && inv.paymongo_checkout_session_id
+      );
+      if (pendingInv?.paymongo_checkout_session_id) {
+        sessionId = pendingInv.paymongo_checkout_session_id;
+      }
     }
 
     if (paymentStatus === "success" && sessionId && processedSessionRef.current !== sessionId) {
       processedSessionRef.current = sessionId;
       if (Platform.OS === "web" && typeof window !== "undefined") {
         window.sessionStorage.removeItem("mff_pending_paymongo_session");
+        window.localStorage.removeItem("mff_pending_paymongo_session");
       }
       void handleVerifyPayment(sessionId);
     } else if (paymentStatus === "cancelled") {
       if (Platform.OS === "web" && typeof window !== "undefined") {
         window.sessionStorage.removeItem("mff_pending_paymongo_session");
+        window.localStorage.removeItem("mff_pending_paymongo_session");
       }
       setBanner({
         type: "info",
@@ -137,7 +188,7 @@ export default function StoreBilling() {
       });
       router.replace("/(web)/dashboard/billing");
     }
-  }, [searchParams.payment, searchParams.session_id]);
+  }, [searchParams.payment, searchParams.session_id, invoices]);
 
   const handleVerifyPayment = async (sessionId: string) => {
     setVerifyingPayment(true);
@@ -238,6 +289,7 @@ export default function StoreBilling() {
         if (Platform.OS === "web" && typeof window !== "undefined") {
           if (checkoutRes.sessionId) {
             window.sessionStorage.setItem("mff_pending_paymongo_session", checkoutRes.sessionId);
+            window.localStorage.setItem("mff_pending_paymongo_session", checkoutRes.sessionId);
           }
           window.location.href = checkoutRes.checkoutUrl;
         } else {
@@ -559,8 +611,8 @@ export default function StoreBilling() {
                 minute: "2-digit",
                 hour12: true,
               });
-              const methodStr = (inv.payment_method || "Online").toUpperCase();
               const isPaid = inv.status === "paid";
+              const methodStr = formatPaymentMethodLabel(inv.payment_method, isPaid);
 
               return (
                 <View

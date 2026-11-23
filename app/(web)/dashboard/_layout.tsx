@@ -40,6 +40,41 @@ const MERCHANT_NAV_ITEMS = [
   },
 ] as const;
 
+const resolveActiveMerchantTab = (
+  path: string
+): "overview" | "menu" | "profile" | "billing" => {
+  // 1. High priority: explicit payment query params or billing URL
+  if (path.includes("payment=") || path.includes("/billing")) {
+    return "billing";
+  }
+  // 2. High priority: explicit menu or profile path in URL
+  if (path.includes("/menu")) {
+    return "menu";
+  }
+  if (path.includes("/profile")) {
+    return "profile";
+  }
+
+  // 3. Fallback: retrieve last active tab from client session/local storage across page refreshes
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    try {
+      const saved =
+        window.sessionStorage.getItem("mff_merchant_active_tab") ||
+        window.localStorage.getItem("mff_merchant_active_tab");
+      if (
+        saved === "menu" ||
+        saved === "profile" ||
+        saved === "billing" ||
+        saved === "overview"
+      ) {
+        return saved;
+      }
+    } catch {}
+  }
+
+  return "overview";
+};
+
 export default function StoreAdminLayout() {
   const pathname = usePathname();
   const router = useRouter();
@@ -78,16 +113,29 @@ export default function StoreAdminLayout() {
       ? window.location.pathname + window.location.search
       : pathname;
 
-  const activeTab: "overview" | "menu" | "profile" | "billing" =
-    currentPath.includes("payment=") ||
-    currentPath.includes("/billing") ||
-    pathname.includes("/dashboard/billing")
-      ? "billing"
-      : currentPath.includes("/menu") || pathname.includes("/dashboard/menu")
-        ? "menu"
-        : currentPath.includes("/profile") || pathname.includes("/dashboard/profile")
-          ? "profile"
-          : "overview";
+  const [activeTab, setActiveTab] = useState<"overview" | "menu" | "profile" | "billing">(() =>
+    resolveActiveMerchantTab(currentPath)
+  );
+
+  useEffect(() => {
+    const resolved = resolveActiveMerchantTab(currentPath);
+    setActiveTab(resolved);
+  }, [currentPath]);
+
+  const handleSelectTab = (tab: "overview" | "menu" | "profile" | "billing") => {
+    setActiveTab(tab);
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      try {
+        window.sessionStorage.setItem("mff_merchant_active_tab", tab);
+        window.localStorage.setItem("mff_merchant_active_tab", tab);
+        const urlPath = tab === "overview" ? "/dashboard" : `/dashboard/${tab}`;
+        if (window.location.pathname !== urlPath) {
+          window.history.pushState(null, "", urlPath);
+        }
+      } catch {}
+    }
+    scrollToTabTop(tab);
+  };
 
   const scrollToTabTop = (tab: "overview" | "menu" | "profile" | "billing") => {
     const scrollRef =
@@ -218,7 +266,6 @@ export default function StoreAdminLayout() {
           <ScrollView className="px-3 py-4">
             <View className="gap-1">
               {MERCHANT_NAV_ITEMS.map((item) => {
-                const isActive = isAdminNavItemActive(pathname, item.href);
                 const targetTab: "overview" | "menu" | "profile" | "billing" = item.href.includes("/dashboard/menu")
                   ? "menu"
                   : item.href.includes("/dashboard/profile")
@@ -226,10 +273,11 @@ export default function StoreAdminLayout() {
                     : item.href.includes("/dashboard/billing")
                       ? "billing"
                       : "overview";
+                const isActive = targetTab === activeTab || isAdminNavItemActive(pathname, item.href);
                 return (
                   <Link key={item.label} href={item.href as any} asChild>
                     <Pressable
-                      onPress={() => scrollToTabTop(targetTab)}
+                      onPress={() => handleSelectTab(targetTab)}
                       accessibilityRole="tab"
                       accessibilityState={{ selected: isActive }}
                       className={`px-3 py-2.5 rounded-lg flex-row items-center gap-2.5 border transition-colors ${
@@ -309,7 +357,6 @@ export default function StoreAdminLayout() {
             contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 10, gap: 6 }}
           >
             {MERCHANT_NAV_ITEMS.map((item) => {
-              const isActive = isAdminNavItemActive(pathname, item.href);
               const targetTab: "overview" | "menu" | "profile" | "billing" = item.href.includes("/dashboard/menu")
                 ? "menu"
                 : item.href.includes("/dashboard/profile")
@@ -317,10 +364,11 @@ export default function StoreAdminLayout() {
                   : item.href.includes("/dashboard/billing")
                     ? "billing"
                     : "overview";
+              const isActive = targetTab === activeTab || isAdminNavItemActive(pathname, item.href);
               return (
                 <Link key={item.label} href={item.href as any} asChild>
                   <Pressable
-                    onPress={() => scrollToTabTop(targetTab)}
+                    onPress={() => handleSelectTab(targetTab)}
                     accessibilityRole="tab"
                     accessibilityState={{ selected: isActive }}
                     className={`px-3 py-1.5 rounded-lg flex-row items-center gap-1.5 border ${

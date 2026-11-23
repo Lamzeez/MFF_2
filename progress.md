@@ -4,6 +4,32 @@
 > development sessions. Last repository review used for this snapshot:
 > 2026-11-24.
 
+## Phase 66: Merchant Tab Persistence Across Reloads, Instant Auto-Verification, & Payment Method Reconciliation (2026-11-24)
+
+### Completed Work
+- **Merchant Tab State Persistence Across Reloads (`app/(web)/dashboard/_layout.tsx`)**:
+  - Implemented `resolveActiveMerchantTab` with 4-level fallback priority: URL query/action parameters, URL path segment, persistent client storage (`sessionStorage` and `localStorage` under `mff_merchant_active_tab`), and root overview fallback.
+  - Added `handleSelectTab` to synchronize state, write to client storage, and update browser history via `window.history.pushState` / `replaceState` without triggering remount loops.
+  - Resolves page refresh returning to Overview from Menu Manager, Store Profile, or Billing & Plans.
+- **Immediate Plan Activation & Auto-Verification on Return (`app/(web)/dashboard/billing.tsx`)**:
+  - Stored pending checkout session IDs in both `sessionStorage` and `localStorage` before redirecting to PayMongo.
+  - Implemented triple-fallback session recovery on return (`searchParams` $\rightarrow$ browser storage $\rightarrow$ store's latest pending invoice query).
+  - Automatically triggers `handleVerifyPayment(sessionId)` the moment the user returns with `?payment=success`, immediately activating the subscription plan and launching the success confirmation modal without requiring manual clicks on "Verify Status".
+- **Background Auto-Reconciliation on Billing Page Load (`app/(web)/dashboard/billing.tsx`)**:
+  - In `loadBillingData`, automatically verifies the most recent pending invoice against PayMongo in the background. If a merchant completed payment on PayMongo and closed the browser before redirect, the invoice updates to `PAID & ACTIVE` with the store tier applied upon the next visit.
+- **Branded Payment Method Formatting (`formatPaymentMethodLabel`)**:
+  - Replaced generic "via ONLINE" display with standard Philippine payment brand labels: `GCASH`, `MAYA`, `GRABPAY`, `QR PH`, `CARD`, `ONLINE BANKING`, and `ONLINE (PENDING)` for unselected sessions.
+- **Remote Database Migration (`20261124000100_add_qrph_to_subscription_payments_constraint.sql`)**:
+  - Updated `store_subscription_payments_payment_method_check` on remote Supabase to permit `'qrph'`, `'grab_pay'`, and `'billease'`.
+  - Pushed to remote database via `npx supabase db push`.
+- **Edge Function Robustness (`supabase/functions/paymongo-checkout/index.ts`)**:
+  - Enhanced payment method resolution across `primaryPayment?.attributes?.source?.type`, `payment_method_type`, and card brands.
+  - Deployed updated function to remote Supabase (`paymongo-checkout`).
+- **Verification**:
+  - Updated unit test contracts in `tests/foundation/paymongo.test.ts`.
+  - Ran `npm.cmd test`: **153/153 unit tests passing**.
+  - Ran `npm.cmd run typecheck`: **0 TypeScript errors**.
+
 ## Phase 65: Streamlined Subscription Confirmation, Billing Return Route Retention, & Payment Verification (2026-11-24)
 
 ### Completed Work

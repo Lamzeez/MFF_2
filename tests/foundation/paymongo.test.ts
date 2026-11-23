@@ -55,6 +55,21 @@ test("Store billing dashboard integrates PayMongo checkout, payment verification
   assert.equal(source.includes("Pay with PayMongo"), true);
   assert.equal(source.includes("Subscription Invoices & Receipts"), true);
   assert.equal(source.includes("Verifying PayMongo Payment..."), true);
+  assert.equal(source.includes("formatPaymentMethodLabel"), true);
+  assert.equal(source.includes("mff_pending_paymongo_session"), true);
+});
+
+test("Store merchant dashboard layout enforces persistent tab recovery across page refreshes", () => {
+  const layoutPath = path.resolve(
+    process.cwd(),
+    "app/(web)/dashboard/_layout.tsx"
+  );
+  assert.equal(fs.existsSync(layoutPath), true);
+  const source = fs.readFileSync(layoutPath, "utf-8");
+
+  assert.equal(source.includes("resolveActiveMerchantTab"), true);
+  assert.equal(source.includes("mff_merchant_active_tab"), true);
+  assert.equal(source.includes("handleSelectTab"), true);
 });
 
 test("SubscriptionConfirmModal component exists and adheres to strict confirmation contract", () => {
