@@ -30,6 +30,12 @@ test("paymongo-checkout Edge Function exists and implements create and verify ac
   assert.equal(source.includes("confirm_subscription_payment"), true);
   assert.equal(source.includes('payload.action === "create"'), true);
   assert.equal(source.includes('payload.action === "verify"'), true);
+  assert.equal(source.includes('"qrph"'), true, "Must include qrph for MariBank and banking QR payments");
+  assert.equal(
+    source.includes("checkout_session.payment.paid"),
+    true,
+    "Must support PayMongo webhook events"
+  );
 });
 
 test("Store billing dashboard integrates PayMongo checkout, payment verification, and invoice ledger", () => {

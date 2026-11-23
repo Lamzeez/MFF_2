@@ -4,6 +4,30 @@
 > development sessions. Last repository review used for this snapshot:
 > 2026-11-23.
 
+## Phase 63: PayMongo QR Ph (MariBank/InstaPay), Gateway Headers, & Return Verification (2026-11-23)
+
+### Completed Work
+- **QR Ph Support for MariBank & Philippine Banks**:
+  - Added `"qrph"` to `payment_method_types` in `supabase/functions/paymongo-checkout/index.ts`.
+  - Enables customers and store admins to scan QR Ph with MariBank, SeaBank, BPI, BDO, UnionBank, GoTyme, GCash, or Maya directly on the checkout screen.
+- **PayMongo Webhook Event Support**:
+  - Implemented handling for `checkout_session.payment.paid` directly inside the Edge Function.
+  - Automatically reconciles payments even if users close their browser before the countdown redirect.
+- **Supabase Kong Gateway Headers & Scoped Client**:
+  - Added required `apikey` and `Authorization` headers to all Edge Function requests in `services/paymongo.ts`.
+  - Pinned `fetchStoreSubscriptionInvoices()` to the `"merchant"` authentication scope (`getSupabaseClient("merchant")`), resolving the `401 Unauthorized` / `42501 permission denied` error.
+- **Database Permissions Fix (`20261123000100_fix_store_subscription_payments_permissions.sql`)**:
+  - Updated RPC functions to allow `service_role` and authenticated merchant execution without relying solely on client `auth.uid()`.
+  - Pushed migration to remote Supabase via `npx supabase db push`.
+- **Client Session Storage Recovery on Return**:
+  - Store billing dashboard saves pending `sessionId` in `sessionStorage` before navigating to PayMongo.
+  - Upon return to `?payment=success`, the dashboard recovers the session ID from query params or `sessionStorage` and triggers `verifyStoreSubscriptionPayment()`.
+- **Verification**:
+  - Deployed updated Edge Function live to Supabase.
+  - Probed live checkout session creation and verification via node scripts; verified 200 OK responses with QR Ph enabled.
+  - Ran `npm.cmd test`: **151/151 unit tests passing**.
+  - Ran `npm.cmd run typecheck`: **0 TypeScript errors**.
+
 ## Phase 62: Store Admin PayMongo Subscription Payments & Invoices (2026-11-23)
 
 ### Completed Work

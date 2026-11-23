@@ -8,22 +8,6 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-interface CreateCheckoutPayload {
-  action: "create";
-  storeId: string;
-  storeName?: string;
-  tier: "basic" | "standard" | "commercial";
-  successUrl?: string;
-  cancelUrl?: string;
-}
-
-interface VerifyCheckoutPayload {
-  action: "verify";
-  sessionId: string;
-}
-
-type RequestPayload = CreateCheckoutPayload | VerifyCheckoutPayload;
-
 const TIER_PRICING: Record<string, { name: string; amountCentavos: number; pricePhp: number }> = {
   basic: { name: "Basic", amountCentavos: 9900, pricePhp: 99 },
   standard: { name: "Standard", amountCentavos: 29900, pricePhp: 299 },
@@ -47,9 +31,49 @@ serve(async (req) => {
 
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    const payload: RequestPayload = await req.json();
+    const payload: any = await req.json();
 
-    // ACTION: CREATE CHECKOUT SESSION
+    // 2. Handle PayMongo Webhook Events (checkout_session.payment.paid)
+    const webhookEventType = payload?.data?.attributes?.type;
+    if (webhookEventType === "checkout_session.payment.paid") {
+      const sessionObj = payload.data.attributes.data;
+      const sessionId = sessionObj?.id;
+      const payments = sessionObj?.attributes?.payments || [];
+      const primaryPayment = payments[0];
+      const paymentId = primaryPayment?.id || null;
+      const paymentMethod = primaryPayment?.attributes?.source?.type || "qrph";
+
+      if (!sessionId) {
+        return new Response(JSON.stringify({ error: "Missing session ID in webhook event." }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: confirmResult, error: confirmError } = await supabaseClient.rpc(
+        "confirm_subscription_payment",
+        {
+          p_session_id: sessionId,
+          p_payment_id: paymentId,
+          p_payment_method: paymentMethod,
+        }
+      );
+
+      if (confirmError) {
+        console.error("Webhook payment confirmation failed:", confirmError);
+        return new Response(JSON.stringify({ error: confirmError.message }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ success: true, status: "paid", data: confirmResult }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 3. ACTION: CREATE CHECKOUT SESSION
     if (payload.action === "create") {
       const { storeId, storeName = "Your Store", tier, successUrl, cancelUrl } = payload;
       if (!storeId || !tier) {
@@ -59,7 +83,7 @@ serve(async (req) => {
         );
       }
 
-      const tierConfig = TIER_PRICING[tier.toLowerCase()];
+      const tierConfig = TIER_PRICING[String(tier).toLowerCase()];
       if (!tierConfig) {
         return new Response(
           JSON.stringify({ error: "Invalid tier. Supported: basic, standard, commercial." }),
@@ -68,14 +92,14 @@ serve(async (req) => {
       }
 
       const defaultSuccessUrl =
-        "https://mati-foodfinder.onrender.com/dashboard/billing?payment=success&session_id={CHECKOUT_SESSION_ID}";
+        "https://mati-foodfinder.onrender.com/dashboard/billing?payment=success";
       const defaultCancelUrl =
         "https://mati-foodfinder.onrender.com/dashboard/billing?payment=cancelled";
 
       const finalSuccessUrl = successUrl || defaultSuccessUrl;
       const finalCancelUrl = cancelUrl || defaultCancelUrl;
 
-      // Call PayMongo Checkout API
+      // Call PayMongo Checkout API with QR Ph included!
       const paymongoAuth = btoa(`${paymongoSecretKey}:`);
       const response = await fetch("https://api.paymongo.com/v1/checkout_sessions", {
         method: "POST",
@@ -99,12 +123,12 @@ serve(async (req) => {
                   quantity: 1,
                 },
               ],
-              payment_method_types: ["gcash", "paymaya", "card", "grab_pay", "dob"],
+              payment_method_types: ["gcash", "paymaya", "card", "qrph", "grab_pay", "dob"],
               success_url: finalSuccessUrl,
               cancel_url: finalCancelUrl,
               metadata: {
                 store_id: storeId,
-                tier: tier.toLowerCase(),
+                tier: String(tier).toLowerCase(),
               },
             },
           },
@@ -129,7 +153,7 @@ serve(async (req) => {
         "record_subscription_checkout_intent",
         {
           p_store_id: storeId,
-          p_tier: tier.toLowerCase(),
+          p_tier: String(tier).toLowerCase(),
           p_amount: tierConfig.pricePhp,
           p_session_id: checkoutSessionId,
         }
@@ -149,7 +173,7 @@ serve(async (req) => {
       );
     }
 
-    // ACTION: VERIFY CHECKOUT SESSION
+    // 4. ACTION: VERIFY CHECKOUT SESSION
     if (payload.action === "verify") {
       const { sessionId } = payload;
       if (!sessionId) {
@@ -178,13 +202,17 @@ serve(async (req) => {
       }
 
       const sessionData = pmResult?.data?.attributes;
-      const paymentStatus = sessionData?.status; // 'paid' | 'active' | 'expired'
       const payments = sessionData?.payments || [];
-      const primaryPayment = payments[0];
-      const paymentId = primaryPayment?.id || null;
-      const paymentMethod = primaryPayment?.attributes?.source?.type || "gcash";
+      const paidPayment = payments.find((p: any) => p?.attributes?.status === "paid") || payments[0];
+      const paymentIntentStatus = sessionData?.payment_intent?.attributes?.status;
+      const paymentId = paidPayment?.id || null;
+      const paymentMethod = paidPayment?.attributes?.source?.type || "qrph";
+      const isPaid =
+        sessionData?.status === "paid" ||
+        paidPayment?.attributes?.status === "paid" ||
+        paymentIntentStatus === "succeeded";
 
-      if (paymentStatus === "paid") {
+      if (isPaid) {
         // Atomically confirm payment in database and upgrade store tier
         const { data: confirmResult, error: confirmError } = await supabaseClient.rpc(
           "confirm_subscription_payment",
@@ -220,19 +248,22 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
-          status: paymentStatus || "unpaid",
+          status: sessionData?.status || "unpaid",
+          paymentsCount: payments.length,
+          paymentIntentStatus,
+          message: "Payment has not been completed yet.",
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     return new Response(
-      JSON.stringify({ error: "Unsupported action. Use 'create' or 'verify'." }),
+      JSON.stringify({ error: "Invalid action. Supported: create, verify, or webhook event." }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (err: any) {
+  } catch (error: any) {
     return new Response(
-      JSON.stringify({ error: err?.message || "Internal server error" }),
+      JSON.stringify({ error: error?.message || "Internal server error in PayMongo gateway." }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

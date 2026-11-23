@@ -99,15 +99,25 @@ export default function StoreBilling() {
     void loadBillingData(false);
   }, [loadBillingData]);
 
-  // Handle PayMongo return callbacks (?payment=success&session_id=... or ?payment=cancelled)
+  // Handle PayMongo return callbacks (?payment=success or ?payment=cancelled)
   useEffect(() => {
     const paymentStatus = searchParams.payment;
-    const sessionId = searchParams.session_id;
+    let sessionId = searchParams.session_id;
+
+    if (!sessionId && typeof window !== "undefined") {
+      sessionId = window.sessionStorage.getItem("mff_pending_paymongo_session") || undefined;
+    }
 
     if (paymentStatus === "success" && sessionId && processedSessionRef.current !== sessionId) {
       processedSessionRef.current = sessionId;
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem("mff_pending_paymongo_session");
+      }
       void handleVerifyPayment(sessionId);
     } else if (paymentStatus === "cancelled") {
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem("mff_pending_paymongo_session");
+      }
       setBanner({
         type: "info",
         message: "PayMongo checkout was cancelled. No charges were made to your account.",
@@ -212,6 +222,9 @@ export default function StoreBilling() {
 
       if (checkoutRes.success && checkoutRes.checkoutUrl) {
         if (Platform.OS === "web" && typeof window !== "undefined") {
+          if (checkoutRes.sessionId) {
+            window.sessionStorage.setItem("mff_pending_paymongo_session", checkoutRes.sessionId);
+          }
           window.location.href = checkoutRes.checkoutUrl;
         } else {
           await Linking.openURL(checkoutRes.checkoutUrl);

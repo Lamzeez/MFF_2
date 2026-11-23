@@ -21,7 +21,16 @@ export interface PayMongoVerifyResponse {
 }
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || "https://tqztlckmeznbsjcszzyg.supabase.co";
+const SUPABASE_ANON_KEY =
+  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+  "sb_publishable_pwbQw_DdIm4q5jjBMSpCSA_5aRUw7cj";
 const PAYMONGO_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/paymongo-checkout`;
+
+const GATEWAY_HEADERS = {
+  "Content-Type": "application/json",
+  apikey: SUPABASE_ANON_KEY,
+  Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+};
 
 /**
  * Initiates a PayMongo Checkout Session for a Store Subscription (Basic, Standard, Commercial).
@@ -43,9 +52,7 @@ export async function createStoreSubscriptionCheckout({
   try {
     const response = await fetch(PAYMONGO_FUNCTION_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: GATEWAY_HEADERS,
       body: JSON.stringify({
         action: "create",
         storeId,
@@ -86,9 +93,7 @@ export async function verifyStoreSubscriptionPayment(
   try {
     const response = await fetch(PAYMONGO_FUNCTION_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: GATEWAY_HEADERS,
       body: JSON.stringify({
         action: "verify",
         sessionId,
@@ -121,7 +126,7 @@ export async function fetchStoreSubscriptionInvoices(
   storeId: string
 ): Promise<StoreSubscriptionInvoice[]> {
   try {
-    const client = getSupabaseClient();
+    const client = getSupabaseClient("merchant");
     const { data, error } = await client.rpc("get_store_subscription_invoices", {
       p_store_id: storeId,
     });
