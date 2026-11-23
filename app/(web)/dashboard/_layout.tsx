@@ -122,6 +122,20 @@ export default function StoreAdminLayout() {
     setActiveTab(resolved);
   }, [currentPath]);
 
+  // Synchronize browser address bar with the authoritative active tab
+  useEffect(() => {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      try {
+        const expectedPath = activeTab === "overview" ? "/dashboard" : `/dashboard/${activeTab}`;
+        const search = window.location.search;
+        const currentUrlPath = window.location.pathname;
+        if (currentUrlPath !== expectedPath && !search.includes("payment=")) {
+          window.history.replaceState(null, "", expectedPath + search);
+        }
+      } catch {}
+    }
+  }, [activeTab]);
+
   const handleSelectTab = (tab: "overview" | "menu" | "profile" | "billing") => {
     setActiveTab(tab);
     if (Platform.OS === "web" && typeof window !== "undefined") {
@@ -273,7 +287,9 @@ export default function StoreAdminLayout() {
                     : item.href.includes("/dashboard/billing")
                       ? "billing"
                       : "overview";
-                const isActive = targetTab === activeTab || isAdminNavItemActive(pathname, item.href);
+                // Single authoritative active tab check to prevent dual highlights on reload
+                const isActive = targetTab === activeTab;
+                void isAdminNavItemActive;
                 return (
                   <Link key={item.label} href={item.href as any} asChild>
                     <Pressable
@@ -364,7 +380,9 @@ export default function StoreAdminLayout() {
                   : item.href.includes("/dashboard/billing")
                     ? "billing"
                     : "overview";
-              const isActive = targetTab === activeTab || isAdminNavItemActive(pathname, item.href);
+              // Single authoritative active tab check to prevent dual highlights on reload
+              const isActive = targetTab === activeTab;
+              void isAdminNavItemActive;
               return (
                 <Link key={item.label} href={item.href as any} asChild>
                   <Pressable

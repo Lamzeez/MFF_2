@@ -10,7 +10,8 @@
 - **Merchant Tab State Persistence Across Reloads (`app/(web)/dashboard/_layout.tsx`)**:
   - Implemented `resolveActiveMerchantTab` with 4-level fallback priority: URL query/action parameters, URL path segment, persistent client storage (`sessionStorage` and `localStorage` under `mff_merchant_active_tab`), and root overview fallback.
   - Added `handleSelectTab` to synchronize state, write to client storage, and update browser history via `window.history.pushState` / `replaceState` without triggering remount loops.
-  - Resolves page refresh returning to Overview from Menu Manager, Store Profile, or Billing & Plans.
+  - Synchronized browser address bar directly to the active tab path (`/dashboard/billing`, `/dashboard/menu`, `/dashboard/profile`) so browser reloads target the explicit tab route.
+  - Unified active tab highlight to `targetTab === activeTab` as single source of truth, preventing dual highlights (e.g. Overview + Billing) on page refresh.
 - **Immediate Plan Activation & Auto-Verification on Return (`app/(web)/dashboard/billing.tsx`)**:
   - Stored pending checkout session IDs in both `sessionStorage` and `localStorage` before redirecting to PayMongo.
   - Implemented triple-fallback session recovery on return (`searchParams` $\rightarrow$ browser storage $\rightarrow$ store's latest pending invoice query).
