@@ -4,6 +4,29 @@
 > development sessions. Last repository review used for this snapshot:
 > 2026-11-24.
 
+## Phase 70: Technical Assessment of PayMongo QR Ph Sandbox Double-Authorization & Simulator Tab Lifecycle (2026-11-24)
+
+### Completed Assessment & Root Cause Analysis
+- **1. Why "Authorize Payment" Requires Two Clicks in QR Ph**:
+  - **PayMongo Source State Machine**: QR Ph creates a payment resource (`src_...`) that follows a 3-step state progression:
+    $$\text{pending} \xrightarrow{\text{Step 1: Scan / Intent}} \text{chargeable} \xrightarrow{\text{Step 2: Payment Approval / OTP}} \text{consumed}$$
+  - **Sandbox Simulation**: In test mode (`sk_test_...`), real Philippine banking apps (BDO, BPI, GCash, Maya) cannot interact with test QR Ph codes. PayMongo provides a generic mock authorization endpoint (`secure-authentication.paymongo.com/sources?id=src_...`) to simulate a bank app's operations.
+  - **Click 1 ("Authorize Payment")**: Moves the source from `pending` to `chargeable`, simulating that the user scanned the QR code in their mobile app and reached the payment summary screen.
+  - **Click 2 ("Authorize Payment")**: Moves the source from `chargeable` to `consumed`, simulating that the user entered their MPIN / OTP and completed the payment deduction.
+  - **Live Production Comparison**: In live production, this simulator does **not exist**. Customers point their real smartphone camera at the dynamic QR Ph code, confirm in their mobile banking app once, and pay. There are no double authorization clicks.
+
+- **2. Why the Browser Gets Stuck on `Source src_... has consumed status`**:
+  - **Multi-Tab Architecture**: PayMongo Checkout spawns the test simulator in a **new browser tab** (`secure-authentication.paymongo.com`).
+  - **Raw Diagnostic Endpoint**: The simulator tab is an internal PayMongo developer tool. When the source reaches `consumed`, the server outputs raw text: `Source src_... has consumed status`. PayMongo did not implement client-side redirect or auto-close scripts on that page because the endpoint does not hold the merchant `success_url`.
+  - **Session Listener on Primary Tab**: The primary checkout tab (`checkout.paymongo.com`) in the background detected that the source was consumed. Once the user closes the simulator tab or switches back to the primary tab, PayMongo displays the success state and auto-redirects or provides "Return to merchant".
+  - **Live Production Comparison**: In production, desktop users scan the QR code using their physical phone. The computer browser never opens a secondary tab; it stays on `checkout.paymongo.com` and automatically redirects to `https://mati-foodfinder.onrender.com/dashboard/billing?payment=success` the instant the mobile payment clears.
+
+- **3. Proposed Fixes & Inconvenience Mitigations**:
+  - **Educational Guidance Copy**: Add a clear sandbox testing tip in MFF's subscription confirmation modal explaining the 2-click scan/OTP simulation and new-tab behavior for evaluators/testers.
+  - **Automatic Background Verification**: MFF's billing engine (`StoreBilling`) already automatically polls and reconciles pending checkout sessions if a merchant returns to MFF directly.
+  - **Dedicated Sandbox Fast-Track Option**: For smooth thesis/capstone presentations, provide a developer quick-simulate toggle to test tier upgrades instantly without external sandbox tab switching.
+  - **Alternative E-Wallet Testing**: Use PayMongo's test GCash / Maya flows during demos, which use single-tab simulated authorization.
+
 ## Phase 69: Elimination of the 0.7s Plan Upgrade Post-Payment Verification Delay (`billing.tsx`) (2026-11-24)
 
 ### Completed Work
