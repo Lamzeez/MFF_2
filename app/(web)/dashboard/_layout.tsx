@@ -127,14 +127,12 @@ export default function StoreAdminLayout() {
     if (Platform.OS === "web" && typeof window !== "undefined") {
       try {
         const expectedPath = activeTab === "overview" ? "/dashboard" : `/dashboard/${activeTab}`;
-        const search = window.location.search;
-        const currentUrlPath = window.location.pathname;
-        if (currentUrlPath !== expectedPath && !search.includes("payment=")) {
-          window.history.replaceState(null, "", expectedPath + search);
+        if (window.location.pathname !== expectedPath) {
+          window.history.replaceState(null, "", expectedPath + window.location.search);
         }
       } catch {}
     }
-  }, [activeTab]);
+  }, [activeTab, pathname]);
 
   const handleSelectTab = (tab: "overview" | "menu" | "profile" | "billing") => {
     setActiveTab(tab);

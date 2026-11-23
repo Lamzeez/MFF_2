@@ -27,6 +27,7 @@ import { SubscriptionConfirmModal } from "../../../components/ui/SubscriptionCon
 import {
   SUBSCRIPTION_TIERS,
   resolveStoreSubscriptionSummary,
+  normalizeSubscriptionTier,
 } from "../../../lib/subscription-tiers";
 import type { StoreSubscriptionTier } from "../../../types/restaurant";
 
@@ -48,6 +49,29 @@ export default function StoreBilling() {
   const router = useRouter();
   const searchParams = useLocalSearchParams<{ payment?: string; session_id?: string }>();
   const { identity } = useSession("merchant");
+
+  // Recover cached or pending optimistic plan tier to eliminate visual jumping/delay from Basic
+  const getOptimisticTier = (): StoreSubscriptionTier | null => {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      try {
+        const pending =
+          window.sessionStorage.getItem("mff_pending_paymongo_tier") ||
+          window.localStorage.getItem("mff_pending_paymongo_tier");
+        if (pending === "standard" || pending === "commercial" || pending === "basic") {
+          return pending;
+        }
+        const cached =
+          window.sessionStorage.getItem("mff_store_active_plan") ||
+          window.localStorage.getItem("mff_store_active_plan");
+        if (cached === "standard" || cached === "commercial" || cached === "basic") {
+          return cached;
+        }
+      } catch {}
+    }
+    return null;
+  };
+
+  const [optimisticTier, setOptimisticTier] = useState<StoreSubscriptionTier | null>(getOptimisticTier);
   const [storeId, setStoreId] = useState<string | null>(null);
   const [storeProfile, setStoreProfile] = useState<LiveStoreProfile | null>(null);
   const [orders, setOrders] = useState<LiveOrder[]>([]);
@@ -95,6 +119,15 @@ export default function StoreBilling() {
         ]);
         if (fetchedStore) {
           setStoreProfile(fetchedStore);
+          if (fetchedStore.subscription_tier) {
+            setOptimisticTier(normalizeSubscriptionTier(fetchedStore.subscription_tier));
+            if (Platform.OS === "web" && typeof window !== "undefined") {
+              try {
+                window.sessionStorage.setItem("mff_store_active_plan", fetchedStore.subscription_tier);
+                window.localStorage.setItem("mff_store_active_plan", fetchedStore.subscription_tier);
+              } catch {}
+            }
+          }
         }
         setOrders(storeOrders || []);
         setInvoices(storeInvoices || []);
@@ -181,12 +214,14 @@ export default function StoreBilling() {
       if (Platform.OS === "web" && typeof window !== "undefined") {
         window.sessionStorage.removeItem("mff_pending_paymongo_session");
         window.localStorage.removeItem("mff_pending_paymongo_session");
+        try {
+          window.history.replaceState(null, "", "/dashboard/billing");
+        } catch {}
       }
       setBanner({
         type: "info",
         message: "PayMongo checkout was cancelled. No charges were made to your account.",
       });
-      router.replace("/(web)/dashboard/billing");
     }
   }, [searchParams.payment, searchParams.session_id, invoices]);
 
@@ -196,10 +231,22 @@ export default function StoreBilling() {
     try {
       const res = await verifyStoreSubscriptionPayment(sessionId);
       if (res.success && res.status === "paid") {
-        const tierName = res.data?.store_subscription_tier || "Selected";
+        const confirmedTier = res.data?.store_subscription_tier || optimisticTier || "Selected";
+        if (res.data?.store_subscription_tier) {
+          setOptimisticTier(normalizeSubscriptionTier(res.data.store_subscription_tier));
+          if (Platform.OS === "web" && typeof window !== "undefined") {
+            try {
+              window.sessionStorage.setItem("mff_store_active_plan", res.data.store_subscription_tier);
+              window.localStorage.setItem("mff_store_active_plan", res.data.store_subscription_tier);
+              window.sessionStorage.removeItem("mff_pending_paymongo_tier");
+              window.localStorage.removeItem("mff_pending_paymongo_tier");
+              window.history.replaceState(null, "", "/dashboard/billing");
+            } catch {}
+          }
+        }
         const method = (res.paymentMethod || "online").toUpperCase();
         setPaymentSuccessMessage(
-          `Payment of ₱${res.data?.amount || 0} via ${method} confirmed! Your store has been upgraded to the ${tierName.toUpperCase()} Plan.`
+          `Payment of ₱${res.data?.amount || 0} via ${method} confirmed! Your store has been upgraded to the ${confirmedTier.toUpperCase()} Plan.`
         );
         setShowPaymentSuccessModal(true);
         await loadBillingData(true);
@@ -224,13 +271,13 @@ export default function StoreBilling() {
   const subscriptionSummary = useMemo(
     () =>
       resolveStoreSubscriptionSummary({
-        subscriptionTier: storeProfile?.subscription_tier,
+        subscriptionTier: storeProfile?.subscription_tier || optimisticTier || undefined,
         subscriptionStatus: storeProfile?.subscription_status,
         trialStartedAt: storeProfile?.trial_started_at,
         trialEndsAt: storeProfile?.trial_ends_at,
         subscribedAt: storeProfile?.subscribed_at,
       }),
-    [storeProfile]
+    [storeProfile, optimisticTier]
   );
 
   const executePlanSelection = async (tier: StoreSubscriptionTier) => {
@@ -279,10 +326,27 @@ export default function StoreBilling() {
 
     // Launch secure PayMongo Checkout Session for paid plans / upgrades
     try {
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.sessionStorage.setItem("mff_pending_paymongo_tier", tier);
+        window.localStorage.setItem("mff_pending_paymongo_tier", tier);
+        window.sessionStorage.setItem("mff_store_active_plan", tier);
+        window.localStorage.setItem("mff_store_active_plan", tier);
+      }
+      const successUrl =
+        Platform.OS === "web" && typeof window !== "undefined"
+          ? `${window.location.origin}/dashboard/billing?payment=success`
+          : undefined;
+      const cancelUrl =
+        Platform.OS === "web" && typeof window !== "undefined"
+          ? `${window.location.origin}/dashboard/billing?payment=cancelled`
+          : undefined;
+
       const checkoutRes = await createStoreSubscriptionCheckout({
         storeId,
         storeName: storeProfile?.name || "Your Store",
         tier,
+        successUrl,
+        cancelUrl,
       });
 
       if (checkoutRes.success && checkoutRes.checkoutUrl) {
@@ -296,6 +360,10 @@ export default function StoreBilling() {
           await Linking.openURL(checkoutRes.checkoutUrl);
         }
       } else {
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          window.sessionStorage.removeItem("mff_pending_paymongo_tier");
+          window.localStorage.removeItem("mff_pending_paymongo_tier");
+        }
         setBanner({
           type: "error",
           message: checkoutRes.error || "Failed to initiate PayMongo checkout. Please try again.",
@@ -303,6 +371,10 @@ export default function StoreBilling() {
         setUpdatingTier(null);
       }
     } catch (err: any) {
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.sessionStorage.removeItem("mff_pending_paymongo_tier");
+        window.localStorage.removeItem("mff_pending_paymongo_tier");
+      }
       setBanner({
         type: "error",
         message: err?.message || "Payment gateway connection error.",
@@ -369,10 +441,12 @@ export default function StoreBilling() {
               Currently Availed Plan • {storeName}
             </Text>
             <Text className="text-lg font-bold text-gray-900">
-              {loadingBilling ? "Loading plan..." : subscriptionSummary.headline}
+              {loadingBilling && !storeProfile && !optimisticTier
+                ? "Loading plan..."
+                : subscriptionSummary.headline}
             </Text>
           </View>
-          {!loadingBilling ? (
+          {(!loadingBilling || storeProfile || optimisticTier) ? (
             <View
               className={`px-3 py-1 rounded-full border flex-row items-center gap-1.5 ${
                 subscriptionSummary.isTemporarilyOffline
@@ -475,7 +549,9 @@ export default function StoreBilling() {
         {/* 3 Tier Cards */}
         <View className="flex-col lg:flex-row gap-4">
           {SUBSCRIPTION_TIERS.map((tier) => {
-            const isCurrentTier = subscriptionSummary.tier === tier.id;
+            const isCurrentTier =
+              (!loadingBilling || storeProfile || optimisticTier) &&
+              subscriptionSummary.tier === tier.id;
             const isSubmittingThis = updatingTier === tier.id;
             const isActiveAndCurrent = isCurrentTier && subscriptionSummary.isActivePaid;
             const isFreeTrialCurrent = isCurrentTier && subscriptionSummary.isTrialActive;
@@ -843,7 +919,11 @@ export default function StoreBilling() {
         iconBgColor="#ECFDF5"
         onClose={() => {
           setShowPaymentSuccessModal(false);
-          router.replace("/(web)/dashboard/billing");
+          if (Platform.OS === "web" && typeof window !== "undefined") {
+            try {
+              window.history.replaceState(null, "", "/dashboard/billing");
+            } catch {}
+          }
         }}
       />
     </View>

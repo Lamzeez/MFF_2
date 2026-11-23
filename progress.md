@@ -4,6 +4,25 @@
 > development sessions. Last repository review used for this snapshot:
 > 2026-11-24.
 
+## Phase 67: Elimination of Plan Highlight Delay/Flicker & Address Bar Synchronization to `/dashboard/billing` (2026-11-24)
+
+### Completed Work
+- **Elimination of Visual Delay / Flicker on Plan Highlight (`app/(web)/dashboard/billing.tsx`)**:
+  - Identified root cause of the initial Basic plan highlight: when returning from PayMongo or mounting Billing, `storeProfile` initialized to `null` while asynchronous fetching ran, causing `normalizeSubscriptionTier(undefined)` to resolve to `"basic"`.
+  - Implemented `getOptimisticTier` and `optimisticTier` state backed by `sessionStorage` and `localStorage` (`mff_pending_paymongo_tier` and `mff_store_active_plan`).
+  - In `executePlanSelection`, cached the target tier synchronously before redirecting to PayMongo.
+  - Linked `subscriptionSummary` to use `storeProfile?.subscription_tier || optimisticTier || undefined`, guaranteeing the paid tier (Standard or Commercial) renders highlighted from the very first frame without delay or jumping.
+  - Guarded tier card highlight conditions (`!loadingBilling || storeProfile || optimisticTier`) so Basic is never falsely highlighted during cold loading.
+- **Address Bar Synchronization to `/dashboard/billing` (`app/(web)/dashboard/_layout.tsx` & `billing.tsx`)**:
+  - Identified why the URL previously pointed to `/dashboard`:
+    1. In `_layout.tsx`, an over-restrictive `!search.includes("payment=")` guard had prevented URL updates when payment query parameters were present.
+    2. In `billing.tsx`, closing the Payment Success Modal called `router.replace("/(web)/dashboard/billing")`, which Expo Router normalized to `/dashboard`.
+  - Updated `_layout.tsx` address bar synchronization to watch both `[activeTab, pathname]`, ensuring `window.history.replaceState` updates the URL to `/dashboard/billing` whenever `window.location.pathname !== expectedPath`.
+  - Replaced `router.replace` in `billing.tsx` modals and cancellation handlers with clean `window.history.replaceState(null, "", "/dashboard/billing")`, ensuring the address bar accurately reflects `mati-foodfinder.onrender.com/dashboard/billing` without query parameter debris or path regression.
+- **Verification**:
+  - Ran `npm.cmd run typecheck`: **0 TypeScript errors**.
+  - Ran `npm.cmd test`: **153/153 unit tests passing**.
+
 ## Phase 66: Merchant Tab Persistence Across Reloads, Instant Auto-Verification, & Payment Method Reconciliation (2026-11-24)
 
 ### Completed Work
