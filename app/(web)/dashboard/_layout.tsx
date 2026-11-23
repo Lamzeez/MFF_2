@@ -125,12 +125,18 @@ export default function StoreAdminLayout() {
   // Synchronize browser address bar with the authoritative active tab
   useEffect(() => {
     if (Platform.OS === "web" && typeof window !== "undefined") {
-      try {
-        const expectedPath = activeTab === "overview" ? "/dashboard" : `/dashboard/${activeTab}`;
-        if (window.location.pathname !== expectedPath) {
-          window.history.replaceState(null, "", expectedPath + window.location.search);
-        }
-      } catch {}
+      const syncAddressBar = () => {
+        try {
+          const expectedPath = activeTab === "overview" ? "/dashboard" : `/dashboard/${activeTab}`;
+          if (window.location.pathname !== expectedPath) {
+            window.history.replaceState(null, "", expectedPath + window.location.search);
+          }
+        } catch {}
+      };
+
+      syncAddressBar();
+      const timer = setTimeout(syncAddressBar, 80);
+      return () => clearTimeout(timer);
     }
   }, [activeTab, pathname]);
 
@@ -289,31 +295,30 @@ export default function StoreAdminLayout() {
                 const isActive = targetTab === activeTab;
                 void isAdminNavItemActive;
                 return (
-                  <Link key={item.label} href={item.href as any} asChild>
-                    <Pressable
-                      onPress={() => handleSelectTab(targetTab)}
-                      accessibilityRole="tab"
-                      accessibilityState={{ selected: isActive }}
-                      className={`px-3 py-2.5 rounded-lg flex-row items-center gap-2.5 border transition-colors ${
-                        isActive
-                          ? "bg-orange-50/90 border-orange-200/90"
-                          : "border-transparent hover:bg-gray-100/70 active:bg-gray-100"
+                  <Pressable
+                    key={item.label}
+                    onPress={() => handleSelectTab(targetTab)}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: isActive }}
+                    className={`px-3 py-2.5 rounded-lg flex-row items-center gap-2.5 border transition-colors ${
+                      isActive
+                        ? "bg-orange-50/90 border-orange-200/90"
+                        : "border-transparent hover:bg-gray-100/70 active:bg-gray-100"
+                    }`}
+                  >
+                    <Ionicons
+                      name={isActive ? item.activeIcon : item.icon}
+                      size={15}
+                      color={isActive ? "#EA5410" : "#6B7280"}
+                    />
+                    <Text
+                      className={`text-xs ${
+                        isActive ? "text-gray-900 font-semibold" : "text-gray-500 font-medium"
                       }`}
                     >
-                      <Ionicons
-                        name={isActive ? item.activeIcon : item.icon}
-                        size={15}
-                        color={isActive ? "#EA5410" : "#6B7280"}
-                      />
-                      <Text
-                        className={`text-xs ${
-                          isActive ? "text-gray-900 font-semibold" : "text-gray-500 font-medium"
-                        }`}
-                      >
-                        {item.label}
-                      </Text>
-                    </Pressable>
-                  </Link>
+                      {item.label}
+                    </Text>
+                  </Pressable>
                 );
               })}
             </View>
@@ -382,31 +387,30 @@ export default function StoreAdminLayout() {
               const isActive = targetTab === activeTab;
               void isAdminNavItemActive;
               return (
-                <Link key={item.label} href={item.href as any} asChild>
-                  <Pressable
-                    onPress={() => handleSelectTab(targetTab)}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: isActive }}
-                    className={`px-3 py-1.5 rounded-lg flex-row items-center gap-1.5 border ${
-                      isActive
-                        ? "bg-orange-50 border-orange-200"
-                        : "bg-gray-50 border-gray-200"
+                <Pressable
+                  key={item.label}
+                  onPress={() => handleSelectTab(targetTab)}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: isActive }}
+                  className={`px-3 py-1.5 rounded-lg flex-row items-center gap-1.5 border ${
+                    isActive
+                      ? "bg-orange-50 border-orange-200"
+                      : "bg-gray-50 border-gray-200"
+                  }`}
+                >
+                  <Ionicons
+                    name={isActive ? item.activeIcon : item.icon}
+                    size={13}
+                    color={isActive ? "#EA5410" : "#6B7280"}
+                  />
+                  <Text
+                    className={`text-[11px] ${
+                      isActive ? "text-gray-900 font-semibold" : "text-gray-600 font-medium"
                     }`}
                   >
-                    <Ionicons
-                      name={isActive ? item.activeIcon : item.icon}
-                      size={13}
-                      color={isActive ? "#EA5410" : "#6B7280"}
-                    />
-                    <Text
-                      className={`text-[11px] ${
-                        isActive ? "text-gray-900 font-semibold" : "text-gray-600 font-medium"
-                      }`}
-                    >
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                </Link>
+                    {item.label}
+                  </Text>
+                </Pressable>
               );
             })}
           </ScrollView>

@@ -71,9 +71,27 @@ export default function StoreBilling() {
     return null;
   };
 
+  // Recover cached store profile to display real merchant name & status immediately on refresh
+  const getInitialStoreProfile = (): LiveStoreProfile | null => {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      try {
+        const raw =
+          window.sessionStorage.getItem("mff_cached_store_profile") ||
+          window.localStorage.getItem("mff_cached_store_profile");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === "object" && parsed.id) {
+            return parsed as LiveStoreProfile;
+          }
+        }
+      } catch {}
+    }
+    return null;
+  };
+
   const [optimisticTier, setOptimisticTier] = useState<StoreSubscriptionTier | null>(getOptimisticTier);
   const [storeId, setStoreId] = useState<string | null>(null);
-  const [storeProfile, setStoreProfile] = useState<LiveStoreProfile | null>(null);
+  const [storeProfile, setStoreProfile] = useState<LiveStoreProfile | null>(getInitialStoreProfile);
   const [orders, setOrders] = useState<LiveOrder[]>([]);
   const [invoices, setInvoices] = useState<StoreSubscriptionInvoice[]>([]);
   const [loadingBilling, setLoadingBilling] = useState(true);
@@ -119,14 +137,18 @@ export default function StoreBilling() {
         ]);
         if (fetchedStore) {
           setStoreProfile(fetchedStore);
-          if (fetchedStore.subscription_tier) {
-            setOptimisticTier(normalizeSubscriptionTier(fetchedStore.subscription_tier));
-            if (Platform.OS === "web" && typeof window !== "undefined") {
-              try {
+          if (Platform.OS === "web" && typeof window !== "undefined") {
+            try {
+              window.sessionStorage.setItem("mff_cached_store_profile", JSON.stringify(fetchedStore));
+              window.localStorage.setItem("mff_cached_store_profile", JSON.stringify(fetchedStore));
+              if (fetchedStore.subscription_tier) {
                 window.sessionStorage.setItem("mff_store_active_plan", fetchedStore.subscription_tier);
                 window.localStorage.setItem("mff_store_active_plan", fetchedStore.subscription_tier);
-              } catch {}
-            }
+              }
+            } catch {}
+          }
+          if (fetchedStore.subscription_tier) {
+            setOptimisticTier(normalizeSubscriptionTier(fetchedStore.subscription_tier));
           }
         }
         setOrders(storeOrders || []);
@@ -240,6 +262,16 @@ export default function StoreBilling() {
               window.localStorage.setItem("mff_store_active_plan", res.data.store_subscription_tier);
               window.sessionStorage.removeItem("mff_pending_paymongo_tier");
               window.localStorage.removeItem("mff_pending_paymongo_tier");
+              const existingRaw =
+                window.sessionStorage.getItem("mff_cached_store_profile") ||
+                window.localStorage.getItem("mff_cached_store_profile");
+              if (existingRaw) {
+                const parsed = JSON.parse(existingRaw);
+                parsed.subscription_tier = res.data.store_subscription_tier;
+                parsed.subscription_status = "active";
+                window.sessionStorage.setItem("mff_cached_store_profile", JSON.stringify(parsed));
+                window.localStorage.setItem("mff_cached_store_profile", JSON.stringify(parsed));
+              }
               window.history.replaceState(null, "", "/dashboard/billing");
             } catch {}
           }
@@ -272,7 +304,8 @@ export default function StoreBilling() {
     () =>
       resolveStoreSubscriptionSummary({
         subscriptionTier: storeProfile?.subscription_tier || optimisticTier || undefined,
-        subscriptionStatus: storeProfile?.subscription_status,
+        subscriptionStatus:
+          storeProfile?.subscription_status || (optimisticTier ? "active" : undefined),
         trialStartedAt: storeProfile?.trial_started_at,
         trialEndsAt: storeProfile?.trial_ends_at,
         subscribedAt: storeProfile?.subscribed_at,
@@ -331,6 +364,18 @@ export default function StoreBilling() {
         window.localStorage.setItem("mff_pending_paymongo_tier", tier);
         window.sessionStorage.setItem("mff_store_active_plan", tier);
         window.localStorage.setItem("mff_store_active_plan", tier);
+        const existingRaw =
+          window.sessionStorage.getItem("mff_cached_store_profile") ||
+          window.localStorage.getItem("mff_cached_store_profile");
+        if (existingRaw) {
+          try {
+            const parsed = JSON.parse(existingRaw);
+            parsed.subscription_tier = tier;
+            parsed.subscription_status = "active";
+            window.sessionStorage.setItem("mff_cached_store_profile", JSON.stringify(parsed));
+            window.localStorage.setItem("mff_cached_store_profile", JSON.stringify(parsed));
+          } catch {}
+        }
       }
       const successUrl =
         Platform.OS === "web" && typeof window !== "undefined"
@@ -438,7 +483,7 @@ export default function StoreBilling() {
         <View className="flex-col md:flex-row justify-between items-start md:items-center gap-3 pb-3.5 border-b border-gray-100 mb-3.5">
           <View className="flex-1">
             <Text className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">
-              Currently Availed Plan • {storeName}
+              Currently Availed Plan • {storeProfile?.name || (loadingBilling ? "..." : storeName)}
             </Text>
             <Text className="text-lg font-bold text-gray-900">
               {loadingBilling && !storeProfile && !optimisticTier
@@ -446,7 +491,7 @@ export default function StoreBilling() {
                 : subscriptionSummary.headline}
             </Text>
           </View>
-          {(!loadingBilling || storeProfile || optimisticTier) ? (
+          {storeProfile || optimisticTier ? (
             <View
               className={`px-3 py-1 rounded-full border flex-row items-center gap-1.5 ${
                 subscriptionSummary.isTemporarilyOffline
@@ -489,7 +534,12 @@ export default function StoreBilling() {
                       : "Free Trial Active"}
               </Text>
             </View>
-          ) : null}
+          ) : (
+            <View className="px-3 py-1 rounded-full border border-gray-200 bg-gray-50 flex-row items-center gap-1.5">
+              <ActivityIndicator size="small" color="#9CA3AF" />
+              <Text className="text-[11px] font-medium text-gray-500">Checking status...</Text>
+            </View>
+          )}
         </View>
 
         <View

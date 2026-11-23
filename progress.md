@@ -4,6 +4,22 @@
 > development sessions. Last repository review used for this snapshot:
 > 2026-11-24.
 
+## Phase 68: Complete Elimination of 0.2s Reload Delay Flash & Decoupled Navigation URL Synchronization (2026-11-24)
+
+### Completed Work
+- **Store Profile Cache Synchronous Hydration (`app/(web)/dashboard/billing.tsx`)**:
+  - Identified root cause of the 0.2s delay where reload briefly showed dummy "YOUR STORE" and "Basic Plan (2-Month Free Trial)" before snapping to the real store profile and active plan.
+  - Added `getInitialStoreProfile()` which synchronously parses `mff_cached_store_profile` from browser storage (`sessionStorage` and `localStorage`) during React initial state creation on frame 0.
+  - Automatically caches the full `LiveStoreProfile` upon `fetchStoreById` completion and updates the cache immediately upon checkout creation and verification.
+  - On page reload, the real store name (`ESTOY WATAPAMPS STORE`), actual active plan (`Basic Plan (₱99/month)`), and `Active Subscription` badge render synchronously from frame 0 with zero delay.
+  - Guarded cold-loading states with neutral status spinners instead of falling back to fake trial text.
+- **Decoupled Merchant Tab Navigation & Timed URL Synchronization (`app/(web)/dashboard/_layout.tsx`)**:
+  - Removed wrapping `<Link>` components around merchant navigation tabs so Expo Router's web engine no longer intercepts tab clicks and normalizes paths back to `/dashboard`.
+  - Upgraded address bar synchronization hook with microtask/timer scheduling (immediate + 80ms post-mount) to defeat Expo Router's post-hydration router rewrite, locking the address bar securely to `/dashboard/billing` on reload.
+- **Verification**:
+  - Ran `npm.cmd run typecheck`: **0 TypeScript errors**.
+  - Ran `npm.cmd test`: **153/153 unit tests passing**.
+
 ## Phase 67: Elimination of Plan Highlight Delay/Flicker & Address Bar Synchronization to `/dashboard/billing` (2026-11-24)
 
 ### Completed Work
