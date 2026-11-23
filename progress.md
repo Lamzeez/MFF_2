@@ -4,6 +4,24 @@
 > development sessions. Last repository review used for this snapshot:
 > 2026-11-24.
 
+## Phase 69: Elimination of the 0.7s Plan Upgrade Post-Payment Verification Delay (`billing.tsx`) (2026-11-24)
+
+### Completed Work
+- **Root Cause Assessment of the 0.7s Post-Payment Upgrade Delay**:
+  - Traced the ~0.7-second delay when returning from PayMongo checkout (e.g. Standard $\rightarrow$ Commercial):
+    1. In `subscriptionSummary`, the tier resolution previously evaluated `storeProfile?.subscription_tier || optimisticTier`. Because `storeProfile` already had `"standard"` from previous sessions, JavaScript evaluated the truthy `"standard"` and ignored the upgraded `optimisticTier`.
+    2. Simultaneously, on mount `loadBillingData` queried Supabase `fetchStoreById`. Because PayMongo payment verification runs via asynchronous Edge Function roundtrip (`verifyStoreSubscriptionPayment`), the database row still had `"standard"` during the first 700ms, overwriting `optimisticTier` back to `"standard"`.
+    3. Only after the 700ms roundtrip finished and `confirm_subscription_payment` committed did the UI finally flip to Commercial.
+- **Immediate Plan Activation & State Precedence (`app/(web)/dashboard/billing.tsx`)**:
+  - Implemented `getPendingPayMongoTier()`: detects `mff_pending_paymongo_tier` upon return from PayMongo checkout.
+  - Prioritized `pendingTier` at the top of the evaluation chain in `subscriptionSummary`: `pendingTier || optimisticTier || storeProfile?.subscription_tier`.
+  - In `getInitialStoreProfile()`, if `pendingTier` is detected upon return, synchronously pre-hydrates `subscription_tier: pendingTier` and `subscription_status: 'active'` on frame 0.
+  - In `loadBillingData`, preserved `pendingTier` so the in-flight database fetch cannot overwrite the paid plan with the stale database value while verification is running.
+  - Added cleanup of `pendingTier` upon cancellation or uncompleted verification.
+- **Verification**:
+  - Ran `npm.cmd run typecheck`: **0 TypeScript errors**.
+  - Ran `npm.cmd test`: **153/153 unit tests passing**.
+
 ## Phase 68: Complete Elimination of 0.2s Reload Delay Flash & Decoupled Navigation URL Synchronization (2026-11-24)
 
 ### Completed Work

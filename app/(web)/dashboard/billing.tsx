@@ -50,8 +50,7 @@ export default function StoreBilling() {
   const searchParams = useLocalSearchParams<{ payment?: string; session_id?: string }>();
   const { identity } = useSession("merchant");
 
-  // Recover cached or pending optimistic plan tier to eliminate visual jumping/delay from Basic
-  const getOptimisticTier = (): StoreSubscriptionTier | null => {
+  const getPendingPayMongoTier = (): StoreSubscriptionTier | null => {
     if (Platform.OS === "web" && typeof window !== "undefined") {
       try {
         const pending =
@@ -60,6 +59,17 @@ export default function StoreBilling() {
         if (pending === "standard" || pending === "commercial" || pending === "basic") {
           return pending;
         }
+      } catch {}
+    }
+    return null;
+  };
+
+  // Recover cached or pending optimistic plan tier to eliminate visual jumping/delay from Basic
+  const getOptimisticTier = (): StoreSubscriptionTier | null => {
+    const pending = getPendingPayMongoTier();
+    if (pending) return pending;
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      try {
         const cached =
           window.sessionStorage.getItem("mff_store_active_plan") ||
           window.localStorage.getItem("mff_store_active_plan");
@@ -81,6 +91,11 @@ export default function StoreBilling() {
         if (raw) {
           const parsed = JSON.parse(raw);
           if (parsed && typeof parsed === "object" && parsed.id) {
+            const pending = getPendingPayMongoTier();
+            if (pending) {
+              parsed.subscription_tier = pending;
+              parsed.subscription_status = "active";
+            }
             return parsed as LiveStoreProfile;
           }
         }
@@ -136,19 +151,26 @@ export default function StoreBilling() {
           fetchStoreSubscriptionInvoices(targetStoreId),
         ]);
         if (fetchedStore) {
-          setStoreProfile(fetchedStore);
+          const pendingTier = getPendingPayMongoTier();
+          const targetTier = pendingTier || normalizeSubscriptionTier(fetchedStore.subscription_tier);
+          const targetStatus = pendingTier ? "active" : fetchedStore.subscription_status;
+
+          const mergedStore: LiveStoreProfile = {
+            ...fetchedStore,
+            subscription_tier: targetTier,
+            subscription_status: targetStatus,
+          };
+
+          setStoreProfile(mergedStore);
+          setOptimisticTier(targetTier);
+
           if (Platform.OS === "web" && typeof window !== "undefined") {
             try {
-              window.sessionStorage.setItem("mff_cached_store_profile", JSON.stringify(fetchedStore));
-              window.localStorage.setItem("mff_cached_store_profile", JSON.stringify(fetchedStore));
-              if (fetchedStore.subscription_tier) {
-                window.sessionStorage.setItem("mff_store_active_plan", fetchedStore.subscription_tier);
-                window.localStorage.setItem("mff_store_active_plan", fetchedStore.subscription_tier);
-              }
+              window.sessionStorage.setItem("mff_cached_store_profile", JSON.stringify(mergedStore));
+              window.localStorage.setItem("mff_cached_store_profile", JSON.stringify(mergedStore));
+              window.sessionStorage.setItem("mff_store_active_plan", targetTier);
+              window.localStorage.setItem("mff_store_active_plan", targetTier);
             } catch {}
-          }
-          if (fetchedStore.subscription_tier) {
-            setOptimisticTier(normalizeSubscriptionTier(fetchedStore.subscription_tier));
           }
         }
         setOrders(storeOrders || []);
@@ -236,6 +258,8 @@ export default function StoreBilling() {
       if (Platform.OS === "web" && typeof window !== "undefined") {
         window.sessionStorage.removeItem("mff_pending_paymongo_session");
         window.localStorage.removeItem("mff_pending_paymongo_session");
+        window.sessionStorage.removeItem("mff_pending_paymongo_tier");
+        window.localStorage.removeItem("mff_pending_paymongo_tier");
         try {
           window.history.replaceState(null, "", "/dashboard/billing");
         } catch {}
@@ -244,6 +268,7 @@ export default function StoreBilling() {
         type: "info",
         message: "PayMongo checkout was cancelled. No charges were made to your account.",
       });
+      void loadBillingData(true);
     }
   }, [searchParams.payment, searchParams.session_id, invoices]);
 
@@ -283,10 +308,15 @@ export default function StoreBilling() {
         setShowPaymentSuccessModal(true);
         await loadBillingData(true);
       } else {
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          window.sessionStorage.removeItem("mff_pending_paymongo_tier");
+          window.localStorage.removeItem("mff_pending_paymongo_tier");
+        }
         setBanner({
           type: "error",
           message: res.error || "Payment was not completed. Please try again.",
         });
+        void loadBillingData(true);
       }
     } catch (err: any) {
       setBanner({
@@ -300,18 +330,22 @@ export default function StoreBilling() {
 
   const settlementData = useMemo(() => calculateCodSettlement(orders), [orders]);
 
-  const subscriptionSummary = useMemo(
-    () =>
-      resolveStoreSubscriptionSummary({
-        subscriptionTier: storeProfile?.subscription_tier || optimisticTier || undefined,
-        subscriptionStatus:
-          storeProfile?.subscription_status || (optimisticTier ? "active" : undefined),
-        trialStartedAt: storeProfile?.trial_started_at,
-        trialEndsAt: storeProfile?.trial_ends_at,
-        subscribedAt: storeProfile?.subscribed_at,
-      }),
-    [storeProfile, optimisticTier]
-  );
+  const subscriptionSummary = useMemo(() => {
+    const pendingTier = getPendingPayMongoTier();
+    const effectiveTier =
+      pendingTier || optimisticTier || storeProfile?.subscription_tier || undefined;
+    const effectiveStatus = pendingTier
+      ? "active"
+      : storeProfile?.subscription_status || (optimisticTier ? "active" : undefined);
+
+    return resolveStoreSubscriptionSummary({
+      subscriptionTier: effectiveTier,
+      subscriptionStatus: effectiveStatus,
+      trialStartedAt: storeProfile?.trial_started_at,
+      trialEndsAt: storeProfile?.trial_ends_at,
+      subscribedAt: storeProfile?.subscribed_at,
+    });
+  }, [storeProfile, optimisticTier]);
 
   const executePlanSelection = async (tier: StoreSubscriptionTier) => {
     if (!storeId) return;
