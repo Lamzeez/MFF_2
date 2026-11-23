@@ -39,7 +39,7 @@ export function SubscriptionConfirmModal({
       statusBarTranslucent={true}
     >
       <View style={styles.overlay}>
-        {/* Backdrop dismiss */}
+        {/* Backdrop click to dismiss */}
         <Pressable
           style={StyleSheet.absoluteFill}
           onPress={onCancel}
@@ -59,7 +59,7 @@ export function SubscriptionConfirmModal({
           >
             <Ionicons
               name={isUpgrade ? "rocket-outline" : "swap-horizontal-outline"}
-              size={28}
+              size={26}
               color={isUpgrade ? "#EA5410" : "#2563EB"}
             />
           </View>
@@ -71,48 +71,13 @@ export function SubscriptionConfirmModal({
               : `Switch to ${targetTier.name} Plan?`}
           </Text>
 
-          {/* Subtitle / Plan comparison badge */}
-          <View style={styles.comparisonContainer}>
-            <View style={styles.planBadge}>
-              <Text style={styles.planBadgeLabel}>CURRENT</Text>
-              <Text style={styles.planBadgeValue}>{currentTierName}</Text>
-            </View>
-
-            <Ionicons name="arrow-forward" size={16} color="#9CA3AF" />
-
-            <View style={[styles.planBadge, styles.planBadgeActive]}>
-              <Text style={styles.planBadgeActiveLabel}>NEW PLAN</Text>
-              <Text style={styles.planBadgeActiveValue}>
-                {targetTier.name} (₱{targetTier.pricePhp}/mo)
-              </Text>
-            </View>
-          </View>
-
-          {/* Explanatory Message */}
-          <Text style={styles.description}>
-            You will be redirected to PayMongo to complete your payment of{" "}
-            <Text style={styles.boldText}>₱{targetTier.pricePhp}.00</Text>. Your new store limits
-            and 30-day billing cycle will activate immediately upon payment.
-          </Text>
-
-          {/* Key perks unlocked */}
-          {targetTier.features && targetTier.features.length > 0 && (
-            <View style={styles.perksContainer}>
-              <Text style={styles.perksTitle}>Plan Perks:</Text>
-              {targetTier.features.slice(0, 3).map((feat, idx) => (
-                <View key={idx} style={styles.perkRow}>
-                  <Ionicons name="checkmark-circle" size={14} color="#059669" />
-                  <Text style={styles.perkText}>{feat}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Secure gateway note */}
-          <View style={styles.securityRow}>
-            <Ionicons name="shield-checkmark" size={13} color="#2563EB" />
-            <Text style={styles.securityText}>
-              Supported: GCash, Maya, QR Ph (MariBank/Banks), and Cards
+          {/* Light-Red Warning Notice */}
+          <View style={styles.warningBox}>
+            <Ionicons name="warning-outline" size={18} color="#DC2626" style={styles.warningIcon} />
+            <Text style={styles.warningText}>
+              <Text style={styles.warningBold}>Important Notice: </Text>
+              Your active {currentTierName} will be replaced immediately, and you will be charged{" "}
+              <Text style={styles.warningBold}>₱{targetTier.pricePhp}.00</Text> for the new 30-day billing cycle.
             </Text>
           </View>
 
@@ -126,9 +91,9 @@ export function SubscriptionConfirmModal({
               onPress={onCancel}
               disabled={isConnecting}
               accessibilityRole="button"
-              accessibilityLabel="Cancel and keep current plan"
+              accessibilityLabel="Cancel"
             >
-              <Text style={styles.cancelButtonText}>Keep Current</Text>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
             </Pressable>
 
             <Pressable
@@ -140,7 +105,7 @@ export function SubscriptionConfirmModal({
               onPress={onConfirm}
               disabled={isConnecting}
               accessibilityRole="button"
-              accessibilityLabel={`Proceed to pay ₱${targetTier.pricePhp}`}
+              accessibilityLabel={`Proceed to Pay ₱${targetTier.pricePhp}`}
             >
               {isConnecting ? (
                 <View style={styles.loadingRow}>
@@ -149,7 +114,7 @@ export function SubscriptionConfirmModal({
                 </View>
               ) : (
                 <Text style={styles.confirmButtonText}>
-                  Proceed (₱{targetTier.pricePhp})
+                  Proceed to Pay (₱{targetTier.pricePhp})
                 </Text>
               )}
             </Pressable>
@@ -171,9 +136,9 @@ const styles = StyleSheet.create({
   },
   card: {
     width: "100%",
-    maxWidth: 440,
+    maxWidth: 420,
     backgroundColor: "#FFFFFF",
-    borderRadius: 24,
+    borderRadius: 20,
     paddingHorizontal: 24,
     paddingTop: 24,
     paddingBottom: 20,
@@ -185,122 +150,46 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   iconWrapper: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 14,
+    marginBottom: 12,
   },
   title: {
     fontSize: 18,
     fontWeight: "800",
     color: "#111827",
     textAlign: "center",
-    marginBottom: 12,
+    marginBottom: 14,
   },
-  comparisonContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    marginBottom: 12,
+  warningBox: {
     width: "100%",
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginBottom: 20,
   },
-  planBadge: {
-    alignItems: "center",
+  warningIcon: {
+    marginTop: 2,
+    flexShrink: 0,
+  },
+  warningText: {
+    fontSize: 12,
+    color: "#991B1B",
+    lineHeight: 18,
     flex: 1,
   },
-  planBadgeLabel: {
-    fontSize: 9,
+  warningBold: {
     fontWeight: "700",
-    color: "#9CA3AF",
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  planBadgeValue: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#4B5563",
-    textAlign: "center",
-  },
-  planBadgeActive: {
-    backgroundColor: "#EFF6FF",
-    borderColor: "#BFDBFE",
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-  },
-  planBadgeActiveLabel: {
-    fontSize: 9,
-    fontWeight: "800",
-    color: "#1D4ED8",
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  planBadgeActiveValue: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#1E40AF",
-    textAlign: "center",
-  },
-  description: {
-    fontSize: 12,
-    color: "#4B5563",
-    textAlign: "center",
-    lineHeight: 18,
-    marginBottom: 12,
-  },
-  boldText: {
-    fontWeight: "700",
-    color: "#111827",
-  },
-  perksContainer: {
-    width: "100%",
-    backgroundColor: "#F0FDF4",
-    borderWidth: 1,
-    borderColor: "#DCFCE7",
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    gap: 5,
-    marginBottom: 12,
-  },
-  perksTitle: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#166534",
-    marginBottom: 2,
-  },
-  perkRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  perkText: {
-    fontSize: 11,
-    color: "#15803D",
-    fontWeight: "500",
-  },
-  securityRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-    marginBottom: 18,
-  },
-  securityText: {
-    fontSize: 10,
-    fontWeight: "600",
-    color: "#6B7280",
-    textAlign: "center",
+    color: "#7F1D1D",
   },
   buttonRow: {
     flexDirection: "row",
@@ -323,7 +212,7 @@ const styles = StyleSheet.create({
     color: "#4B5563",
   },
   confirmButton: {
-    flex: 1.3,
+    flex: 1.5,
     height: 42,
     backgroundColor: "#EA5410",
     borderRadius: 12,

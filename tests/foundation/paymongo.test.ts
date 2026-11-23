@@ -66,8 +66,8 @@ test("SubscriptionConfirmModal component exists and adheres to strict confirmati
   const source = fs.readFileSync(modalPath, "utf-8");
 
   assert.equal(source.includes("SubscriptionConfirmModal"), true);
-  assert.equal(source.includes("PayMongo"), true);
   assert.equal(source.includes("targetTier"), true);
+  assert.equal(source.includes("Important Notice"), true);
   assert.equal(source.includes("onConfirm"), true);
   assert.equal(source.includes("onCancel"), true);
 });

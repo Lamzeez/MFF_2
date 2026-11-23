@@ -73,13 +73,21 @@ export default function StoreAdminLayout() {
   const profileScrollRef = useRef<ScrollView>(null);
   const billingScrollRef = useRef<ScrollView>(null);
 
-  const activeTab: "overview" | "menu" | "profile" | "billing" = pathname.includes("/dashboard/menu")
-    ? "menu"
-    : pathname.includes("/dashboard/profile")
-      ? "profile"
-      : pathname.includes("/dashboard/billing")
-        ? "billing"
-        : "overview";
+  const currentPath =
+    Platform.OS === "web" && typeof window !== "undefined"
+      ? window.location.pathname + window.location.search
+      : pathname;
+
+  const activeTab: "overview" | "menu" | "profile" | "billing" =
+    currentPath.includes("payment=") ||
+    currentPath.includes("/billing") ||
+    pathname.includes("/dashboard/billing")
+      ? "billing"
+      : currentPath.includes("/menu") || pathname.includes("/dashboard/menu")
+        ? "menu"
+        : currentPath.includes("/profile") || pathname.includes("/dashboard/profile")
+          ? "profile"
+          : "overview";
 
   const scrollToTabTop = (tab: "overview" | "menu" | "profile" | "billing") => {
     const scrollRef =

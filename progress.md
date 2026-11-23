@@ -2,7 +2,27 @@
 
 > Living project memory for Codex/agents. Update after meaningful
 > development sessions. Last repository review used for this snapshot:
-> 2026-11-23.
+> 2026-11-24.
+
+## Phase 65: Streamlined Subscription Confirmation, Billing Return Route Retention, & Payment Verification (2026-11-24)
+
+### Completed Work
+- **Streamlined Subscription Confirmation Modal (`components/ui/SubscriptionConfirmModal.tsx`)**:
+  - Simplified dialog layout by removing visual clutter (comparison containers, bullet perk lists, blue security rows).
+  - Added a clear, light-red notice callout (`bg-red-50 border-red-200 text-red-800`):
+    `Important Notice: Your active [Current Plan] will be replaced immediately, and you will be charged ₱[amount].00 for the new 30-day billing cycle.`
+  - Cleaned up user action buttons: `[ Cancel ]` and `[ Proceed to Pay (₱...) ]`.
+- **Merchant Dashboard Route Retention on Return (`app/(web)/dashboard/_layout.tsx`)**:
+  - Resolved external redirect tab reset: when returning from PayMongo checkout (`?payment=success`), `pathname` hydration previously lagged, falling back to `overview`.
+  - Added robust detection inspecting `window.location.pathname + window.location.search` to keep the merchant on the **Billing & Plans** tab seamlessly.
+- **Payment Verification & Manual Sync (`app/(web)/dashboard/billing.tsx`)**:
+  - Guaranteed `handleVerifyPayment(sessionId)` triggers upon return by extracting query params from both `searchParams` and `window.location.search`.
+  - Added a **[ Verify Status ]** button on pending invoice rows in the ledger, allowing merchants to re-verify payment status at any time if a browser tab was closed before redirect.
+- **PayMongo QR Ph Sandbox Behavior Clarification**:
+  - Documented that the dual "Authorize Payment" prompt occurs strictly in PayMongo's test sandbox simulator (Click 1 launches mock bank app, Click 2 simulates approval); in live production, merchants and customers scan once via QR Ph in their banking app.
+- **Verification**:
+  - Ran `npm.cmd test`: **152/152 unit tests passing**.
+  - Ran `npm.cmd run typecheck`: **0 TypeScript errors**.
 
 ## Phase 64: Subscription Upgrade/Switch Confirmation Modal & Timestamped Receipts (2026-11-23)
 

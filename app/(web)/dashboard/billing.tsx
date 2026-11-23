@@ -103,28 +103,39 @@ export default function StoreBilling() {
 
   // Handle PayMongo return callbacks (?payment=success or ?payment=cancelled)
   useEffect(() => {
-    const paymentStatus = searchParams.payment;
+    let paymentStatus = searchParams.payment;
     let sessionId = searchParams.session_id;
 
-    if (!sessionId && typeof window !== "undefined") {
-      sessionId = window.sessionStorage.getItem("mff_pending_paymongo_session") || undefined;
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (!paymentStatus && urlParams.has("payment")) {
+          paymentStatus = urlParams.get("payment") || undefined;
+        }
+        if (!sessionId && urlParams.has("session_id")) {
+          sessionId = urlParams.get("session_id") || undefined;
+        }
+        if (!sessionId) {
+          sessionId = window.sessionStorage.getItem("mff_pending_paymongo_session") || undefined;
+        }
+      } catch {}
     }
 
     if (paymentStatus === "success" && sessionId && processedSessionRef.current !== sessionId) {
       processedSessionRef.current = sessionId;
-      if (typeof window !== "undefined") {
+      if (Platform.OS === "web" && typeof window !== "undefined") {
         window.sessionStorage.removeItem("mff_pending_paymongo_session");
       }
       void handleVerifyPayment(sessionId);
     } else if (paymentStatus === "cancelled") {
-      if (typeof window !== "undefined") {
+      if (Platform.OS === "web" && typeof window !== "undefined") {
         window.sessionStorage.removeItem("mff_pending_paymongo_session");
       }
       setBanner({
         type: "info",
         message: "PayMongo checkout was cancelled. No charges were made to your account.",
       });
-      router.replace("/dashboard/billing");
+      router.replace("/(web)/dashboard/billing");
     }
   }, [searchParams.payment, searchParams.session_id]);
 
@@ -574,6 +585,16 @@ export default function StoreBilling() {
                           {isPaid ? "Paid & Active" : inv.status}
                         </Text>
                       </View>
+                      {!isPaid && inv.paymongo_checkout_session_id ? (
+                        <Pressable
+                          disabled={verifyingPayment}
+                          onPress={() => void handleVerifyPayment(inv.paymongo_checkout_session_id!)}
+                          className="px-2 py-0.5 rounded-md bg-blue-50 hover:bg-blue-100 border border-blue-200 flex-row items-center gap-1 cursor-pointer"
+                        >
+                          <Ionicons name="refresh" size={10} color="#1D4ED8" />
+                          <Text className="text-[9px] font-bold text-blue-700">Verify Status</Text>
+                        </Pressable>
+                      ) : null}
                       <Text className="text-[11px] text-gray-500 font-medium">via {methodStr}</Text>
                     </View>
                     <Text className="text-[11px] text-gray-500 mt-1">
@@ -770,7 +791,7 @@ export default function StoreBilling() {
         iconBgColor="#ECFDF5"
         onClose={() => {
           setShowPaymentSuccessModal(false);
-          router.replace("/dashboard/billing");
+          router.replace("/(web)/dashboard/billing");
         }}
       />
     </View>
