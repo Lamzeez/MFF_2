@@ -51,7 +51,23 @@ test("Store billing dashboard integrates PayMongo checkout, payment verification
   assert.equal(source.includes("verifyStoreSubscriptionPayment"), true);
   assert.equal(source.includes("fetchStoreSubscriptionInvoices"), true);
   assert.equal(source.includes("ActionSuccessModal"), true);
+  assert.equal(source.includes("SubscriptionConfirmModal"), true);
   assert.equal(source.includes("Pay with PayMongo"), true);
   assert.equal(source.includes("Subscription Invoices & Receipts"), true);
   assert.equal(source.includes("Verifying PayMongo Payment..."), true);
+});
+
+test("SubscriptionConfirmModal component exists and adheres to strict confirmation contract", () => {
+  const modalPath = path.resolve(
+    process.cwd(),
+    "components/ui/SubscriptionConfirmModal.tsx"
+  );
+  assert.equal(fs.existsSync(modalPath), true, "SubscriptionConfirmModal.tsx must exist");
+  const source = fs.readFileSync(modalPath, "utf-8");
+
+  assert.equal(source.includes("SubscriptionConfirmModal"), true);
+  assert.equal(source.includes("PayMongo"), true);
+  assert.equal(source.includes("targetTier"), true);
+  assert.equal(source.includes("onConfirm"), true);
+  assert.equal(source.includes("onCancel"), true);
 });

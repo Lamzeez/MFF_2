@@ -4,6 +4,21 @@
 > development sessions. Last repository review used for this snapshot:
 > 2026-11-23.
 
+## Phase 64: Subscription Upgrade/Switch Confirmation Modal & Timestamped Receipts (2026-11-23)
+
+### Completed Work
+- **Strict Subscription Confirmation Dialog (`components/ui/SubscriptionConfirmModal.tsx`)**:
+  - Implemented an explicit confirmation dialog that triggers whenever a Store Admin clicks to subscribe, upgrade, or switch tiers (e.g. Free Trial $\rightarrow$ Standard, Standard $\rightarrow$ Commercial).
+  - Clearly compares current plan vs target new plan (e.g. `CURRENT: Standard Plan` $\rightarrow$ `NEW PLAN: Commercial Plan (₱699/mo)`).
+  - Explicitly states the payment amount, billing cycle duration, and unlocked perks (e.g. Unlimited menu items, Unlimited gallery photos).
+  - Prevents accidental one-click redirects or unexpected payments with clear **[ Keep Current ]** and **[ Proceed (₱...) ]** actions.
+- **Timestamped Subscription Invoice Ledger (`app/(web)/dashboard/billing.tsx`)**:
+  - Enhanced the invoice receipts table to display both date and exact time (e.g. `Nov 23, 2026 • 6:28 PM`).
+- **Verification**:
+  - Added unit test contract verification in `tests/foundation/paymongo.test.ts`.
+  - Ran `npm.cmd test`: **152/152 unit tests passing**.
+  - Ran `npm.cmd run typecheck`: **0 TypeScript errors**.
+
 ## Phase 63: PayMongo QR Ph (MariBank/InstaPay), Gateway Headers, & Return Verification (2026-11-23)
 
 ### Completed Work

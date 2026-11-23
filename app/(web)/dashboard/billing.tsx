@@ -23,6 +23,7 @@ import {
 } from "../../../services/paymongo";
 import { NotificationBanner, type BannerMessage } from "../../../components/ui/NotificationBanner";
 import { ActionSuccessModal } from "../../../components/ui/ActionSuccessModal";
+import { SubscriptionConfirmModal } from "../../../components/ui/SubscriptionConfirmModal";
 import {
   SUBSCRIPTION_TIERS,
   resolveStoreSubscriptionSummary,
@@ -40,6 +41,7 @@ export default function StoreBilling() {
   const [loadingBilling, setLoadingBilling] = useState(true);
   const [refreshingBilling, setRefreshingBilling] = useState(false);
   const [updatingTier, setUpdatingTier] = useState<StoreSubscriptionTier | null>(null);
+  const [confirmingTier, setConfirmingTier] = useState<typeof SUBSCRIPTION_TIERS[number] | null>(null);
   const [verifyingPayment, setVerifyingPayment] = useState(false);
   const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
   const [paymentSuccessMessage, setPaymentSuccessMessage] = useState("");
@@ -169,7 +171,7 @@ export default function StoreBilling() {
     [storeProfile]
   );
 
-  const handleSelectPlan = async (tier: StoreSubscriptionTier) => {
+  const executePlanSelection = async (tier: StoreSubscriptionTier) => {
     if (!storeId) return;
     setUpdatingTier(tier);
     setBanner(null);
@@ -195,6 +197,7 @@ export default function StoreBilling() {
             type: "success",
             message: "Active on Basic Plan (Free 2-month trial upon approval).",
           });
+          setConfirmingTier(null);
         } else {
           setBanner({
             type: "error",
@@ -465,7 +468,7 @@ export default function StoreBilling() {
                 <View className="px-4 pb-4 pt-1">
                   <Pressable
                     disabled={loadingBilling || Boolean(updatingTier) || isActiveAndCurrent || !storeId}
-                    onPress={() => void handleSelectPlan(tier.id)}
+                    onPress={() => setConfirmingTier(tier)}
                     className={`h-9 rounded-lg items-center justify-center flex-row gap-1.5 cursor-pointer ${
                       isActiveAndCurrent
                         ? "bg-emerald-50 border border-emerald-200"
@@ -534,10 +537,16 @@ export default function StoreBilling() {
         ) : (
           <View className="gap-2.5">
             {invoices.map((inv) => {
-              const dateStr = new Date(inv.created_at).toLocaleDateString("en-PH", {
+              const dateObj = new Date(inv.created_at);
+              const dateStr = dateObj.toLocaleDateString("en-PH", {
                 year: "numeric",
                 month: "short",
                 day: "numeric",
+              });
+              const timeStr = dateObj.toLocaleTimeString("en-PH", {
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: true,
               });
               const methodStr = (inv.payment_method || "Online").toUpperCase();
               const isPaid = inv.status === "paid";
@@ -576,7 +585,9 @@ export default function StoreBilling() {
                     <Text className="text-sm font-extrabold text-gray-900 tabular-nums">
                       ₱{Number(inv.amount).toFixed(2)}
                     </Text>
-                    <Text className="text-[10px] text-gray-400 mt-0.5">{dateStr}</Text>
+                    <Text className="text-[10px] text-gray-400 mt-0.5">
+                      {dateStr} • {timeStr}
+                    </Text>
                   </View>
                 </View>
               );
@@ -733,6 +744,20 @@ export default function StoreBilling() {
           </View>
         )}
       </View>
+
+      {/* Strict Subscription Upgrade/Switch Confirmation Modal */}
+      <SubscriptionConfirmModal
+        visible={Boolean(confirmingTier)}
+        currentTierName={subscriptionSummary.tierDef.name + " Plan"}
+        targetTier={confirmingTier}
+        isConnecting={Boolean(updatingTier)}
+        onCancel={() => setConfirmingTier(null)}
+        onConfirm={() => {
+          if (confirmingTier) {
+            void executePlanSelection(confirmingTier.id);
+          }
+        }}
+      />
 
       {/* Payment Success Modal */}
       <ActionSuccessModal
